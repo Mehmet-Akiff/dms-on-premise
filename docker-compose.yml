@@ -1,0 +1,105 @@
+# ============================================================
+# DMS On-Premise - Docker Compose Yapılandırması
+# Versiyon: 3.8
+# Servisler: frontend, backend, ai-service, db
+# Ağ: dms-network (bridge, izole)
+# ============================================================
+
+version: '3.8'
+
+services:
+  # --------------------------------------------------------
+  # 1. FRONTEND - Vue 3 (Vite) + Nginx
+  # Host'a açık port: 80
+  # --------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dms_frontend
+    ports:
+      - "80:80"
+    networks:
+      - dms-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # --------------------------------------------------------
+  # 2. BACKEND - Node.js (Express)
+  # Host'a açık port: 3000
+  # --------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dms_backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://dms_user:dms_secure_pass@db:5432/dms_db
+      - AI_SERVICE_URL=http://ai-service:8000
+    volumes:
+      - upload-data:/app/uploads
+    networks:
+      - dms-network
+    depends_on:
+      - db
+      - ai-service
+    restart: unless-stopped
+
+  # --------------------------------------------------------
+  # 3. AI SERVICE - Python (FastAPI + Tesseract + SpaCy)
+  # Host'a port AÇILMIYOR (tamamen izole)
+  # --------------------------------------------------------
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: dms_ai_service
+    # ports yok - sadece iç ağdan erişilebilir
+    environment:
+      - TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
+      - DATABASE_URL=postgres://dms_user:dms_secure_pass@db:5432/dms_db
+    volumes:
+      - upload-data:/app/shared-uploads
+    networks:
+      - dms-network
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # --------------------------------------------------------
+  # 4. DATABASE - PostgreSQL 15
+  # Host'a port AÇILMIYOR (tamamen izole)
+  # --------------------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: dms_db
+    # ports yok - sadece iç ağdan erişilebilir
+    environment:
+      - POSTGRES_USER=dms_user
+      - POSTGRES_PASSWORD=dms_secure_pass
+      - POSTGRES_DB=dms_db
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - dms-network
+    restart: always
+
+# ============================================================
+# AĞ TANIMI (Network Definition)
+# ============================================================
+networks:
+  dms-network:
+    driver: bridge
+
+# ============================================================
+# KALICI DİSK ALANLARI (Named Volumes)
+# ============================================================
+volumes:
+  pg-data:
+    driver: local
+  upload-data:
+    driver: local
