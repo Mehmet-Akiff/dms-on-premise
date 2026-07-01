@@ -10,7 +10,7 @@ WORKDIR /app
 # Bağımlılık dosyalarını önce kopyala (Docker cache optimizasyonu)
 COPY package*.json ./
 
-RUN npm ci --omit=dev --silent
+RUN npm install --omit=dev --silent
 
 # Uygulama kaynak kodlarını kopyala
 COPY . .
