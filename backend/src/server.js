@@ -10,6 +10,9 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 
+const { sequelize } = require('./models');
+const documentRoutes = require('./routes/document.routes');
+
 // ============================================================
 // Uygulama Yapılandırması
 // ============================================================
@@ -38,48 +41,29 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Sağlık Kontrolü (Health Check)
 // ============================================================
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  try {
+    await sequelize.authenticate();
+    dbStatus = 'connected';
+  } catch {
+    dbStatus = 'error';
+  }
+
   res.status(200).json({
     status: 'healthy',
     service: 'dms-backend',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
+    database: dbStatus,
   });
 });
 
 // ============================================================
-// API Rotaları (Placeholder)
+// API Rotaları
 // ============================================================
 
-// Doküman yükleme endpoint'i (Gün 3'te implemente edilecek)
-app.post('/api/documents/upload', (req, res) => {
-  // TODO: Multer entegrasyonu
-  res.status(501).json({ message: 'Henüz implemente edilmedi' });
-});
-
-// Doküman listeleme endpoint'i
-app.get('/api/documents', (req, res) => {
-  // TODO: Sequelize ile DB sorgusu
-  res.status(501).json({ message: 'Henüz implemente edilmedi' });
-});
-
-// Doküman detay endpoint'i
-app.get('/api/documents/:id', (req, res) => {
-  // TODO: Sequelize ile tekil doküman sorgusu
-  res.status(501).json({ message: 'Henüz implemente edilmedi' });
-});
-
-// İş durumu sorgulama endpoint'i
-app.get('/api/jobs/:jobId', (req, res) => {
-  // TODO: İş kuyruğu durumu
-  res.status(501).json({ message: 'Henüz implemente edilmedi' });
-});
-
-// Doküman arama endpoint'i (Gün 7'de implemente edilecek)
-app.get('/api/documents/search', (req, res) => {
-  // TODO: PostgreSQL FTS entegrasyonu
-  res.status(501).json({ message: 'Henüz implemente edilmedi' });
-});
+app.use('/api/documents', documentRoutes);
 
 // ============================================================
 // 404 ve Genel Hata Yönetimi
@@ -95,19 +79,37 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================================
-// Sunucuyu Başlat
+// Veritabanı Senkronizasyonu ve Sunucu Başlatma
 // ============================================================
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`
+const startServer = async () => {
+  try {
+    // Veritabanı bağlantısını doğrula
+    await sequelize.authenticate();
+    console.log('[DB] PostgreSQL bağlantısı başarılı.');
+
+    // Tabloları otomatik oluştur/güncelle
+    await sequelize.sync({ alter: true });
+    console.log('[DB] Tablolar senkronize edildi.');
+
+    // Sunucuyu başlat
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`
   ╔══════════════════════════════════════════════╗
   ║   DMS Backend API - Çalışıyor               ║
   ║   Port: ${PORT}                                ║
   ║   Ortam: ${(process.env.NODE_ENV || 'development').padEnd(35)}║
-  ║   DB: ${DATABASE_URL.substring(0, 40).padEnd(39)}║
+  ║   DB: Bağlı                                 ║
   ║   AI: ${AI_SERVICE_URL.padEnd(39)}║
   ╚══════════════════════════════════════════════╝
-  `);
-});
+      `);
+    });
+  } catch (error) {
+    console.error('[KRITIK] Sunucu başlatılamadı:', error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 module.exports = app;
