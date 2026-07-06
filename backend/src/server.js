@@ -42,21 +42,24 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // ============================================================
 
 app.get('/api/health', async (req, res) => {
-  let dbStatus = 'disconnected';
   try {
     await sequelize.authenticate();
-    dbStatus = 'connected';
-  } catch {
-    dbStatus = 'error';
+    res.status(200).json({
+      status: 'healthy',
+      service: 'dms-backend',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      database: 'connected',
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      service: 'dms-backend',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      database: 'error',
+    });
   }
-
-  res.status(200).json({
-    status: 'healthy',
-    service: 'dms-backend',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    database: dbStatus,
-  });
 });
 
 // ============================================================
@@ -83,15 +86,30 @@ app.use((err, req, res, next) => {
 // ============================================================
 
 const startServer = async () => {
+  let retries = 5;
+  while (retries > 0) {
+    try {
+      // Veritabanı bağlantısını doğrula
+      await sequelize.authenticate();
+      console.log('[DB] PostgreSQL bağlantısı başarılı.');
+
+      // Tabloları otomatik oluştur/güncelle
+      await sequelize.sync({ alter: true });
+      console.log('[DB] Tablolar senkronize edildi.');
+      break;
+    } catch (error) {
+      console.error(`[UYARI] Veritabanı bağlantısı kurulamadı. Yeniden deneniyor... Kalan deneme: ${retries - 1}`);
+      retries -= 1;
+      if (retries === 0) {
+        console.error('[KRITIK] Sunucu başlatılamadı:', error.message);
+        process.exit(1);
+      }
+      // 5 saniye bekle
+      await new Promise(res => setTimeout(res, 5000));
+    }
+  }
+
   try {
-    // Veritabanı bağlantısını doğrula
-    await sequelize.authenticate();
-    console.log('[DB] PostgreSQL bağlantısı başarılı.');
-
-    // Tabloları otomatik oluştur/güncelle
-    await sequelize.sync({ alter: true });
-    console.log('[DB] Tablolar senkronize edildi.');
-
     // Sunucuyu başlat
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`
