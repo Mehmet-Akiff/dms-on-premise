@@ -85,75 +85,144 @@ const handleMulterError = (err, req, res, next) => {
 // Asenkron AI Servis İşleme Fonksiyonu
 // ============================================================
 
+const fs = require('fs');
+
 /**
  * Yüklenen dokümanı arka planda AI servisine gönderir.
  * Başarılıysa: DocumentMetadata oluşturur, Document → COMPLETED, Job → COMPLETED
  * Başarısızsa: Document → FAILED, Job → FAILED + errorLog
+ *
+ * ÖNEMLİ: Bu fonksiyon fire-and-forget çağrıldığı için kendi içinde
+ * tüm hataları yakalamalıdır. Dışarıya ASLA hata fırlatmamalıdır.
  */
 async function processDocumentWithAI(document, job) {
   const fileName = path.basename(document.filePath);
+  const fullPath = document.filePath; // /app/uploads/UUID.ext
+
+  console.log(`[AI_SERVICE] ========== İşleme Başlıyor ==========`);
+  console.log(`[AI_SERVICE] Doküman ID : ${document.id}`);
+  console.log(`[AI_SERVICE] Dosya Adı  : ${fileName}`);
+  console.log(`[AI_SERVICE] Tam Yol    : ${fullPath}`);
+  console.log(`[AI_SERVICE] Hedef      : ${AI_SERVICE_URL}/api/ocr`);
 
   try {
+    // 0. Dosyanın diskte var olduğunu kontrol et
+    if (!fs.existsSync(fullPath)) {
+      throw new Error(`Dosya diskte bulunamadı: ${fullPath}`);
+    }
+    console.log(`[AI_SERVICE] Dosya diskte doğrulandı ✓`);
+
     // 1. İş durumunu PROCESSING olarak güncelle
     await job.update({ jobStatus: 'PROCESSING', startedAt: new Date() });
     await document.update({ status: 'PROCESSING' });
-    console.log(`[AI] İşleme başlatıldı — Doküman: ${document.id} — Dosya: ${fileName}`);
+    console.log(`[AI_SERVICE] Durum → PROCESSING`);
 
-    // 2. AI servisine OCR isteği at
-    console.log(`[AI] POST ${AI_SERVICE_URL}/api/ocr — filePath: ${fileName}`);
+    // 2. AI servisine OCR isteği at (JSON body ile dosya yolunu gönder)
+    //    Not: Backend ve AI servisi aynı Docker volume'ü paylaşır.
+    //    Backend: /app/uploads/x.png ↔ AI Service: /app/shared-uploads/x.png
+    console.log(`[AI_SERVICE] POST isteği gönderiliyor → filePath: "${fileName}"`);
 
-    const response = await fetch(`${AI_SERVICE_URL}/api/ocr`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filePath: fileName }),
-      signal: AbortSignal.timeout(120000), // 2 dakika timeout
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 dk timeout
 
-    const result = await response.json();
-    console.log(`[AI] Yanıt alındı — HTTP ${response.status} — status: ${result.status}`);
+    let response;
+    try {
+      response = await fetch(`${AI_SERVICE_URL}/api/ocr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath: fileName }),
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      // Ağ hatası veya timeout — AI servisi erişilemez
+      const isAbort = fetchError.name === 'AbortError';
+      throw new Error(
+        isAbort
+          ? `AI servisi ${AI_SERVICE_URL} adresinden 120 saniye içinde yanıt vermedi (TIMEOUT)`
+          : `AI servisine bağlanılamadı (${AI_SERVICE_URL}): ${fetchError.message}`
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
-    // 3. AI yanıtını değerlendir
+    console.log(`[AI_SERVICE] HTTP yanıt kodu: ${response.status} ${response.statusText}`);
+
+    // 3. Yanıtı parse et
+    let result;
+    const rawBody = await response.text();
+    try {
+      result = JSON.parse(rawBody);
+    } catch (parseError) {
+      console.error(`[AI_SERVICE_ERROR] JSON parse hatası. Ham yanıt: ${rawBody.substring(0, 500)}`);
+      throw new Error(`AI servisi geçersiz JSON döndü (HTTP ${response.status})`);
+    }
+
+    console.log(`[AI_SERVICE] Yanıt status: ${result.status || 'bilinmiyor'}`);
+
+    // 4. AI yanıtını değerlendir
     if (response.ok && result.status === 'success') {
       // Başarılı: Metni DocumentMetadata tablosuna kaydet
       await DocumentMetadata.create({
         documentId: document.id,
         extractedText: result.text,
-        category: 'uncategorized', // NLP sınıflandırma sonraki adımda eklenecek
+        category: 'uncategorized',
         extractedTags: [],
         confidence: 0.0,
       });
-      console.log(`[AI] OCR metni kaydedildi — Doküman: ${document.id} — Karakter: ${result.text.length}`);
+
+      const charCount = (result.text || '').length;
+      console.log(`[AI_SERVICE] OCR metni kaydedildi — ${charCount} karakter`);
 
       // Document ve Job durumlarını COMPLETED yap
       await document.update({ status: 'COMPLETED' });
       await job.update({
         jobStatus: 'COMPLETED',
-        resultSummary: `OCR başarılı. ${result.text.length} karakter çıkarıldı.`,
+        resultSummary: `OCR başarılı. ${charCount} karakter çıkarıldı.`,
         completedAt: new Date(),
       });
-      console.log(`[AI] ✅ İşlem tamamlandı — Doküman: ${document.id}`);
+
+      console.log(`[AI_SERVICE] ✅ İşlem başarıyla tamamlandı — Doküman: ${document.id}`);
 
     } else {
-      // AI servisi hata döndü
-      const errorMessage = result.message || result.detail || `AI servisi hata döndü (HTTP ${response.status})`;
+      // AI servisi hata döndü — detaylı mesaj çıkar
+      let errorMessage;
+      if (result.detail && typeof result.detail === 'object') {
+        errorMessage = result.detail.message || JSON.stringify(result.detail);
+      } else {
+        errorMessage = result.detail || result.message || result.error || `AI servisi hata döndü (HTTP ${response.status})`;
+      }
       throw new Error(errorMessage);
     }
 
   } catch (error) {
-    // Hata: Document → FAILED, Job → FAILED
-    const errorDetail = error.name === 'TimeoutError'
-      ? 'AI servisi yanıt süresi aşıldı (120s timeout)'
-      : error.message;
+    // ==========================================
+    // HATA YAKALAMA — Document → FAILED garantisi
+    // ==========================================
+    console.error(`[AI_SERVICE_ERROR] ❌ İşlem başarısız — Doküman: ${document.id}`);
+    console.error(`[AI_SERVICE_ERROR] Hata Mesajı: ${error.message}`);
+    console.error(`[AI_SERVICE_ERROR] Stack Trace:`, error.stack);
 
-    console.error(`[AI] ❌ İşlem başarısız — Doküman: ${document.id} — Hata: ${errorDetail}`);
+    // Veritabanını güncelle — her ne olursa olsun FAILED'a düşür
+    try {
+      await document.update({ status: 'FAILED' });
+      console.log(`[AI_SERVICE] Doküman durumu → FAILED`);
+    } catch (dbError) {
+      console.error(`[AI_SERVICE_ERROR] Document.update başarısız:`, dbError.message);
+    }
 
-    await document.update({ status: 'FAILED' }).catch(() => {});
-    await job.update({
-      jobStatus: 'FAILED',
-      errorLog: errorDetail,
-      completedAt: new Date(),
-    }).catch(() => {});
+    try {
+      await job.update({
+        jobStatus: 'FAILED',
+        errorLog: `${error.message}\n\nStack: ${error.stack || 'N/A'}`,
+        completedAt: new Date(),
+      });
+      console.log(`[AI_SERVICE] Job durumu → FAILED`);
+    } catch (dbError) {
+      console.error(`[AI_SERVICE_ERROR] Job.update başarısız:`, dbError.message);
+    }
   }
+
+  console.log(`[AI_SERVICE] ========== İşleme Bitti ==========\n`);
 }
 
 // ============================================================
@@ -185,7 +254,10 @@ router.post('/upload', upload.single('file'), handleMulterError, async (req, res
     console.log(`[UPLOAD] Doküman yüklendi — ID: ${document.id} — Dosya: ${req.file.originalname}`);
 
     // Asenkron olarak AI servisine gönder (yanıtı beklemeden istemciye 202 dön)
-    processDocumentWithAI(document, job);
+    // .catch() ile unhandled promise rejection koruması
+    processDocumentWithAI(document, job).catch((unexpectedError) => {
+      console.error('[AI_SERVICE_FATAL] Beklenmeyen kritik hata:', unexpectedError.message, unexpectedError.stack);
+    });
 
     res.status(202).json({
       message: 'Doküman başarıyla yüklendi ve işleme kuyruğuna eklendi.',
@@ -204,6 +276,53 @@ router.post('/upload', upload.single('file'), handleMulterError, async (req, res
   } catch (error) {
     console.error('[HATA] Doküman yükleme:', error.message);
     res.status(500).json({ error: 'Doküman yüklenirken bir hata oluştu.', message: error.message });
+  }
+});
+
+// ============================================================
+// DELETE /api/documents/clear-ghosts — Hayalet PENDING Kayıtlarını Temizle
+// ============================================================
+
+router.delete('/clear-ghosts', async (req, res) => {
+  try {
+    console.log('[TEMİZLİK] Hayalet PENDING kayıtları temizleniyor...');
+
+    // PENDING dokümanların ID'lerini bul
+    const ghostDocs = await Document.findAll({
+      where: { status: 'PENDING' },
+      attributes: ['id'],
+    });
+
+    const ghostIds = ghostDocs.map(d => d.id);
+
+    if (ghostIds.length === 0) {
+      return res.status(200).json({ message: 'Temizlenecek hayalet kayıt bulunamadı.', deleted: 0 });
+    }
+
+    // İlişkili job'ları sil
+    const deletedJobs = await ProcessingJob.destroy({
+      where: { documentId: ghostIds },
+    });
+
+    // İlişkili metadata'ları sil
+    const deletedMeta = await DocumentMetadata.destroy({
+      where: { documentId: ghostIds },
+    });
+
+    // PENDING dokümanları sil
+    const deletedDocs = await Document.destroy({
+      where: { status: 'PENDING' },
+    });
+
+    console.log(`[TEMİZLİK] ✅ ${deletedDocs} doküman, ${deletedJobs} job, ${deletedMeta} metadata silindi.`);
+
+    res.status(200).json({
+      message: `Temizlik tamamlandı.`,
+      deleted: { documents: deletedDocs, jobs: deletedJobs, metadata: deletedMeta },
+    });
+  } catch (error) {
+    console.error('[HATA] Hayalet temizliği:', error.message);
+    res.status(500).json({ error: 'Temizlik sırasında hata oluştu.', message: error.message });
   }
 });
 
