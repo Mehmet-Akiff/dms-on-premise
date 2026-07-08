@@ -28,7 +28,7 @@
           </svg>
           Doküman Yükle
         </h3>
-        <FileUpload />
+        <FileUpload @uploaded="onDocumentUploaded" />
         <div class="panel-hint">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -39,7 +39,7 @@
 
       <!-- Sağ Panel: Doküman Listesi -->
       <section class="panel panel--list">
-        <DocumentList />
+        <DocumentList ref="documentListRef" />
       </section>
     </main>
 
@@ -51,8 +51,16 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import FileUpload from './components/FileUpload.vue'
 import DocumentList from './components/DocumentList.vue'
+
+const documentListRef = ref(null)
+
+function onDocumentUploaded() {
+  // Yükleme başarılı olduğunda doküman listesini yenile
+  documentListRef.value?.refresh()
+}
 </script>
 
 <style>

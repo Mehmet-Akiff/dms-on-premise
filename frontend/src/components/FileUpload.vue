@@ -1,70 +1,117 @@
 <template>
-  <div
-    class="upload-zone"
-    :class="{ 'upload-zone--active': isDragging }"
-    @dragenter.prevent="onDragEnter"
-    @dragover.prevent="onDragOver"
-    @dragleave.prevent="onDragLeave"
-    @drop.prevent="onDrop"
-    @click="triggerFileInput"
-  >
-    <input
-      ref="fileInput"
-      type="file"
-      accept=".pdf,.png,.jpg,.jpeg"
-      class="upload-input"
-      @change="onFileSelected"
-    />
+  <div class="upload-wrapper">
+    <div
+      class="upload-zone"
+      :class="{
+        'upload-zone--active': isDragging,
+        'upload-zone--uploading': isUploading,
+      }"
+      @dragenter.prevent="onDragEnter"
+      @dragover.prevent="onDragOver"
+      @dragleave.prevent="onDragLeave"
+      @drop.prevent="onDrop"
+      @click="triggerFileInput"
+    >
+      <input
+        ref="fileInput"
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg"
+        class="upload-input"
+        @change="onFileSelected"
+      />
 
-    <!-- İkon ve Mesaj -->
-    <div class="upload-content" v-if="!selectedFile">
-      <div class="upload-icon">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="17 8 12 3 7 8"/>
-          <line x1="12" y1="3" x2="12" y2="15"/>
-        </svg>
+      <!-- Yükleme Animasyonu -->
+      <div class="upload-content" v-if="isUploading">
+        <div class="spinner"></div>
+        <p class="upload-title">Yükleniyor...</p>
+        <p class="upload-subtitle">Dosya sunucuya gönderiliyor</p>
       </div>
-      <p class="upload-title">Dosyalarınızı buraya sürükleyin</p>
-      <p class="upload-subtitle">veya <span class="upload-link">dosya seçmek için tıklayın</span></p>
-      <div class="upload-formats">
-        <span class="format-badge">PDF</span>
-        <span class="format-badge">PNG</span>
-        <span class="format-badge">JPG</span>
-        <span class="format-sep">•</span>
-        <span class="format-limit">Maks. 50 MB</span>
+
+      <!-- Varsayılan Alan -->
+      <div class="upload-content" v-else-if="!selectedFile">
+        <div class="upload-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="upload-title">Dosyalarınızı buraya sürükleyin</p>
+        <p class="upload-subtitle">veya <span class="upload-link">dosya seçmek için tıklayın</span></p>
+        <div class="upload-formats">
+          <span class="format-badge">PDF</span>
+          <span class="format-badge">PNG</span>
+          <span class="format-badge">JPG</span>
+          <span class="format-sep">•</span>
+          <span class="format-limit">Maks. 50 MB</span>
+        </div>
+      </div>
+
+      <!-- Dosya Seçildi -->
+      <div class="upload-preview" v-else @click.stop>
+        <div class="preview-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </div>
+        <div class="preview-info">
+          <p class="preview-name">{{ selectedFile.name }}</p>
+          <p class="preview-size">{{ formatSize(selectedFile.size) }}</p>
+        </div>
+        <button class="preview-remove" @click.stop="clearFile" title="Kaldır">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
     </div>
 
-    <!-- Dosya Seçildi -->
-    <div class="upload-preview" v-else>
-      <div class="preview-icon">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-        </svg>
+    <!-- Yükle Butonu -->
+    <button
+      v-if="selectedFile && !isUploading"
+      class="upload-btn"
+      @click="uploadFile"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Dokümanı Yükle ve İşle
+    </button>
+
+    <!-- Toast Mesajları -->
+    <Transition name="toast">
+      <div v-if="toast.show" class="toast" :class="'toast--' + toast.type">
+        <span class="toast-icon">{{ toast.type === 'success' ? '✅' : '❌' }}</span>
+        <span>{{ toast.message }}</span>
       </div>
-      <div class="preview-info">
-        <p class="preview-name">{{ selectedFile.name }}</p>
-        <p class="preview-size">{{ formatSize(selectedFile.size) }}</p>
-      </div>
-      <button class="preview-remove" @click.stop="clearFile" title="Kaldır">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
 
+const emit = defineEmits(['uploaded'])
+
 const isDragging = ref(false)
+const isUploading = ref(false)
 const selectedFile = ref(null)
 const fileInput = ref(null)
+const toast = ref({ show: false, message: '', type: 'success' })
 
 let dragCounter = 0
+let toastTimer = null
+
+function showToast(message, type = 'success', duration = 4000) {
+  clearTimeout(toastTimer)
+  toast.value = { show: true, message, type }
+  toastTimer = setTimeout(() => {
+    toast.value.show = false
+  }, duration)
+}
 
 function onDragEnter() {
   dragCounter++
@@ -93,7 +140,7 @@ function onDrop(event) {
 }
 
 function triggerFileInput() {
-  if (!selectedFile.value) {
+  if (!selectedFile.value && !isUploading.value) {
     fileInput.value?.click()
   }
 }
@@ -108,7 +155,11 @@ function onFileSelected(event) {
 function handleFile(file) {
   const allowed = ['application/pdf', 'image/png', 'image/jpeg']
   if (!allowed.includes(file.type)) {
-    console.warn(`[FileUpload] Desteklenmeyen dosya tipi: ${file.type}`)
+    showToast(`Desteklenmeyen dosya tipi: ${file.type}`, 'error')
+    return
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    showToast('Dosya boyutu 50 MB sınırını aşıyor.', 'error')
     return
   }
   selectedFile.value = file
@@ -120,7 +171,41 @@ function clearFile() {
   if (fileInput.value) {
     fileInput.value.value = ''
   }
-  console.log('[FileUpload] Dosya kaldırıldı.')
+}
+
+async function uploadFile() {
+  if (!selectedFile.value || isUploading.value) return
+
+  isUploading.value = true
+  console.log(`[FileUpload] Yükleme başlatılıyor: ${selectedFile.value.name}`)
+
+  try {
+    const formData = new FormData()
+    formData.append('file', selectedFile.value)
+    formData.append('title', selectedFile.value.name)
+
+    const response = await fetch('/api/documents/upload', {
+      method: 'POST',
+      body: formData,
+    })
+
+    const result = await response.json()
+
+    if (response.ok) {
+      console.log(`[FileUpload] Yükleme başarılı — Doküman ID: ${result.document?.id}`)
+      showToast(`"${selectedFile.value.name}" başarıyla yüklendi ve işleme kuyruğuna eklendi.`, 'success')
+      clearFile()
+      emit('uploaded')
+    } else {
+      console.error('[FileUpload] Sunucu hatası:', result)
+      showToast(result.error || result.message || 'Yükleme başarısız oldu.', 'error')
+    }
+  } catch (error) {
+    console.error('[FileUpload] Ağ hatası:', error)
+    showToast('Sunucuya bağlanılamadı. Backend çalışıyor mu?', 'error')
+  } finally {
+    isUploading.value = false
+  }
 }
 
 function formatSize(bytes) {
@@ -131,6 +216,12 @@ function formatSize(bytes) {
 </script>
 
 <style scoped>
+.upload-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .upload-zone {
   position: relative;
   border: 2px dashed var(--border);
@@ -151,6 +242,11 @@ function formatSize(bytes) {
   border-color: var(--accent);
   background: var(--accent-glow);
   box-shadow: 0 0 24px rgba(56, 189, 248, 0.12);
+}
+
+.upload-zone--uploading {
+  pointer-events: none;
+  opacity: 0.85;
 }
 
 .upload-input {
@@ -229,6 +325,20 @@ function formatSize(bytes) {
   opacity: 0.7;
 }
 
+/* Spinner */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Dosya Önizleme */
 .upload-preview {
   display: flex;
@@ -287,5 +397,78 @@ function formatSize(bytes) {
   border-color: #ef4444;
   color: #ef4444;
   background: rgba(239, 68, 68, 0.1);
+}
+
+/* Yükle Butonu */
+.upload-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent), #818cf8);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 12px rgba(56, 189, 248, 0.25);
+}
+
+.upload-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.4);
+}
+
+.upload-btn:active {
+  transform: translateY(0);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.25rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.toast--success {
+  background: #14532d;
+  color: #bbf7d0;
+  border: 1px solid #166534;
+}
+
+.toast--error {
+  background: #450a0a;
+  color: #fecaca;
+  border: 1px solid #7f1d1d;
+}
+
+.toast-icon {
+  font-size: 1rem;
+}
+
+.toast-enter-active {
+  animation: toast-in 0.35s ease;
+}
+
+.toast-leave-active {
+  animation: toast-in 0.25s ease reverse;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 </style>
