@@ -1,27 +1,49 @@
 <template>
   <div id="dms-app">
+    <!-- Header -->
     <header class="dms-header">
-      <div class="logo">
-        <span class="logo-icon">📄</span>
-        <h1>DMS</h1>
-        <span class="badge">On-Premise</span>
+      <div class="header-inner">
+        <div class="logo">
+          <span class="logo-icon">📄</span>
+          <h1>DMS</h1>
+          <span class="badge">On-Premise</span>
+        </div>
+        <p class="subtitle">Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi</p>
       </div>
-      <p class="subtitle">Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi</p>
+      <div class="header-status">
+        <span class="status-indicator status-indicator--online"></span>
+        <span class="status-text">Sistem Aktif</span>
+      </div>
     </header>
 
+    <!-- Ana İçerik -->
     <main class="dms-main">
-      <div class="status-card">
-        <h2>🚀 Sistem Durumu</h2>
-        <p>Frontend iskeleti başarıyla yüklendi.</p>
-        <ul>
-          <li>✅ Vue 3 + Vite — Aktif</li>
-          <li>⏳ Backend API Bağlantısı — Beklemede</li>
-          <li>⏳ AI Servisi Bağlantısı — Beklemede</li>
-          <li>⏳ PostgreSQL Bağlantısı — Beklemede</li>
-        </ul>
-      </div>
+      <!-- Sol Panel: Dosya Yükleme -->
+      <section class="panel panel--upload">
+        <h3 class="panel-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Doküman Yükle
+        </h3>
+        <FileUpload />
+        <div class="panel-hint">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Tüm dosyalar yerel sunucuda güvenle işlenir. Veri dışarı çıkmaz.
+        </div>
+      </section>
+
+      <!-- Sağ Panel: Doküman Listesi -->
+      <section class="panel panel--list">
+        <DocumentList />
+      </section>
     </main>
 
+    <!-- Footer -->
     <footer class="dms-footer">
       <p>&copy; 2026 DMS On-Premise — Tüm veriler yerel sunucuda işlenmektedir.</p>
     </footer>
@@ -29,12 +51,17 @@
 </template>
 
 <script setup>
-// Gün 9'da dashboard bileşenleri ve Pinia state yönetimi eklenecek
+import FileUpload from './components/FileUpload.vue'
+import DocumentList from './components/DocumentList.vue'
 </script>
 
 <style>
+/* ============================================================
+   GLOBAL TASARIM SİSTEMİ (Design Tokens)
+   ============================================================ */
 :root {
   --bg-primary: #0f172a;
+  --bg-secondary: #131c31;
   --bg-card: #1e293b;
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
@@ -42,6 +69,7 @@
   --accent-glow: rgba(56, 189, 248, 0.15);
   --border: #334155;
   --radius: 12px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -55,35 +83,51 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* ============================================================
+   UYGULAMA LAYOUT
+   ============================================================ */
 #dms-app {
   display: flex;
   flex-direction: column;
-  align-items: center;
   min-height: 100vh;
-  padding: 2rem;
+  padding: 1.5rem 2rem;
+  max-width: 1280px;
+  margin: 0 auto;
 }
 
+/* ============================================================
+   HEADER
+   ============================================================ */
 .dms-header {
-  text-align: center;
-  margin-bottom: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.header-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .logo {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: 0.6rem;
 }
 
 .logo-icon {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
 }
 
 .logo h1 {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
   font-weight: 800;
   letter-spacing: -0.5px;
   background: linear-gradient(135deg, var(--accent), #a78bfa);
@@ -94,68 +138,127 @@ body {
 .badge {
   background: var(--accent-glow);
   color: var(--accent);
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   font-weight: 600;
-  border: 1px solid var(--accent);
+  border: 1px solid rgba(56, 189, 248, 0.3);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
 .subtitle {
   color: var(--text-secondary);
-  font-size: 1.1rem;
-  margin-top: 0.5rem;
+  font-size: 0.85rem;
 }
 
-.status-card {
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   background: var(--bg-card);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 2rem 2.5rem;
-  max-width: 520px;
-  width: 100%;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
-.status-card h2 {
-  font-size: 1.3rem;
-  margin-bottom: 1rem;
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-indicator--online {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
+  50% { box-shadow: 0 0 16px rgba(34, 197, 94, 0.8); }
+}
+
+.status-text {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #22c55e;
+}
+
+/* ============================================================
+   ANA İÇERİK (2 Sütun Grid)
+   ============================================================ */
+.dms-main {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 1.5rem;
+  flex: 1;
+  align-items: start;
+}
+
+.panel--upload {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-.status-card p {
-  color: var(--text-secondary);
-  margin-bottom: 1.25rem;
-  line-height: 1.6;
+.panel-title svg {
+  color: var(--accent);
+  opacity: 0.8;
 }
 
-.status-card ul {
-  list-style: none;
+.panel-hint {
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.status-card li {
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  font-size: 0.95rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--bg-primary);
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  opacity: 0.65;
+  padding: 0.5rem 0;
 }
 
+.panel-hint svg {
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
 .dms-footer {
-  margin-top: auto;
-  padding-top: 3rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
   text-align: center;
 }
 
 .dms-footer p {
   color: var(--text-secondary);
-  font-size: 0.8rem;
-  opacity: 0.7;
+  font-size: 0.75rem;
+  opacity: 0.55;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 900px) {
+  .dms-main {
+    grid-template-columns: 1fr;
+  }
+
+  .dms-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
 }
 </style>
