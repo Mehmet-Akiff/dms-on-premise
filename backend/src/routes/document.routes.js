@@ -7,7 +7,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { Document, DocumentMetadata, ProcessingJob } = require('../models');
+const { sequelize, Document, DocumentMetadata, ProcessingJob } = require('../models');
 
 const router = express.Router();
 
@@ -204,6 +204,68 @@ router.post('/upload', upload.single('file'), handleMulterError, async (req, res
   } catch (error) {
     console.error('[HATA] Doküman yükleme:', error.message);
     res.status(500).json({ error: 'Doküman yüklenirken bir hata oluştu.', message: error.message });
+  }
+});
+
+// ============================================================
+// GET /api/documents/search?q=kelime — Full-Text Search (PostgreSQL FTS)
+// ============================================================
+
+router.get('/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.trim().length === 0) {
+      return res.status(400).json({ error: 'Arama sorgusu (q) parametresi gereklidir.' });
+    }
+
+    const searchTerm = q.trim();
+    console.log(`[ARAMA] Full-Text Search sorgusu: "${searchTerm}"`);
+
+    // PostgreSQL FTS: tsvector + tsquery ile metin içi arama
+    const results = await sequelize.query(
+      `SELECT
+         d.id,
+         d.title,
+         d.original_name AS "originalName",
+         d.mime_type AS "mimeType",
+         d.status,
+         d.created_at AS "createdAt",
+         dm.category,
+         dm.confidence,
+         ts_rank(
+           to_tsvector('simple', COALESCE(dm.extracted_text, '')),
+           plainto_tsquery('simple', :searchTerm)
+         ) AS relevance,
+         ts_headline(
+           'simple',
+           COALESCE(dm.extracted_text, ''),
+           plainto_tsquery('simple', :searchTerm),
+           'StartSel=<mark>, StopSel=</mark>, MaxWords=40, MinWords=20'
+         ) AS highlight
+       FROM documents d
+       INNER JOIN document_metadata dm ON dm.document_id = d.id
+       WHERE
+         to_tsvector('simple', COALESCE(dm.extracted_text, ''))
+         @@ plainto_tsquery('simple', :searchTerm)
+       ORDER BY relevance DESC
+       LIMIT 50`,
+      {
+        replacements: { searchTerm },
+        type: sequelize.constructor.QueryTypes.SELECT,
+      }
+    );
+
+    console.log(`[ARAMA] "${searchTerm}" için ${results.length} sonuç bulundu.`);
+
+    res.status(200).json({
+      query: searchTerm,
+      count: results.length,
+      results,
+    });
+  } catch (error) {
+    console.error('[HATA] Full-Text Search:', error.message);
+    res.status(500).json({ error: 'Arama sırasında bir hata oluştu.' });
   }
 });
 
