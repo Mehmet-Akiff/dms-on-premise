@@ -37,8 +37,9 @@
         </div>
       </section>
 
-      <!-- Sağ Panel: Doküman Listesi -->
+      <!-- Sağ Panel: Arama + Doküman Listesi -->
       <section class="panel panel--list">
+        <SearchBar />
         <DocumentList ref="documentListRef" />
       </section>
     </main>
@@ -54,6 +55,7 @@
 import { ref } from 'vue'
 import FileUpload from './components/FileUpload.vue'
 import DocumentList from './components/DocumentList.vue'
+import SearchBar from './components/SearchBar.vue'
 
 const documentListRef = ref(null)
 
@@ -205,6 +207,12 @@ body {
 }
 
 .panel--upload {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.panel--list {
   display: flex;
   flex-direction: column;
   gap: 1rem;
