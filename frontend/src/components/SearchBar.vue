@@ -25,78 +25,50 @@
         {{ isSearching ? 'Aranıyor...' : 'Ara' }}
       </button>
     </div>
-
-    <!-- Arama Sonuçları -->
-    <div v-if="hasSearched" class="search-results">
-      <div class="results-header">
-        <span class="results-count">
-          "<strong>{{ lastQuery }}</strong>" için {{ results.length }} sonuç bulundu
-        </span>
-        <button class="results-close" @click="clearSearch">Temizle</button>
-      </div>
-
-      <div v-if="results.length > 0" class="results-list">
-        <div v-for="item in results" :key="item.id" class="result-card">
-          <div class="result-top">
-            <span class="result-name">{{ item.originalName }}</span>
-            <span class="result-score" :title="`Eşleşme skoru: ${item.relevance}`">
-              {{ (item.relevance * 100).toFixed(0) }}%
-            </span>
-          </div>
-          <div class="result-category" v-if="item.category && item.category !== 'uncategorized'">
-            {{ item.category }}
-          </div>
-          <div class="result-highlight" v-html="item.highlight"></div>
-        </div>
-      </div>
-
-      <div v-else class="results-empty">
-        <p>Eşleşen doküman bulunamadı.</p>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
+const emit = defineEmits(['results', 'clear', 'loading'])
 const query = ref('')
-const results = ref([])
-const lastQuery = ref('')
 const isSearching = ref(false)
-const hasSearched = ref(false)
 
 async function search() {
   const term = query.value.trim()
   if (term.length === 0) return
 
   isSearching.value = true
-  hasSearched.value = true
-  lastQuery.value = term
+  emit('loading', true)
 
   try {
     const response = await fetch(`/api/documents/search?q=${encodeURIComponent(term)}`)
     if (response.ok) {
       const data = await response.json()
-      results.value = data.results || []
-      console.log(`[Search] "${term}" — ${results.value.length} sonuç`)
+      emit('results', data.results || [], term)
     } else {
-      results.value = []
+      emit('results', [], term)
     }
   } catch (error) {
     console.error('[Search] Hata:', error)
-    results.value = []
+    emit('results', [], term)
   } finally {
     isSearching.value = false
+    emit('loading', false)
   }
 }
 
 function clearSearch() {
   query.value = ''
-  results.value = []
-  hasSearched.value = false
-  lastQuery.value = ''
+  emit('clear')
 }
+
+watch(query, (newVal) => {
+  if (newVal.trim().length === 0) {
+    emit('clear')
+  }
+})
 </script>
 
 <style scoped>
@@ -177,119 +149,5 @@ function clearSearch() {
 .search-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-/* Sonuçlar */
-.search-results {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.results-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.85rem 1.25rem;
-  border-bottom: 1px solid var(--border);
-  background: rgba(15, 23, 42, 0.4);
-}
-
-.results-count {
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-}
-
-.results-count strong {
-  color: var(--accent);
-}
-
-.results-close {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 0.72rem;
-  padding: 0.25rem 0.6rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.results-close:hover {
-  border-color: var(--text-primary);
-  color: var(--text-primary);
-}
-
-.results-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.result-card {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border);
-  transition: background 0.15s;
-}
-
-.result-card:last-child {
-  border-bottom: none;
-}
-
-.result-card:hover {
-  background: rgba(56, 189, 248, 0.03);
-}
-
-.result-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.35rem;
-}
-
-.result-name {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.result-score {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--accent);
-  background: var(--accent-glow);
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-}
-
-.result-category {
-  font-size: 0.72rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.5rem;
-  text-transform: capitalize;
-}
-
-.result-highlight {
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  background: var(--bg-primary);
-  border-radius: 6px;
-  padding: 0.65rem 0.85rem;
-  border: 1px solid var(--border);
-}
-
-.result-highlight :deep(mark) {
-  background: rgba(56, 189, 248, 0.25);
-  color: var(--accent);
-  padding: 0.1rem 0.2rem;
-  border-radius: 3px;
-}
-
-.results-empty {
-  padding: 2rem;
-  text-align: center;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
 }
 </style>
