@@ -39,7 +39,7 @@
 
       <!-- Sağ Panel: Arama + Doküman Listesi -->
       <section class="panel panel--list">
-        <SearchBar />
+        <SearchBar @results="onSearchResults" @clear="onSearchClear" @loading="onSearchLoading" />
         <DocumentList ref="documentListRef" />
       </section>
     </main>
@@ -62,6 +62,20 @@ const documentListRef = ref(null)
 function onDocumentUploaded() {
   // Yükleme başarılı olduğunda doküman listesini yenile
   documentListRef.value?.refresh()
+}
+
+function onSearchResults(results, term) {
+  documentListRef.value?.setSearchResults(results, term)
+}
+
+function onSearchClear() {
+  documentListRef.value?.clearSearch()
+}
+
+function onSearchLoading(isLoading) {
+  if (isLoading) {
+    documentListRef.value?.setLoading(true)
+  }
 }
 </script>
 

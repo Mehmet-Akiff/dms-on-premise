@@ -8,14 +8,17 @@
           <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
           <polyline points="10 9 9 9 8 9"/>
         </svg>
-        Son Yüklenen Dokümanlar
+        {{ isSearchMode ? 'Arama Sonuçları' : 'Son Yüklenen Dokümanlar' }}
       </h2>
       <div class="doc-header-actions">
-        <span v-if="isPolling" class="polling-indicator" title="Otomatik güncelleme aktif">
+        <span v-if="isPolling && !isSearchMode" class="polling-indicator" title="Otomatik güncelleme aktif">
           <span class="polling-dot"></span>
           Canlı
         </span>
-        <span class="doc-count">{{ documents.length }} doküman</span>
+        <span v-if="isSearchMode" class="search-badge">
+          "<strong>{{ searchQuery }}</strong>" için {{ documents.length }} sonuç
+        </span>
+        <span v-else class="doc-count">{{ documents.length }} doküman</span>
       </div>
     </div>
 
@@ -38,42 +41,46 @@
           </tr>
         </thead>
         <tbody>
-          <tr
-            v-for="doc in documents"
-            :key="doc.id"
-            class="doc-row"
-          >
-            <td class="doc-name">
-              <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
-              {{ doc.originalName || doc.original_name }}
-            </td>
-            <td>
-              <span class="type-badge">{{ getTypeLabel(doc.mimeType || doc.mime_type) }}</span>
-            </td>
-            <td>
-              <span class="status-badge" :class="'status--' + (doc.status || '').toLowerCase()">
-                <span class="status-dot"></span>
-                {{ getStatusLabel(doc.status) }}
-              </span>
-            </td>
-            <td class="doc-date">{{ formatDate(doc.createdAt || doc.created_at) }}</td>
-            <td class="doc-actions">
-              <button
-                v-if="doc.status === 'COMPLETED'"
-                class="action-btn"
-                @click="openDetail(doc)"
-                title="OCR Metnini Görüntüle"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-              </button>
-              <span v-else-if="doc.status === 'PROCESSING'" class="action-hint">
-                <div class="spinner-xs"></div>
-              </span>
-            </td>
-          </tr>
+          <template v-for="doc in documents" :key="doc.id">
+            <tr class="doc-row">
+              <td class="doc-name">
+                <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
+                {{ doc.originalName || doc.original_name }}
+              </td>
+              <td>
+                <span class="type-badge">{{ getTypeLabel(doc.mimeType || doc.mime_type) }}</span>
+              </td>
+              <td>
+                <span class="status-badge" :class="'status--' + (doc.status || '').toLowerCase()">
+                  <span class="status-dot"></span>
+                  {{ getStatusLabel(doc.status) }}
+                </span>
+              </td>
+              <td class="doc-date">{{ formatDate(doc.createdAt || doc.created_at) }}</td>
+              <td class="doc-actions">
+                <button
+                  v-if="doc.status === 'COMPLETED'"
+                  class="action-btn"
+                  @click="openDetail(doc)"
+                  title="OCR Metnini Görüntüle"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+                <span v-else-if="doc.status === 'PROCESSING'" class="action-hint">
+                  <div class="spinner-xs"></div>
+                </span>
+              </td>
+            </tr>
+            <!-- Arama Highlight Satırı -->
+            <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight">
+              <td colspan="5">
+                <div class="search-highlight" v-html="doc.highlight"></div>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>
@@ -152,6 +159,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 const documents = ref([])
 const isLoading = ref(true)
 const isPolling = ref(false)
+const isSearchMode = ref(false)
+const searchQuery = ref('')
 const selectedDoc = ref(null)
 const detailData = ref(null)
 const isLoadingDetail = ref(false)
@@ -229,10 +238,37 @@ function closeDetail() {
 // ============================================================
 
 function refresh() {
-  fetchDocuments()
+  if (!isSearchMode.value) {
+    fetchDocuments()
+  }
 }
 
-defineExpose({ refresh })
+// ============================================================
+// Arama Fonksiyonları
+// ============================================================
+
+function setLoading(state) {
+  isLoading.value = state
+  if (state) documents.value = []
+}
+
+function setSearchResults(results, term) {
+  stopPolling() // Arama modunda polling'i durdur
+  documents.value = results
+  isSearchMode.value = true
+  searchQuery.value = term
+  isLoading.value = false
+}
+
+function clearSearch() {
+  isSearchMode.value = false
+  searchQuery.value = ''
+  isLoading.value = true
+  fetchDocuments()
+  startPolling()
+}
+
+defineExpose({ refresh, setLoading, setSearchResults, clearSearch })
 
 // ============================================================
 // Yardımcı Fonksiyonlar
@@ -294,6 +330,18 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+}
+
+.search-badge {
+  font-size: 0.78rem;
+  color: var(--accent);
+  background: var(--accent-glow);
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+.search-badge strong {
+  color: #fff;
 }
 
 .doc-list-header {
@@ -425,6 +473,25 @@ onUnmounted(() => {
 
 .doc-row:hover {
   background: rgba(56, 189, 248, 0.03);
+}
+
+.doc-row-highlight {
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.search-highlight {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  padding: 0 1.25rem 1rem 3.5rem;
+}
+
+.search-highlight :deep(mark) {
+  background: rgba(56, 189, 248, 0.25);
+  color: var(--accent);
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
 }
 
 .doc-table td {
