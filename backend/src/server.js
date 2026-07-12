@@ -97,9 +97,13 @@ const startServer = async () => {
       await sequelize.sync({ alter: true });
       console.log('[DB] Tablolar senkronize edildi.');
 
-      // Fuzzy Search için pg_trgm eklentisini aktifleştir
-      await sequelize.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
-      console.log('[DB] pg_trgm eklentisi (Fuzzy Search) aktifleştirildi.');
+      // Fuzzy Search için pg_trgm eklentisini güvenli bir şekilde aktifleştir
+      try {
+        await sequelize.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
+        console.log('[DB] pg_trgm eklentisi (Fuzzy Search) aktifleştirildi.');
+      } catch (extError) {
+        console.warn('[UYARI] pg_trgm eklentisi aktifleştirilemedi (yetki sorunu olabilir). Fuzzy search tam verimle çalışmayabilir:', extError.message);
+      }
 
       break;
     } catch (error) {
