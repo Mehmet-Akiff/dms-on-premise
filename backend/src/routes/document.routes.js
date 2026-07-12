@@ -327,58 +327,82 @@ router.delete('/clear-ghosts', async (req, res) => {
 });
 
 // ============================================================
-// GET /api/documents/search?q=kelime — Full-Text Search (PostgreSQL FTS)
+// GET /api/documents/search?q=kelime&mode=broad|exact|fuzzy — Arama (FTS + Fuzzy)
 // ============================================================
 
 router.get('/search', async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q, mode = 'broad' } = req.query;
 
     if (!q || q.trim().length === 0) {
       return res.status(400).json({ error: 'Arama sorgusu (q) parametresi gereklidir.' });
     }
 
     const searchTerm = q.trim();
-    console.log(`[ARAMA] Full-Text Search sorgusu: "${searchTerm}"`);
+    console.log(`[ARAMA] Mod: ${mode} — Sorgu: "${searchTerm}"`);
 
-    // PostgreSQL FTS: tsvector + tsquery ile metin içi arama
-    const results = await sequelize.query(
-      `SELECT
-         d.id,
-         d.title,
-         d.original_name AS "originalName",
-         d.mime_type AS "mimeType",
-         d.status,
-         d.created_at AS "createdAt",
-         dm.category,
-         dm.confidence,
-         ts_rank(
-           to_tsvector('simple', COALESCE(dm.extracted_text, '')),
-           plainto_tsquery('simple', :searchTerm)
-         ) AS relevance,
-         ts_headline(
-           'simple',
-           COALESCE(dm.extracted_text, ''),
-           plainto_tsquery('simple', :searchTerm),
-           'StartSel=<mark>, StopSel=</mark>, MaxWords=40, MinWords=20'
-         ) AS highlight
+    let queryStr = '';
+    const isFuzzy = mode === 'fuzzy';
+
+    if (mode === 'exact') {
+      // 1. KATI EŞLEŞME (Exact Match): phraseto_tsquery
+      // Kelimelerin tam olarak yan yana aynı sırada geçmesi gerekir.
+      queryStr = `
+        SELECT
+         d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
+         ts_rank(to_tsvector('simple', COALESCE(dm.extracted_text, '')), phraseto_tsquery('simple', :searchTerm)) AS relevance,
+         ts_headline('simple', COALESCE(dm.extracted_text, ''), phraseto_tsquery('simple', :searchTerm), 'StartSel=<mark>, StopSel=</mark>, MaxWords=40, MinWords=20') AS highlight
        FROM documents d
        INNER JOIN document_metadata dm ON dm.document_id = d.id
-       WHERE
-         to_tsvector('simple', COALESCE(dm.extracted_text, ''))
-         @@ plainto_tsquery('simple', :searchTerm)
-       ORDER BY relevance DESC
-       LIMIT 50`,
-      {
-        replacements: { searchTerm },
-        type: sequelize.constructor.QueryTypes.SELECT,
-      }
-    );
+       WHERE to_tsvector('simple', COALESCE(dm.extracted_text, '')) @@ phraseto_tsquery('simple', :searchTerm)
+       ORDER BY relevance DESC LIMIT 50`;
+    } else if (isFuzzy) {
+      // 3. AKILLI ARAMA (Fuzzy Match): pg_trgm (word_similarity)
+      // Yazım hatalarını tolere eder. ts_headline kullanılamadığı için Regex ile highlight benzeri bir şey veya substr veriyoruz.
+      queryStr = `
+        SELECT
+         d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
+         word_similarity(:searchTerm, COALESCE(dm.extracted_text, '')) AS relevance,
+         substring(COALESCE(dm.extracted_text, '') from 1 for 250) || '...' AS highlight
+       FROM documents d
+       INNER JOIN document_metadata dm ON dm.document_id = d.id
+       WHERE word_similarity(:searchTerm, COALESCE(dm.extracted_text, '')) > 0.2
+       ORDER BY relevance DESC LIMIT 50`;
+    } else {
+      // 2. GENİŞ ARAMA (Broad Match): plainto_tsquery (Varsayılan)
+      // Kelimelerin belge içinde herhangi bir yerde (aynı cümlede/paragrafta) geçmesi yeterli.
+      queryStr = `
+        SELECT
+         d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
+         ts_rank(to_tsvector('simple', COALESCE(dm.extracted_text, '')), plainto_tsquery('simple', :searchTerm)) AS relevance,
+         ts_headline('simple', COALESCE(dm.extracted_text, ''), plainto_tsquery('simple', :searchTerm), 'StartSel=<mark>, StopSel=</mark>, MaxWords=40, MinWords=20') AS highlight
+       FROM documents d
+       INNER JOIN document_metadata dm ON dm.document_id = d.id
+       WHERE to_tsvector('simple', COALESCE(dm.extracted_text, '')) @@ plainto_tsquery('simple', :searchTerm)
+       ORDER BY relevance DESC LIMIT 50`;
+    }
 
-    console.log(`[ARAMA] "${searchTerm}" için ${results.length} sonuç bulundu.`);
+    const results = await sequelize.query(queryStr, {
+      replacements: { searchTerm },
+      type: sequelize.constructor.QueryTypes.SELECT,
+    });
+
+    // Fuzzy aramada highlight (substr) üzerinde basit bir regex vurgulaması yapalım
+    if (isFuzzy && results.length > 0) {
+      const escapedTerm = searchTerm.replace(/[.*+?^$\/{}()|[\\]\\\\]/g, '\\\\$&');
+      const fuzzyRegex = new RegExp(\`(\${escapedTerm})\`, 'gi');
+      results.forEach(r => {
+        if (r.highlight) {
+          r.highlight = r.highlight.replace(fuzzyRegex, '<mark>$1</mark>');
+        }
+      });
+    }
+
+    console.log(\`[ARAMA] "\${searchTerm}" için \${results.length} sonuç bulundu.\`);
 
     res.status(200).json({
       query: searchTerm,
+      mode,
       count: results.length,
       results,
     });

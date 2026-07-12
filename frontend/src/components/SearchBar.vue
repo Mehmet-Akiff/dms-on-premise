@@ -11,6 +11,14 @@
         placeholder="Doküman içeriğinde ara..."
         @keydown.enter="search"
       />
+      
+      <!-- Arama Modu Seçici -->
+      <select v-model="searchMode" class="search-mode-select" title="Arama Hassasiyeti">
+        <option value="broad">Geniş (Herhangi bir yerde)</option>
+        <option value="exact">Katı (Tam eşleşme)</option>
+        <option value="fuzzy">Akıllı (Yazım hatası toleranslı)</option>
+      </select>
+
       <button
         v-if="query.length > 0"
         class="search-clear"
@@ -33,6 +41,7 @@ import { ref, watch } from 'vue'
 
 const emit = defineEmits(['results', 'clear', 'loading'])
 const query = ref('')
+const searchMode = ref('broad')
 const isSearching = ref(false)
 
 async function search() {
@@ -43,7 +52,7 @@ async function search() {
   emit('loading', true)
 
   try {
-    const response = await fetch(`/api/documents/search?q=${encodeURIComponent(term)}`)
+    const response = await fetch(`/api/documents/search?q=${encodeURIComponent(term)}&mode=${searchMode.value}`)
     if (response.ok) {
       const data = await response.json()
       emit('results', data.results || [], term)
@@ -112,6 +121,24 @@ watch(query, (newVal) => {
 .search-input::placeholder {
   color: var(--text-secondary);
   opacity: 0.5;
+}
+
+.search-mode-select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.search-mode-select:hover, .search-mode-select:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
 }
 
 .search-clear {

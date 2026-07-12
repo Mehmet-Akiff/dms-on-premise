@@ -96,6 +96,11 @@ const startServer = async () => {
       // Tabloları otomatik oluştur/güncelle
       await sequelize.sync({ alter: true });
       console.log('[DB] Tablolar senkronize edildi.');
+
+      // Fuzzy Search için pg_trgm eklentisini aktifleştir
+      await sequelize.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;');
+      console.log('[DB] pg_trgm eklentisi (Fuzzy Search) aktifleştirildi.');
+
       break;
     } catch (error) {
       console.error(`[UYARI] Veritabanı bağlantısı kurulamadı. Yeniden deneniyor... Kalan deneme: ${retries - 1}`);
