@@ -330,20 +330,28 @@ router.delete('/clear-ghosts', async (req, res) => {
 // Yardımcı Fonksiyonlar: Akıllı Snippet ve Highlight (Fosforlu Kalem) Motoru
 // ============================================================
 
-function getMatchSnippet(text, query) {
+function getMatchSnippet(text, query, isCaseSensitive = false) {
   if (!text) return '';
   const cleanText = text.replace(/\s+/g, ' ').trim();
-  const queryLower = query.toLowerCase();
   
-  // 1. Birebir eşleşme ara (büyük/küçük harf duyarsız)
-  const idx = cleanText.toLowerCase().indexOf(queryLower);
+  // 1. Birebir eşleşme ara (Katı modda büyük/küçük harf duyarlı)
+  const textToSearch = isCaseSensitive ? cleanText : cleanText.toLowerCase();
+  const queryToSearch = isCaseSensitive ? query : query.toLowerCase();
+  const idx = textToSearch.indexOf(queryToSearch);
+  
   if (idx !== -1) {
     const start = Math.max(0, idx - 80);
     const end = Math.min(cleanText.length, idx + query.length + 80);
     return (start > 0 ? '...' : '') + cleanText.substring(start, end) + (end < cleanText.length ? '...' : '');
   }
   
+  // Katı modda fuzzy aramaya düşmesini engelle
+  if (isCaseSensitive) {
+    return cleanText.substring(0, 150) + (cleanText.length > 150 ? '...' : '');
+  }
+  
   // 2. Akıllı fuzzy eşleşme (kelime bazlı karakter benzerliği)
+  const queryLower = query.toLowerCase();
   const words = cleanText.split(' ');
   let bestIdx = -1;
   let maxOverlap = 0;
@@ -374,15 +382,18 @@ function getMatchSnippet(text, query) {
   return cleanText.substring(0, 150) + (cleanText.length > 150 ? '...' : '');
 }
 
-function applyHighlight(snippet, query) {
+function applyHighlight(snippet, query, isCaseSensitive = false) {
   if (!snippet || !query) return snippet;
   const escaped = query.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-  const regex = new RegExp(`(${escaped})`, 'gi');
+  const regex = new RegExp(`(${escaped})`, isCaseSensitive ? 'g' : 'gi');
   
   // Birebir eşleşmeyi sarı/yeşil işaretle
   if (regex.test(snippet)) {
     return snippet.replace(regex, '<mark>$1</mark>');
   }
+  
+  // Katı modda fuzzy highlight yapılmasın
+  if (isCaseSensitive) return snippet;
   
   // Fuzzy kelime işaretlemesi
   const cleanQuery = query.toLowerCase().replace(/[^a-z0-9ıışğüçö]/gi, '');
@@ -457,16 +468,16 @@ router.get('/search', async (req, res) => {
     else if (sort === 'name_desc') orderClause = 'ORDER BY d.original_name DESC';
 
     if (mode === 'exact') {
-      // 1. KATI EŞLEŞME (Exact Match): ILIKE
+      // 1. KATI EŞLEŞME (Exact Match): LIKE (Büyük/Küçük harf ve boşluk duyarlı)
       queryStr = `
         SELECT
          d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
          1.0 AS relevance,
-         (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN false ELSE true END) AS "isDimmed",
+         (CASE WHEN d.original_name LIKE '%' || :searchTerm || '%' THEN false ELSE true END) AS "isDimmed",
          COALESCE(dm.extracted_text, '') AS "extractedText"
        FROM documents d
        LEFT JOIN document_metadata dm ON dm.document_id = d.id
-       WHERE (d.original_name ILIKE '%' || :searchTerm || '%' OR COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%')
+       WHERE (d.original_name LIKE '%' || :searchTerm || '%' OR COALESCE(dm.extracted_text, '') LIKE '%' || :searchTerm || '%')
        ${extraFilters}
        ${orderClause} LIMIT 50`;
        
@@ -522,18 +533,16 @@ router.get('/search', async (req, res) => {
     });
 
     // JS tabanlı dinamik snippet ve highlight oluşturma
+    const isExact = (mode === 'exact');
     results.forEach(r => {
-      const nameLower = (r.originalName || '').toLowerCase();
-      const searchLower = searchTerm.toLowerCase();
-
-      // Eşleşmenin nerede olduğunu tespit et
-      const inFilename = nameLower.includes(searchLower);
+      const name = r.originalName || '';
+      const inFilename = isExact ? name.includes(searchTerm) : name.toLowerCase().includes(searchTerm.toLowerCase());
       r.matchLocation = inFilename ? 'filename' : 'content';
 
       // Dinamik snippet oluştur ve highlight et
       const rawText = r.extractedText || '';
-      const snippet = getMatchSnippet(rawText, searchTerm);
-      r.highlight = applyHighlight(snippet, searchTerm);
+      const snippet = getMatchSnippet(rawText, searchTerm, isExact);
+      r.highlight = applyHighlight(snippet, searchTerm, isExact);
 
       // Gönderilen veriyi hafifletmek için extractedText alanını sil
       delete r.extractedText;
