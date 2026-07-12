@@ -9,6 +9,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 
 const { sequelize } = require('./models');
 const documentRoutes = require('./routes/document.routes');
@@ -29,8 +30,23 @@ const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
 // ============================================================
 
 app.use(helmet());                              // Güvenlik başlıkları
+
+// Rate Limiting - Aynı IP'den 15 dakikada en fazla 100 istek
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Çok fazla istek gönderildi',
+    message: 'Bu IP adresinden çok fazla istek geldi. Lütfen 15 dakika sonra tekrar deneyin.',
+    retryAfter: '15 dakika',
+  },
+});
+app.use('/api/', apiLimiter);
+
 app.use(cors());                                // Cross-Origin isteklerine izin ver
-app.use(morgan('combined'));                     // HTTP istek loglaması
+app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
 app.use(express.json({ limit: '10mb' }));       // JSON body parser
 app.use(express.urlencoded({ extended: true })); // URL-encoded body parser
 
