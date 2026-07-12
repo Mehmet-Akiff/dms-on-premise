@@ -389,8 +389,8 @@ router.get('/search', async (req, res) => {
 
     // Fuzzy aramada highlight (substr) üzerinde basit bir regex vurgulaması yapalım
     if (isFuzzy && results.length > 0) {
-      const escapedTerm = searchTerm.replace(/[.*+?^$\/{}()|[\\]\\\\]/g, '\\\\$&');
-      const fuzzyRegex = new RegExp(\`(\${escapedTerm})\`, 'gi');
+      const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+      const fuzzyRegex = new RegExp(`(${escapedTerm})`, 'gi');
       results.forEach(r => {
         if (r.highlight) {
           r.highlight = r.highlight.replace(fuzzyRegex, '<mark>$1</mark>');
@@ -398,7 +398,7 @@ router.get('/search', async (req, res) => {
       });
     }
 
-    console.log(\`[ARAMA] "\${searchTerm}" için \${results.length} sonuç bulundu.\`);
+    console.log(`[ARAMA] "${searchTerm}" için ${results.length} sonuç bulundu.`);
 
     res.status(200).json({
       query: searchTerm,
