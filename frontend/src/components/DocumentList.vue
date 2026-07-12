@@ -199,8 +199,25 @@
                   </svg>
                   Çıkarılan Metin (OCR)
                 </span>
+                
+                <!-- Doküman içi arama çubuğu -->
+                <div class="doc-search-box">
+                  <input
+                    v-model="docSearchQuery"
+                    type="text"
+                    class="doc-search-input"
+                    placeholder="Metin içinde ara..."
+                    @input="onDocSearch"
+                    @keydown.enter.prevent="nextMatch"
+                  />
+                  <div class="doc-search-nav" v-if="matchCount > 0">
+                    <span class="doc-search-count">{{ activeMatchIndex + 1 }} / {{ matchCount }}</span>
+                    <button class="doc-nav-btn" @click="prevMatch" title="Önceki">▲</button>
+                    <button class="doc-nav-btn" @click="nextMatch" title="Sonraki">▼</button>
+                  </div>
+                </div>
               </div>
-              <pre class="ocr-text">{{ detailData.metadata.extracted_text || detailData.metadata.extractedText }}</pre>
+              <pre class="ocr-text" v-html="highlightedOcrHtml"></pre>
             </div>
             <div v-else class="modal-empty">
               <p>Bu doküman için henüz çıkarılmış metin bulunmuyor.</p>
@@ -213,7 +230,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const documents = ref([])
 const isLoading = ref(true)
@@ -225,6 +242,12 @@ const detailData = ref(null)
 const isLoadingDetail = ref(false)
 
 let pollInterval = null
+
+// Doküman içi arama durumları
+const docSearchQuery = ref('')
+const matchCount = ref(0)
+const activeMatchIndex = ref(0)
+const highlightedOcrHtml = ref('')
 
 // ============================================================
 // Computed: Kesin ve Olası Sonuçlar
@@ -279,13 +302,92 @@ function stopPolling() {
 }
 
 // ============================================================
-// Doküman Detay Modalı
+// Doküman Detay Modalı ve İçerik Arama Mantığı
 // ============================================================
+
+function getHighlightedHtml(text, query) {
+  if (!text) return '';
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  if (!query || query.trim().length === 0) {
+    matchCount.value = 0;
+    activeMatchIndex.value = 0;
+    return escaped;
+  }
+
+  const term = query.trim();
+  const escapedTerm = term.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escapedTerm})`, 'gi');
+  
+  let matchId = 0;
+  const highlighted = escaped.replace(regex, (match) => {
+    const id = matchId++;
+    return `<span class="doc-match" data-match-index="${id}">${match}</span>`;
+  });
+
+  matchCount.value = matchId;
+  return highlighted;
+}
+
+function updateActiveMatch() {
+  nextTick(() => {
+    const container = document.querySelector('.ocr-text');
+    if (!container) return;
+
+    const matches = container.querySelectorAll('.doc-match');
+    matches.forEach((el, idx) => {
+      if (idx === activeMatchIndex.value) {
+        el.classList.add('doc-match--active');
+        
+        // Sadece container elementini kaydır
+        const containerRect = container.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        container.scrollTop = container.scrollTop + (elRect.top - containerRect.top) - (containerRect.height / 2) + (elRect.height / 2);
+      } else {
+        el.classList.remove('doc-match--active');
+      }
+    });
+  });
+}
+
+function onDocSearch() {
+  activeMatchIndex.value = 0;
+  updateHighlightHtml();
+}
+
+function nextMatch() {
+  if (matchCount.value === 0) return;
+  activeMatchIndex.value = (activeMatchIndex.value + 1) % matchCount.value;
+  updateActiveMatch();
+}
+
+function prevMatch() {
+  if (matchCount.value === 0) return;
+  activeMatchIndex.value = (activeMatchIndex.value - 1 + matchCount.value) % matchCount.value;
+  updateActiveMatch();
+}
+
+function updateHighlightHtml() {
+  const text = detailData.value?.metadata?.extracted_text || detailData.value?.metadata?.extractedText || '';
+  highlightedOcrHtml.value = getHighlightedHtml(text, docSearchQuery.value);
+  updateActiveMatch();
+}
+
+watch([docSearchQuery, detailData], () => {
+  updateHighlightHtml();
+});
 
 async function openDetail(doc) {
   selectedDoc.value = doc
   isLoadingDetail.value = true
   detailData.value = null
+  docSearchQuery.value = searchQuery.value || '' // Arama sorgusuyla başlat
+  activeMatchIndex.value = 0
 
   try {
     const response = await fetch(`/api/documents/${doc.id}`)
@@ -304,6 +406,10 @@ async function openDetail(doc) {
 function closeDetail() {
   selectedDoc.value = null
   detailData.value = null
+  docSearchQuery.value = ''
+  matchCount.value = 0
+  activeMatchIndex.value = 0
+  highlightedOcrHtml.value = ''
 }
 
 // ============================================================
@@ -896,6 +1002,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .ocr-label {
@@ -913,6 +1021,70 @@ onUnmounted(() => {
   color: var(--accent);
 }
 
+/* Doküman içi arama çubuğu */
+.doc-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+  max-width: 280px;
+  transition: border-color 0.2s;
+}
+
+.doc-search-box:focus-within {
+  border-color: var(--accent);
+}
+
+.doc-search-input {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-family: inherit;
+  width: 130px;
+}
+
+.doc-search-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.doc-search-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-left: 1px solid var(--border);
+  padding-left: 0.35rem;
+}
+
+.doc-search-count {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.doc-nav-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.1rem 0.2rem;
+  font-size: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.doc-nav-btn:hover {
+  color: var(--accent);
+}
+
 .ocr-text {
   background: var(--bg-primary);
   border: 1px solid var(--border);
@@ -926,6 +1098,25 @@ onUnmounted(() => {
   word-break: break-word;
   max-height: 400px;
   overflow-y: auto;
+  position: relative;
+}
+
+/* Match Highlights (Fosforlu Kalem) */
+.ocr-text :deep(.doc-match) {
+  background: rgba(250, 204, 21, 0.35);
+  color: #fff;
+  border-radius: 2px;
+  transition: all 0.15s;
+  padding: 0.05rem 0.1rem;
+}
+
+.ocr-text :deep(.doc-match--active) {
+  background: linear-gradient(120deg, rgba(34, 197, 94, 0.75) 0%, rgba(74, 222, 128, 0.7) 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.6), 0 2px 4px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+  transform: scale(1.03);
+  display: inline-block;
 }
 
 /* Modal Transition */
