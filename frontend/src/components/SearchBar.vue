@@ -12,11 +12,18 @@
         @keydown.enter="search"
       />
       
+      <!-- Dosya Türü Seçici -->
+      <select v-model="fileType" class="search-filter-select" title="Dosya Türü" @change="search">
+        <option value="all">Tümü</option>
+        <option value="pdf">PDF</option>
+        <option value="image">Resim</option>
+      </select>
+      
       <!-- Arama Modu Seçici -->
       <select v-model="searchMode" class="search-mode-select" title="Arama Hassasiyeti" @change="search">
+        <option value="fuzzy">Akıllı (Varsayılan)</option>
         <option value="broad">Geniş (Herhangi bir yerde)</option>
         <option value="exact">Katı (Tam eşleşme)</option>
-        <option value="fuzzy">Akıllı (Yazım hatası toleranslı)</option>
       </select>
 
       <button
@@ -41,7 +48,8 @@ import { ref, watch } from 'vue'
 
 const emit = defineEmits(['results', 'clear', 'loading'])
 const query = ref('')
-const searchMode = ref('broad')
+const searchMode = ref('fuzzy')
+const fileType = ref('all')
 const isSearching = ref(false)
 
 async function search() {
@@ -52,7 +60,7 @@ async function search() {
   emit('loading', true)
 
   try {
-    const response = await fetch(`/api/documents/search?q=${encodeURIComponent(term)}&mode=${searchMode.value}`)
+    const response = await fetch(`/api/documents/search?q=${encodeURIComponent(term)}&mode=${searchMode.value}&fileType=${fileType.value}`)
     if (response.ok) {
       const data = await response.json()
       emit('results', data.results || [], term)
@@ -123,7 +131,7 @@ watch(query, (newVal) => {
   opacity: 0.5;
 }
 
-.search-mode-select {
+.search-filter-select, .search-mode-select {
   background: var(--bg-primary);
   border: 1px solid var(--border);
   color: var(--text-secondary);
@@ -134,8 +142,14 @@ watch(query, (newVal) => {
   outline: none;
   cursor: pointer;
   transition: all 0.2s;
+  min-width: 140px;
 }
 
+.search-filter-select {
+  min-width: 80px;
+}
+
+.search-filter-select:hover, .search-filter-select:focus,
 .search-mode-select:hover, .search-mode-select:focus {
   border-color: var(--accent);
   color: var(--text-primary);
