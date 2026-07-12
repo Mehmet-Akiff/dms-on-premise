@@ -1,6 +1,6 @@
 <template>
   <div class="search-container">
-    <!-- Ana Arama Satırı -->
+    <!-- Üst Satır: Input + Ara Butonu -->
     <div class="search-row">
       <div class="search-input-group">
         <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -13,19 +13,14 @@
           placeholder="Doküman adı veya içeriğinde ara..."
           @keydown.enter="search"
         />
-        <button
-          v-if="query.length > 0"
-          class="search-clear-btn"
-          @click="clearSearch"
-          title="Temizle"
-        >
+        <button v-if="query.length > 0" class="search-clear-btn" @click="clearSearch" title="Temizle">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
       </div>
       <button class="search-submit" @click="search" :disabled="isSearching || query.trim().length === 0">
-        <svg v-if="!isSearching" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg v-if="!isSearching" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
         <div v-else class="search-spinner"></div>
@@ -33,43 +28,45 @@
       </button>
     </div>
 
-    <!-- Filtre Satırı -->
+    <!-- Alt Satır: Filtre Dropdown'ları -->
     <div class="filter-row">
-      <!-- Arama Modu -->
-      <div class="filter-group">
-        <span class="filter-label">Mod:</span>
-        <div class="filter-chips">
-          <button
-            v-for="m in modes"
-            :key="m.value"
-            class="filter-chip"
-            :class="{ 'filter-chip--active': searchMode === m.value }"
-            @click="setMode(m.value)"
-          >
-            <span class="chip-icon">{{ m.icon }}</span>
-            {{ m.label }}
-          </button>
-        </div>
+      <div class="filter-item">
+        <label class="filter-label">Arama Modu</label>
+        <select v-model="searchMode" class="filter-select" @change="onFilterChange">
+          <option value="fuzzy">🔮 Akıllı — Yazım hatalarını tolere eder, en esnek</option>
+          <option value="broad">🔍 Geniş — Kelimenin kökünü veya parçasını arar</option>
+          <option value="exact">🎯 Katı — Birebir yazdığın gibi arar (büyük/küçük harf duyarsız)</option>
+        </select>
       </div>
 
-      <!-- Ayırıcı -->
-      <div class="filter-divider"></div>
+      <div class="filter-item filter-item--sm">
+        <label class="filter-label">Dosya Türü</label>
+        <select v-model="fileType" class="filter-select" @change="onFilterChange">
+          <option value="all">📁 Tüm Dosyalar</option>
+          <option value="pdf">📕 Sadece PDF</option>
+          <option value="image">🖼️ Sadece Resim (JPG, PNG)</option>
+        </select>
+      </div>
 
-      <!-- Dosya Türü -->
-      <div class="filter-group">
-        <span class="filter-label">Tür:</span>
-        <div class="filter-chips">
-          <button
-            v-for="ft in fileTypes"
-            :key="ft.value"
-            class="filter-chip"
-            :class="{ 'filter-chip--active': fileType === ft.value }"
-            @click="setFileType(ft.value)"
-          >
-            <span class="chip-icon">{{ ft.icon }}</span>
-            {{ ft.label }}
-          </button>
-        </div>
+      <div class="filter-item filter-item--sm">
+        <label class="filter-label">Durum</label>
+        <select v-model="statusFilter" class="filter-select" @change="onFilterChange">
+          <option value="all">Tümü</option>
+          <option value="completed">✅ Tamamlanan</option>
+          <option value="pending">⏳ Bekleyen</option>
+          <option value="failed">❌ Başarısız</option>
+        </select>
+      </div>
+
+      <div class="filter-item filter-item--sm">
+        <label class="filter-label">Sıralama</label>
+        <select v-model="sortOrder" class="filter-select" @change="onFilterChange">
+          <option value="relevance">⭐ Alaka Düzeyine Göre</option>
+          <option value="newest">📅 En Yeni Önce</option>
+          <option value="oldest">📅 En Eski Önce</option>
+          <option value="name_asc">🔤 A → Z</option>
+          <option value="name_desc">🔤 Z → A</option>
+        </select>
       </div>
     </div>
   </div>
@@ -82,27 +79,11 @@ const emit = defineEmits(['results', 'clear', 'loading'])
 const query = ref('')
 const searchMode = ref('fuzzy')
 const fileType = ref('all')
+const statusFilter = ref('all')
+const sortOrder = ref('relevance')
 const isSearching = ref(false)
 
-const modes = [
-  { value: 'fuzzy', label: 'Akıllı', icon: '✨' },
-  { value: 'broad', label: 'Geniş', icon: '🔍' },
-  { value: 'exact', label: 'Katı', icon: '🎯' },
-]
-
-const fileTypes = [
-  { value: 'all', label: 'Tümü', icon: '📁' },
-  { value: 'pdf', label: 'PDF', icon: '📕' },
-  { value: 'image', label: 'Resim', icon: '🖼️' },
-]
-
-function setMode(mode) {
-  searchMode.value = mode
-  if (query.value.trim().length > 0) search()
-}
-
-function setFileType(type) {
-  fileType.value = type
+function onFilterChange() {
   if (query.value.trim().length > 0) search()
 }
 
@@ -114,7 +95,14 @@ async function search() {
   emit('loading', true)
 
   try {
-    const response = await fetch(`/api/documents/search?q=${encodeURIComponent(term)}&mode=${searchMode.value}&fileType=${fileType.value}`)
+    const params = new URLSearchParams({
+      q: term,
+      mode: searchMode.value,
+      fileType: fileType.value,
+      status: statusFilter.value,
+      sort: sortOrder.value,
+    })
+    const response = await fetch(`/api/documents/search?${params}`)
     if (response.ok) {
       const data = await response.json()
       emit('results', data.results || [], term)
@@ -134,6 +122,8 @@ function clearSearch() {
   query.value = ''
   searchMode.value = 'fuzzy'
   fileType.value = 'all'
+  statusFilter.value = 'all'
+  sortOrder.value = 'relevance'
   emit('clear')
 }
 
@@ -148,14 +138,14 @@ watch(query, (newVal) => {
 .search-container {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.6rem;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.85rem 1rem;
 }
 
-/* ===== Ana Arama Satırı ===== */
+/* ===== Üst Satır ===== */
 .search-row {
   display: flex;
   align-items: center;
@@ -172,6 +162,7 @@ watch(query, (newVal) => {
   border-radius: 10px;
   padding: 0.55rem 0.85rem;
   transition: border-color 0.2s, box-shadow 0.2s;
+  min-width: 0;
 }
 
 .search-input-group:focus-within {
@@ -262,74 +253,59 @@ watch(query, (newVal) => {
   to { transform: rotate(360deg); }
 }
 
-/* ===== Filtre Satırı ===== */
+/* ===== Alt Satır: Filtreler ===== */
 .filter-row {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.filter-group {
+.filter-item {
+  flex: 1 1 200px;
+  min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.filter-item--sm {
+  flex: 0 1 150px;
 }
 
 .filter-label {
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.62rem;
+  font-weight: 700;
   color: var(--text-secondary);
-  opacity: 0.6;
+  opacity: 0.55;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  flex-shrink: 0;
+  letter-spacing: 0.8px;
+  padding-left: 0.15rem;
 }
 
-.filter-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-  flex-shrink: 0;
-}
-
-.filter-chips {
-  display: flex;
-  gap: 0.3rem;
-}
-
-.filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  background: transparent;
-  color: var(--text-secondary);
+.filter-select {
+  width: 100%;
+  background: var(--bg-primary);
   border: 1px solid var(--border);
+  color: var(--text-secondary);
   border-radius: 8px;
-  padding: 0.28rem 0.6rem;
-  font-size: 0.72rem;
-  font-weight: 500;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.75rem;
   font-family: inherit;
+  outline: none;
   cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
+  transition: border-color 0.2s, color 0.2s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  padding-right: 1.5rem;
+  text-overflow: ellipsis;
 }
 
-.filter-chip:hover {
-  border-color: rgba(56, 189, 248, 0.4);
+.filter-select:hover,
+.filter-select:focus {
+  border-color: var(--accent);
   color: var(--text-primary);
-  background: rgba(56, 189, 248, 0.05);
-}
-
-.filter-chip--active {
-  background: var(--accent-glow);
-  color: var(--accent);
-  border-color: rgba(56, 189, 248, 0.4);
-  font-weight: 600;
-}
-
-.chip-icon {
-  font-size: 0.72rem;
-  line-height: 1;
 }
 </style>

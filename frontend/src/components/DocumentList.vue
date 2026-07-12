@@ -46,7 +46,10 @@
             <tr class="doc-row">
               <td class="doc-name">
                 <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
-                {{ doc.originalName || doc.original_name }}
+                <span class="doc-name-text">{{ doc.originalName || doc.original_name }}</span>
+                <span v-if="isSearchMode && doc.matchLocation" class="match-badge" :class="'match--' + doc.matchLocation">
+                  {{ doc.matchLocation === 'filename' ? '📌 Adında' : '📄 İçerikte' }}
+                </span>
               </td>
               <td>
                 <span class="type-badge">{{ getTypeLabel(doc.mimeType || doc.mime_type) }}</span>
@@ -99,7 +102,10 @@
             <tr class="doc-row doc-row--dimmed">
               <td class="doc-name">
                 <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
-                {{ doc.originalName || doc.original_name }}
+                <span class="doc-name-text">{{ doc.originalName || doc.original_name }}</span>
+                <span v-if="doc.matchLocation" class="match-badge" :class="'match--' + doc.matchLocation">
+                  {{ doc.matchLocation === 'filename' ? '📌 Adında' : '📄 İçerikte' }}
+                </span>
               </td>
               <td>
                 <span class="type-badge">{{ getTypeLabel(doc.mimeType || doc.mime_type) }}</span>
@@ -591,10 +597,12 @@ onUnmounted(() => {
 }
 
 .search-highlight :deep(mark) {
-  background: rgba(56, 189, 248, 0.25);
-  color: var(--accent);
-  padding: 0.1rem 0.2rem;
+  background: linear-gradient(120deg, rgba(250, 204, 21, 0.4) 0%, rgba(74, 222, 128, 0.35) 100%);
+  color: #fef9c3;
+  padding: 0.1rem 0.3rem;
   border-radius: 3px;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(250, 204, 21, 0.15);
 }
 
 .doc-table td {
@@ -608,14 +616,42 @@ onUnmounted(() => {
   gap: 0.5rem;
   font-weight: 500;
   color: var(--text-primary);
-  max-width: 280px;
+  max-width: 380px;
+  overflow: hidden;
+}
+
+.doc-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doc-icon {
   font-size: 1.1rem;
   flex-shrink: 0;
+}
+
+/* Eşleşme Konumu Badge */
+.match-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+
+.match--filename {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.25);
+}
+
+.match--content {
+  background: rgba(56, 189, 248, 0.1);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.2);
 }
 
 .doc-date {

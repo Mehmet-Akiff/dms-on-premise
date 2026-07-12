@@ -327,30 +327,44 @@ router.delete('/clear-ghosts', async (req, res) => {
 });
 
 // ============================================================
-// GET /api/documents/search?q=kelime&mode=broad|exact|fuzzy&fileType=all|pdf|image — Arama
+// GET /api/documents/search — Arama (mode, fileType, status, sort)
 // ============================================================
 
 router.get('/search', async (req, res) => {
   try {
-    const { q, mode = 'fuzzy', fileType = 'all' } = req.query;
+    const { q, mode = 'fuzzy', fileType = 'all', status = 'all', sort = 'relevance' } = req.query;
 
     if (!q || q.trim().length === 0) {
       return res.status(400).json({ error: 'Arama sorgusu (q) parametresi gereklidir.' });
     }
 
     const searchTerm = q.trim();
-    console.log(`[ARAMA] Mod: ${mode} — Tür: ${fileType} — Sorgu: "${searchTerm}"`);
+    console.log(`[ARAMA] Mod: ${mode} | Tür: ${fileType} | Durum: ${status} | Sıra: ${sort} | Sorgu: "${searchTerm}"`);
 
     let queryStr = '';
     const isFuzzy = mode === 'fuzzy';
     
     // Filtreler
-    let fileTypeFilter = '';
+    let extraFilters = '';
     if (fileType === 'pdf') {
-      fileTypeFilter = `AND d.mime_type = 'application/pdf'`;
+      extraFilters += ` AND d.mime_type = 'application/pdf'`;
     } else if (fileType === 'image') {
-      fileTypeFilter = `AND d.mime_type LIKE 'image/%'`;
+      extraFilters += ` AND d.mime_type LIKE 'image/%'`;
     }
+    if (status === 'completed') {
+      extraFilters += ` AND d.status = 'COMPLETED'`;
+    } else if (status === 'pending') {
+      extraFilters += ` AND d.status = 'PENDING'`;
+    } else if (status === 'failed') {
+      extraFilters += ` AND d.status = 'FAILED'`;
+    }
+
+    // Sıralama
+    let orderClause = 'ORDER BY relevance DESC';
+    if (sort === 'newest') orderClause = 'ORDER BY d.created_at DESC';
+    else if (sort === 'oldest') orderClause = 'ORDER BY d.created_at ASC';
+    else if (sort === 'name_asc') orderClause = 'ORDER BY d.original_name ASC';
+    else if (sort === 'name_desc') orderClause = 'ORDER BY d.original_name DESC';
 
     if (mode === 'exact') {
       // 1. KATI EŞLEŞME (Exact Match): ILIKE
@@ -364,8 +378,8 @@ router.get('/search', async (req, res) => {
        FROM documents d
        LEFT JOIN document_metadata dm ON dm.document_id = d.id
        WHERE (d.original_name ILIKE '%' || :searchTerm || '%' OR COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%')
-       ${fileTypeFilter}
-       ORDER BY (d.original_name ILIKE '%' || :searchTerm || '%') DESC LIMIT 50`;
+       ${extraFilters}
+       ${orderClause} LIMIT 50`;
        
     } else if (isFuzzy) {
       // 3. AKILLI ARAMA (Fuzzy Match + Hybrid Scoring)
@@ -389,8 +403,8 @@ router.get('/search', async (req, res) => {
          OR d.original_name ILIKE '%' || :searchTerm || '%'
          OR COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%'
        )
-       ${fileTypeFilter}
-       ORDER BY relevance DESC LIMIT 50`;
+       ${extraFilters}
+       ${orderClause} LIMIT 50`;
        
     } else {
       // 2. GENİŞ ARAMA (Broad Match): plainto_tsquery
@@ -409,8 +423,8 @@ router.get('/search', async (req, res) => {
          to_tsvector('simple', COALESCE(d.original_name, '')) @@ plainto_tsquery('simple', :searchTerm) OR
          to_tsvector('simple', COALESCE(dm.extracted_text, '')) @@ plainto_tsquery('simple', :searchTerm)
        )
-       ${fileTypeFilter}
-       ORDER BY relevance DESC LIMIT 50`;
+       ${extraFilters}
+       ${orderClause} LIMIT 50`;
     }
 
     const results = await sequelize.query(queryStr, {
@@ -418,16 +432,21 @@ router.get('/search', async (req, res) => {
       type: sequelize.constructor.QueryTypes.SELECT,
     });
 
-    // ILIKE ve Fuzzy aramada regex bazlı highlight yapalım
-    if ((isFuzzy || mode === 'exact') && results.length > 0) {
-      const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
-      const fuzzyRegex = new RegExp(`(${escapedTerm})`, 'gi');
-      results.forEach(r => {
-        if (r.highlight) {
-          r.highlight = r.highlight.replace(fuzzyRegex, '<mark>$1</mark>');
-        }
-      });
-    }
+    // Highlight ve matchLocation zenginleştirmesi
+    const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+    const highlightRegex = new RegExp(`(${escapedTerm})`, 'gi');
+    results.forEach(r => {
+      // Eşleşmenin nerede bulunduğunu belirle
+      const nameMatch = r.originalName && highlightRegex.test(r.originalName);
+      highlightRegex.lastIndex = 0;
+      r.matchLocation = nameMatch ? 'filename' : 'content';
+
+      // Highlight ekle (ILIKE/Fuzzy modları için)
+      if ((isFuzzy || mode === 'exact') && r.highlight) {
+        r.highlight = r.highlight.replace(highlightRegex, '<mark>$1</mark>');
+        highlightRegex.lastIndex = 0;
+      }
+    });
 
     console.log(`[ARAMA] "${searchTerm}" için ${results.length} sonuç bulundu.`);
 
@@ -435,6 +454,8 @@ router.get('/search', async (req, res) => {
       query: searchTerm,
       mode,
       fileType,
+      status,
+      sort,
       count: results.length,
       results,
     });
