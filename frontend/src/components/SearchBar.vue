@@ -261,7 +261,7 @@ watch(query, (newVal) => {
 }
 
 .filter-item {
-  flex: 1 1 200px;
+  flex: 1 1 140px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -269,7 +269,7 @@ watch(query, (newVal) => {
 }
 
 .filter-item--sm {
-  flex: 0 1 150px;
+  flex: 1 1 110px;
 }
 
 .filter-label {

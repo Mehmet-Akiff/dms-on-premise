@@ -327,6 +327,96 @@ router.delete('/clear-ghosts', async (req, res) => {
 });
 
 // ============================================================
+// Yardımcı Fonksiyonlar: Akıllı Snippet ve Highlight (Fosforlu Kalem) Motoru
+// ============================================================
+
+function getMatchSnippet(text, query) {
+  if (!text) return '';
+  const cleanText = text.replace(/\s+/g, ' ').trim();
+  const queryLower = query.toLowerCase();
+  
+  // 1. Birebir eşleşme ara (büyük/küçük harf duyarsız)
+  const idx = cleanText.toLowerCase().indexOf(queryLower);
+  if (idx !== -1) {
+    const start = Math.max(0, idx - 80);
+    const end = Math.min(cleanText.length, idx + query.length + 80);
+    return (start > 0 ? '...' : '') + cleanText.substring(start, end) + (end < cleanText.length ? '...' : '');
+  }
+  
+  // 2. Akıllı fuzzy eşleşme (kelime bazlı karakter benzerliği)
+  const words = cleanText.split(' ');
+  let bestIdx = -1;
+  let maxOverlap = 0;
+  
+  for (let i = 0; i < words.length; i++) {
+    const cleanWord = words[i].toLowerCase().replace(/[^a-z0-9ıışğüçö]/gi, '');
+    if (cleanWord.length < 2) continue;
+    
+    let matches = 0;
+    const wordSet = new Set(cleanWord);
+    for (const char of queryLower) {
+      if (wordSet.has(char)) matches++;
+    }
+    const overlap = matches / Math.max(cleanWord.length, queryLower.length);
+    if (overlap > maxOverlap) {
+      maxOverlap = overlap;
+      bestIdx = i;
+    }
+  }
+  
+  if (bestIdx !== -1 && maxOverlap > 0.35) {
+    const startWord = Math.max(0, bestIdx - 8);
+    const endWord = Math.min(words.length, bestIdx + 8);
+    return (startWord > 0 ? '...' : '') + words.slice(startWord, endWord).join(' ') + (endWord < words.length ? '...' : '');
+  }
+  
+  // 3. Fallback: eşleşme bulunamazsa ilk 150 karakteri göster
+  return cleanText.substring(0, 150) + (cleanText.length > 150 ? '...' : '');
+}
+
+function applyHighlight(snippet, query) {
+  if (!snippet || !query) return snippet;
+  const escaped = query.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  
+  // Birebir eşleşmeyi sarı/yeşil işaretle
+  if (regex.test(snippet)) {
+    return snippet.replace(regex, '<mark>$1</mark>');
+  }
+  
+  // Fuzzy kelime işaretlemesi
+  const cleanQuery = query.toLowerCase().replace(/[^a-z0-9ıışğüçö]/gi, '');
+  if (cleanQuery.length < 2) return snippet;
+  
+  const tokens = snippet.split(/(\s+)/);
+  let bestIdx = -1;
+  let maxOverlap = 0;
+  
+  for (let i = 0; i < tokens.length; i++) {
+    const cleanToken = tokens[i].toLowerCase().replace(/[^a-z0-9ıışğüçö]/gi, '');
+    if (cleanToken.length < 2) continue;
+    
+    let matches = 0;
+    const tokenSet = new Set(cleanToken);
+    for (const char of cleanQuery) {
+      if (tokenSet.has(char)) matches++;
+    }
+    const overlap = matches / Math.max(cleanToken.length, cleanQuery.length);
+    if (overlap > maxOverlap) {
+      maxOverlap = overlap;
+      bestIdx = i;
+    }
+  }
+  
+  if (bestIdx !== -1 && maxOverlap > 0.35) {
+    tokens[bestIdx] = `<mark>${tokens[bestIdx]}</mark>`;
+    return tokens.join('');
+  }
+  
+  return snippet;
+}
+
+// ============================================================
 // GET /api/documents/search — Arama (mode, fileType, status, sort)
 // ============================================================
 
@@ -368,13 +458,12 @@ router.get('/search', async (req, res) => {
 
     if (mode === 'exact') {
       // 1. KATI EŞLEŞME (Exact Match): ILIKE
-      // Birebir eşleşme arar, büyük-küçük harf duyarsızdır (PostgreSQL ILIKE).
       queryStr = `
         SELECT
          d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
          1.0 AS relevance,
          (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN false ELSE true END) AS "isDimmed",
-         substring(COALESCE(dm.extracted_text, '') from 1 for 250) || '...' AS highlight
+         COALESCE(dm.extracted_text, '') AS "extractedText"
        FROM documents d
        LEFT JOIN document_metadata dm ON dm.document_id = d.id
        WHERE (d.original_name ILIKE '%' || :searchTerm || '%' OR COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%')
@@ -383,7 +472,7 @@ router.get('/search', async (req, res) => {
        
     } else if (isFuzzy) {
       // 3. AKILLI ARAMA (Fuzzy Match + Hybrid Scoring)
-      // Dosya adı ağırlıklı, pg_trgm + ILIKE kombinasyonu
+      // Eşleşme hassasiyeti (threshold) > 0.30 olarak yükseltildi, alakasız kelimeler getirilmez.
       queryStr = `
         SELECT
          d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
@@ -393,13 +482,13 @@ router.get('/search', async (req, res) => {
            (CASE WHEN COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%' THEN 3 ELSE 0 END) +
            (word_similarity(:searchTerm, COALESCE(dm.extracted_text, '')) * 1)
          ) AS relevance,
-         (CASE WHEN (d.original_name ILIKE '%' || :searchTerm || '%' OR word_similarity(:searchTerm, d.original_name) > 0.25) THEN false ELSE true END) AS "isDimmed",
-         substring(COALESCE(dm.extracted_text, '') from 1 for 250) || '...' AS highlight
+         (CASE WHEN (d.original_name ILIKE '%' || :searchTerm || '%' OR word_similarity(:searchTerm, d.original_name) > 0.35) THEN false ELSE true END) AS "isDimmed",
+         COALESCE(dm.extracted_text, '') AS "extractedText"
        FROM documents d
        LEFT JOIN document_metadata dm ON dm.document_id = d.id
        WHERE (
-         word_similarity(:searchTerm, d.original_name) > 0.15 
-         OR word_similarity(:searchTerm, COALESCE(dm.extracted_text, '')) > 0.15
+         word_similarity(:searchTerm, d.original_name) > 0.30 
+         OR word_similarity(:searchTerm, COALESCE(dm.extracted_text, '')) > 0.30
          OR d.original_name ILIKE '%' || :searchTerm || '%'
          OR COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%'
        )
@@ -416,7 +505,7 @@ router.get('/search', async (req, res) => {
            ts_rank(to_tsvector('simple', COALESCE(dm.extracted_text, '')), plainto_tsquery('simple', :searchTerm))
          ) AS relevance,
          (CASE WHEN to_tsvector('simple', COALESCE(d.original_name, '')) @@ plainto_tsquery('simple', :searchTerm) THEN false ELSE true END) AS "isDimmed",
-         ts_headline('simple', COALESCE(dm.extracted_text, ''), plainto_tsquery('simple', :searchTerm), 'StartSel=<mark>, StopSel=</mark>, MaxWords=40, MinWords=20') AS highlight
+         COALESCE(dm.extracted_text, '') AS "extractedText"
        FROM documents d
        LEFT JOIN document_metadata dm ON dm.document_id = d.id
        WHERE (
@@ -432,20 +521,22 @@ router.get('/search', async (req, res) => {
       type: sequelize.constructor.QueryTypes.SELECT,
     });
 
-    // Highlight ve matchLocation zenginleştirmesi
-    const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
-    const highlightRegex = new RegExp(`(${escapedTerm})`, 'gi');
+    // JS tabanlı dinamik snippet ve highlight oluşturma
     results.forEach(r => {
-      // Eşleşmenin nerede bulunduğunu belirle
-      const nameMatch = r.originalName && highlightRegex.test(r.originalName);
-      highlightRegex.lastIndex = 0;
-      r.matchLocation = nameMatch ? 'filename' : 'content';
+      const nameLower = (r.originalName || '').toLowerCase();
+      const searchLower = searchTerm.toLowerCase();
 
-      // Highlight ekle (ILIKE/Fuzzy modları için)
-      if ((isFuzzy || mode === 'exact') && r.highlight) {
-        r.highlight = r.highlight.replace(highlightRegex, '<mark>$1</mark>');
-        highlightRegex.lastIndex = 0;
-      }
+      // Eşleşmenin nerede olduğunu tespit et
+      const inFilename = nameLower.includes(searchLower);
+      r.matchLocation = inFilename ? 'filename' : 'content';
+
+      // Dinamik snippet oluştur ve highlight et
+      const rawText = r.extractedText || '';
+      const snippet = getMatchSnippet(rawText, searchTerm);
+      r.highlight = applyHighlight(snippet, searchTerm);
+
+      // Gönderilen veriyi hafifletmek için extractedText alanını sil
+      delete r.extractedText;
     });
 
     console.log(`[ARAMA] "${searchTerm}" için ${results.length} sonuç bulundu.`);
