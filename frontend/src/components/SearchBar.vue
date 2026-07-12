@@ -13,7 +13,7 @@
       />
       
       <!-- Arama Modu Seçici -->
-      <select v-model="searchMode" class="search-mode-select" title="Arama Hassasiyeti">
+      <select v-model="searchMode" class="search-mode-select" title="Arama Hassasiyeti" @change="search">
         <option value="broad">Geniş (Herhangi bir yerde)</option>
         <option value="exact">Katı (Tam eşleşme)</option>
         <option value="fuzzy">Akıllı (Yazım hatası toleranslı)</option>
