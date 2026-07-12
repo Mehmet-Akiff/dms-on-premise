@@ -42,7 +42,7 @@
         </thead>
         <tbody>
           <template v-for="doc in documents" :key="doc.id">
-            <tr class="doc-row">
+            <tr class="doc-row" :class="{ 'doc-row--dimmed': doc.isDimmed }">
               <td class="doc-name">
                 <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
                 {{ doc.originalName || doc.original_name }}
@@ -75,7 +75,7 @@
               </td>
             </tr>
             <!-- Arama Highlight Satırı -->
-            <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight">
+            <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight" :class="{ 'doc-row--dimmed': doc.isDimmed }">
               <td colspan="5">
                 <div class="search-highlight" v-html="doc.highlight"></div>
               </td>
@@ -473,6 +473,16 @@ onUnmounted(() => {
 
 .doc-row:hover {
   background: rgba(56, 189, 248, 0.03);
+}
+
+.doc-row--dimmed {
+  opacity: 0.55;
+  filter: grayscale(80%);
+}
+
+.doc-row--dimmed:hover {
+  opacity: 0.75;
+  filter: grayscale(40%);
 }
 
 .doc-row-highlight {
