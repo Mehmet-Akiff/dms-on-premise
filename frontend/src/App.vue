@@ -230,6 +230,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
 }
 
 .panel-title {
