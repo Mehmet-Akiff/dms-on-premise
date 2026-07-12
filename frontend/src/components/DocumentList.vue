@@ -41,8 +41,9 @@
           </tr>
         </thead>
         <tbody>
-          <template v-for="doc in documents" :key="doc.id">
-            <tr class="doc-row" :class="{ 'doc-row--dimmed': doc.isDimmed }">
+          <!-- Kesin Eşleşmeler -->
+          <template v-for="doc in primaryResults" :key="doc.id">
+            <tr class="doc-row">
               <td class="doc-name">
                 <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
                 {{ doc.originalName || doc.original_name }}
@@ -75,7 +76,59 @@
               </td>
             </tr>
             <!-- Arama Highlight Satırı -->
-            <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight" :class="{ 'doc-row--dimmed': doc.isDimmed }">
+            <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight">
+              <td colspan="5">
+                <div class="search-highlight" v-html="doc.highlight"></div>
+              </td>
+            </tr>
+          </template>
+
+          <!-- Olası Eşleşmeler Ayırıcı -->
+          <tr v-if="isSearchMode && dimmedResults.length > 0 && primaryResults.length > 0" class="dimmed-separator-row">
+            <td colspan="5">
+              <div class="dimmed-separator">
+                <div class="dimmed-separator-line"></div>
+                <span class="dimmed-separator-text">💡 Olası Eşleşmeler ({{ dimmedResults.length }})</span>
+                <div class="dimmed-separator-line"></div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Olası (Dimmed) Eşleşmeler -->
+          <template v-for="doc in dimmedResults" :key="'dim-' + doc.id">
+            <tr class="doc-row doc-row--dimmed">
+              <td class="doc-name">
+                <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
+                {{ doc.originalName || doc.original_name }}
+              </td>
+              <td>
+                <span class="type-badge">{{ getTypeLabel(doc.mimeType || doc.mime_type) }}</span>
+              </td>
+              <td>
+                <span class="status-badge" :class="'status--' + (doc.status || '').toLowerCase()">
+                  <span class="status-dot"></span>
+                  {{ getStatusLabel(doc.status) }}
+                </span>
+              </td>
+              <td class="doc-date">{{ formatDate(doc.createdAt || doc.created_at) }}</td>
+              <td class="doc-actions">
+                <button
+                  v-if="doc.status === 'COMPLETED'"
+                  class="action-btn"
+                  @click="openDetail(doc)"
+                  title="OCR Metnini Görüntüle"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+                <span v-else-if="doc.status === 'PROCESSING'" class="action-hint">
+                  <div class="spinner-xs"></div>
+                </span>
+              </td>
+            </tr>
+            <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight doc-row--dimmed">
               <td colspan="5">
                 <div class="search-highlight" v-html="doc.highlight"></div>
               </td>
@@ -154,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const documents = ref([])
 const isLoading = ref(true)
@@ -166,6 +219,20 @@ const detailData = ref(null)
 const isLoadingDetail = ref(false)
 
 let pollInterval = null
+
+// ============================================================
+// Computed: Kesin ve Olası Sonuçlar
+// ============================================================
+
+const primaryResults = computed(() => {
+  if (!isSearchMode.value) return documents.value
+  return documents.value.filter(d => !d.isDimmed)
+})
+
+const dimmedResults = computed(() => {
+  if (!isSearchMode.value) return []
+  return documents.value.filter(d => d.isDimmed)
+})
 
 // ============================================================
 // Doküman Listesini Çek
@@ -476,13 +543,39 @@ onUnmounted(() => {
 }
 
 .doc-row--dimmed {
-  opacity: 0.55;
-  filter: grayscale(80%);
+  opacity: 0.5;
 }
 
 .doc-row--dimmed:hover {
-  opacity: 0.75;
-  filter: grayscale(40%);
+  opacity: 0.72;
+}
+
+/* Olası Eşleşmeler Ayırıcı */
+.dimmed-separator-row {
+  border: none !important;
+}
+
+.dimmed-separator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 0;
+}
+
+.dimmed-separator-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+.dimmed-separator-text {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .doc-row-highlight {
