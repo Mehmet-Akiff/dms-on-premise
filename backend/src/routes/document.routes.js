@@ -464,19 +464,56 @@ router.get('/search', async (req, res) => {
   try {
     const { q, mode = 'fuzzy', fileType = 'all', status = 'all', sort = 'relevance', category = 'all' } = req.query;
 
-    if (!q || q.trim().length === 0) {
-      return res.status(400).json({ error: 'Arama sorgusu (q) parametresi gereklidir.' });
-    }
-
-    const searchTerm = q.trim();
-    console.log(`[ARAMA] Mod: ${mode} | Tür: ${fileType} | Kategori: ${category} | Durum: ${status} | Sıra: ${sort} | Sorgu: "${searchTerm}"`);
+    const rawSearchTerm = q ? q.trim() : '';
+    console.log(`[ARAMA] Mod: ${mode} | Tür: ${fileType} | Kategori: ${category} | Durum: ${status} | Sıra: ${sort} | Ham Sorgu: "${rawSearchTerm}"`);
 
     let queryStr = '';
     const isFuzzy = mode === 'fuzzy';
-    const replacements = { searchTerm };
+    const replacements = {};
+    let extraFilters = '';
+
+    // 1. Negatif (hariç tutma) ve Pozitif kelimeleri ayrıştır
+    const excludeWords = [];
+    const searchWords = [];
+    let searchTerm = '';
+
+    if (rawSearchTerm.length > 0) {
+      const rawWords = rawSearchTerm.split(/\s+/).filter(w => w.length > 0);
+      let skipNext = false;
+
+      for (let i = 0; i < rawWords.length; i++) {
+        if (skipNext) {
+          skipNext = false;
+          continue;
+        }
+
+        const word = rawWords[i];
+        const wordUpper = word.toUpperCase();
+
+        if (word.startsWith('-') && word.length > 1) {
+          excludeWords.push(word.substring(1));
+        } else if (wordUpper === 'NOT' && i + 1 < rawWords.length) {
+          excludeWords.push(rawWords[i + 1]);
+          skipNext = true;
+        } else {
+          searchWords.push(word);
+        }
+      }
+
+      searchTerm = searchWords.join(' ').trim();
+      replacements.searchTerm = searchTerm;
+
+      // Negatif filtreleri SQL'e ekle
+      excludeWords.forEach((exWord, idx) => {
+        const key = `excludeWord${idx}`;
+        replacements[key] = `%${exWord}%`;
+        extraFilters += ` AND d.original_name NOT ILIKE :${key} AND COALESCE(dm.extracted_text, '') NOT ILIKE :${key}`;
+      });
+    } else {
+      replacements.searchTerm = '';
+    }
     
     // Filtreler
-    let extraFilters = '';
     if (fileType === 'pdf') {
       extraFilters += ` AND d.mime_type = 'application/pdf'`;
     } else if (fileType === 'image') {
@@ -503,7 +540,20 @@ router.get('/search', async (req, res) => {
     else if (sort === 'name_asc') orderClause = 'ORDER BY d.original_name ASC';
     else if (sort === 'name_desc') orderClause = 'ORDER BY d.original_name DESC';
 
-    if (mode === 'exact') {
+    if (searchTerm.length === 0) {
+      // SADECE FİLTRELEME (Arama kelimesi yok)
+      queryStr = `
+        SELECT
+         d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
+         1.0 AS relevance,
+         false AS "isDimmed",
+         COALESCE(dm.extracted_text, '') AS "extractedText"
+       FROM documents d
+       LEFT JOIN document_metadata dm ON dm.document_id = d.id
+       WHERE 1=1
+       ${extraFilters}
+       ${orderClause} LIMIT 50`;
+    } else if (mode === 'exact') {
       // 1. KATI EŞLEŞME (Exact Match): LIKE (Büyük/Küçük harf ve boşluk duyarlı)
       queryStr = `
         SELECT
@@ -614,13 +664,17 @@ router.get('/search', async (req, res) => {
     const isExact = (mode === 'exact');
     results.forEach(r => {
       const name = r.originalName || '';
-      const inFilename = isExact ? name.includes(searchTerm) : name.toLowerCase().includes(searchTerm.toLowerCase());
-      r.matchLocation = inFilename ? 'filename' : 'content';
-
-      // Dinamik snippet oluştur ve highlight et
       const rawText = r.extractedText || '';
-      const snippet = getMatchSnippet(rawText, searchTerm, isExact);
-      r.highlight = applyHighlight(snippet, searchTerm, isExact);
+      
+      if (searchTerm && searchTerm.length > 0) {
+        const inFilename = isExact ? name.includes(searchTerm) : name.toLowerCase().includes(searchTerm.toLowerCase());
+        r.matchLocation = inFilename ? 'filename' : 'content';
+        const snippet = getMatchSnippet(rawText, searchTerm, isExact);
+        r.highlight = applyHighlight(snippet, searchTerm, isExact);
+      } else {
+        r.matchLocation = 'filename';
+        r.highlight = rawText.substring(0, 150) + (rawText.length > 150 ? '...' : '');
+      }
 
       // Gönderilen veriyi hafifletmek için extractedText alanını sil
       delete r.extractedText;
@@ -652,17 +706,15 @@ router.get('/ai-search', async (req, res) => {
   try {
     const { q, status = 'all', sort = 'relevance' } = req.query;
 
-    if (!q || q.trim().length === 0) {
-      return res.status(400).json({ error: 'Arama sorgusu (q) parametresi gereklidir.' });
-    }
-
-    const originalQuery = q.trim();
+    const originalQuery = q ? q.trim() : '';
     console.log(`[AI_SEARCH] Doğal Dil Sorgusu: "${originalQuery}"`);
 
     // 1. AI Servisinden NLP Analizi iste
     let cleanedQuery = originalQuery;
     let detectedCategory = null;
     let detectedFileType = null;
+
+    if (originalQuery.length > 0) {
 
     try {
       const aiResponse = await fetch(`${AI_SERVICE_URL}/api/nlp-search`, {
@@ -683,29 +735,14 @@ router.get('/ai-search', async (req, res) => {
     } catch (aiError) {
       console.error(`[AI_SEARCH_WARN] AI Servis NLP analizi başarısız (direkt aramaya düşülüyor):`, aiError.message);
     }
-
-    // Eğer temizleme sonucu arama kelimesi boş kaldıysa ama kategori varsa, 
-    // aramayı kategorinin kendisiyle tetikleyelim veya boş q araması yaptıralım
-    const finalSearchTerm = cleanedQuery || detectedCategory || '';
-
-    if (finalSearchTerm.length === 0) {
-      // Eğer kelime bulunamadıysa, direkt boş sonuç dön
-      return res.status(200).json({
-        query: originalQuery,
-        aiAnalysis: {
-          cleanedQuery: '',
-          category: detectedCategory || 'Tümü',
-          fileType: detectedFileType || 'Tümü'
-        },
-        count: 0,
-        results: []
-      });
     }
+
+    const finalSearchTerm = cleanedQuery ? cleanedQuery.trim() : '';
+    const replacements = { searchTerm: finalSearchTerm };
 
     // 2. Çözümlenen parametrelerle iç arama sorgumuzu çalıştıralım
     // Filtreler
     let extraFilters = '';
-    const replacements = { searchTerm: finalSearchTerm };
 
     if (detectedFileType === 'pdf') {
       extraFilters += ` AND d.mime_type = 'application/pdf'`;
@@ -737,7 +774,19 @@ router.get('/ai-search', async (req, res) => {
     const searchWords = finalSearchTerm.split(/\s+/).filter(w => w.length > 0);
     let queryStr = '';
 
-    if (searchWords.length > 0) {
+    if (finalSearchTerm.length === 0) {
+      queryStr = `
+        SELECT
+         d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
+         1.0 AS relevance,
+         false AS "isDimmed",
+         COALESCE(dm.extracted_text, '') AS "extractedText"
+       FROM documents d
+       LEFT JOIN document_metadata dm ON dm.document_id = d.id
+       WHERE 1=1
+       ${extraFilters}
+       ${orderClause} LIMIT 50`;
+    } else if (searchWords.length > 0) {
       const relevanceParts = [];
       const whereParts = [];
 
@@ -794,12 +843,17 @@ router.get('/ai-search', async (req, res) => {
 
     results.forEach(r => {
       const name = r.originalName || '';
-      const inFilename = name.toLowerCase().includes(finalSearchTerm.toLowerCase());
-      r.matchLocation = inFilename ? 'filename' : 'content';
-
       const rawText = r.extractedText || '';
-      const snippet = getMatchSnippet(rawText, finalSearchTerm, false);
-      r.highlight = applyHighlight(snippet, finalSearchTerm, false);
+
+      if (finalSearchTerm && finalSearchTerm.length > 0) {
+        const inFilename = name.toLowerCase().includes(finalSearchTerm.toLowerCase());
+        r.matchLocation = inFilename ? 'filename' : 'content';
+        const snippet = getMatchSnippet(rawText, finalSearchTerm, false);
+        r.highlight = applyHighlight(snippet, finalSearchTerm, false);
+      } else {
+        r.matchLocation = 'filename';
+        r.highlight = rawText.substring(0, 150) + (rawText.length > 150 ? '...' : '');
+      }
 
       delete r.extractedText;
     });

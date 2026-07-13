@@ -32,7 +32,7 @@
           </svg>
         </button>
       </div>
-      <button class="search-submit" :class="{ 'ai-submit': isAISearch }" @click="search" :disabled="isSearching || query.trim().length === 0">
+      <button class="search-submit" :class="{ 'ai-submit': isAISearch }" @click="search" :disabled="isSearching">
         <svg v-if="!isSearching" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
@@ -143,16 +143,15 @@ const aiAnalysisResult = ref(null)
 function toggleAISearch() {
   isAISearch.value = !isAISearch.value
   aiAnalysisResult.value = null
-  if (query.value.trim().length > 0) search()
+  search()
 }
 
 function onFilterChange() {
-  if (query.value.trim().length > 0) search()
+  search()
 }
 
 async function search() {
   const term = query.value.trim()
-  if (term.length === 0) return
 
   isSearching.value = true
   emit('loading', true)
