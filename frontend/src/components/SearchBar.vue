@@ -51,17 +51,29 @@
           <strong>Yapay Zeka Analiz Raporu:</strong>
         </div>
         <div class="ai-banner-chips">
-          <div class="ai-chip">
-            <span class="ai-chip-label">Filtrelenen Kategori:</span>
+          <div class="ai-chip" v-if="aiAnalysisResult.category && aiAnalysisResult.category !== 'Tümü'">
+            <span class="ai-chip-label">Kategori:</span>
             <span class="ai-chip-value">{{ aiAnalysisResult.category }}</span>
           </div>
-          <div class="ai-chip" v-if="aiAnalysisResult.fileType !== 'Tümü'">
+          <div class="ai-chip ai-chip--exclude" v-if="aiAnalysisResult.excludeCategory">
+            <span class="ai-chip-label">Kategori Hariç:</span>
+            <span class="ai-chip-value">{{ aiAnalysisResult.excludeCategory }}</span>
+          </div>
+          <div class="ai-chip" v-if="aiAnalysisResult.fileType && aiAnalysisResult.fileType !== 'Tümü'">
             <span class="ai-chip-label">Dosya Türü:</span>
             <span class="ai-chip-value uppercase">{{ aiAnalysisResult.fileType }}</span>
+          </div>
+          <div class="ai-chip ai-chip--exclude" v-if="aiAnalysisResult.excludeFileType">
+            <span class="ai-chip-label">Tür Hariç:</span>
+            <span class="ai-chip-value uppercase">{{ aiAnalysisResult.excludeFileType }}</span>
           </div>
           <div class="ai-chip" v-if="aiAnalysisResult.cleanedQuery">
             <span class="ai-chip-label">Aranan Terim:</span>
             <span class="ai-chip-value">"{{ aiAnalysisResult.cleanedQuery }}"</span>
+          </div>
+          <div class="ai-chip ai-chip--exclude" v-if="aiAnalysisResult.excludeKeywords && aiAnalysisResult.excludeKeywords.length > 0">
+            <span class="ai-chip-label">Kelimeler Hariç:</span>
+            <span class="ai-chip-value">"{{ aiAnalysisResult.excludeKeywords.join(', ') }}"</span>
           </div>
         </div>
       </div>
@@ -454,6 +466,19 @@ watch(query, (newVal) => {
   border-radius: 5px;
   padding: 0.2rem 0.45rem;
   font-size: 0.7rem;
+}
+
+.ai-chip--exclude {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.ai-chip--exclude .ai-chip-label {
+  color: #f87171;
+}
+
+.ai-chip--exclude .ai-chip-value {
+  color: #fee2e2;
 }
 
 .ai-chip-label {

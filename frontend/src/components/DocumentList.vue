@@ -8,14 +8,30 @@
           <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
           <polyline points="10 9 9 9 8 9"/>
         </svg>
-        {{ isSearchMode ? 'Arama Sonuçları' : 'Son Yüklenen Dokümanlar' }}
+        {{ isTrashView ? 'Çöp Kutusu (Silinen Belgeler)' : isSearchMode ? 'Arama Sonuçları' : 'Son Yüklenen Dokümanlar' }}
       </h2>
       <div class="doc-header-actions">
-        <span v-if="isPolling && !isSearchMode" class="polling-indicator" title="Otomatik güncelleme aktif">
+        <!-- Çöp Kutusu Butonu -->
+        <button 
+          class="trash-toggle-btn" 
+          :class="{ 'trash-active': isTrashView }" 
+          @click="toggleTrashView"
+          :title="isTrashView ? 'Normal Belgeleri Göster' : 'Çöp Kutusunu Göster'"
+        >
+          <svg class="trash-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+          <span>{{ isTrashView ? 'Belgelere Dön' : 'Çöp Kutusu' }}</span>
+        </button>
+
+        <span v-if="isPolling && !isSearchMode && !isTrashView" class="polling-indicator" title="Otomatik güncelleme aktif">
           <span class="polling-dot"></span>
           Canlı
         </span>
-        <span v-if="isSearchMode" class="search-badge">
+        <span v-if="isSearchMode && !isTrashView" class="search-badge">
           "<strong>{{ searchQuery }}</strong>" için {{ documents.length }} sonuç
         </span>
         <span v-else class="doc-count">{{ documents.length }} doküman</span>
@@ -68,20 +84,59 @@
               </td>
               <td class="doc-date">{{ formatDate(doc.createdAt || doc.created_at) }}</td>
               <td class="doc-actions">
-                <button
-                  v-if="doc.status === 'COMPLETED'"
-                  class="action-btn"
-                  @click="openDetail(doc)"
-                  title="OCR Metnini Görüntüle"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </button>
-                <span v-else-if="doc.status === 'PROCESSING'" class="action-hint">
-                  <div class="spinner-xs"></div>
-                </span>
+                <!-- Çöp Kutusu Modu Aksiyonları -->
+                <template v-if="isTrashView">
+                  <button 
+                    class="action-btn action-btn--success" 
+                    @click="restoreDocument(doc)"
+                    title="Belgeyi Çöp Kutusundan Kurtar"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                  </button>
+                  <button 
+                    class="action-btn action-btn--danger" 
+                    @click="triggerDelete(doc)"
+                    title="Belgeyi Kalıcı Olarak Sil"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                </template>
+
+                <!-- Normal Liste Aksiyonları -->
+                <template v-else>
+                  <button
+                    v-if="doc.status === 'COMPLETED'"
+                    class="action-btn"
+                    @click="openDetail(doc)"
+                    title="OCR Metnini Görüntüle"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                  <span v-else-if="doc.status === 'PROCESSING'" class="action-hint">
+                    <div class="spinner-xs"></div>
+                  </span>
+                  
+                  <button 
+                    v-if="doc.status !== 'PROCESSING'"
+                    class="action-btn action-btn--danger" 
+                    @click="triggerDelete(doc)"
+                    title="Çöp Kutusuna Gönder"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                </template>
               </td>
             </tr>
             <!-- Arama Highlight Satırı -->
@@ -129,20 +184,59 @@
               </td>
               <td class="doc-date">{{ formatDate(doc.createdAt || doc.created_at) }}</td>
               <td class="doc-actions">
-                <button
-                  v-if="doc.status === 'COMPLETED'"
-                  class="action-btn"
-                  @click="openDetail(doc)"
-                  title="OCR Metnini Görüntüle"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </button>
-                <span v-else-if="doc.status === 'PROCESSING'" class="action-hint">
-                  <div class="spinner-xs"></div>
-                </span>
+                <!-- Çöp Kutusu Modu Aksiyonları -->
+                <template v-if="isTrashView">
+                  <button 
+                    class="action-btn action-btn--success" 
+                    @click="restoreDocument(doc)"
+                    title="Belgeyi Çöp Kutusundan Kurtar"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                  </button>
+                  <button 
+                    class="action-btn action-btn--danger" 
+                    @click="triggerDelete(doc)"
+                    title="Belgeyi Kalıcı Olarak Sil"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                </template>
+
+                <!-- Normal Liste Aksiyonları -->
+                <template v-else>
+                  <button
+                    v-if="doc.status === 'COMPLETED'"
+                    class="action-btn"
+                    @click="openDetail(doc)"
+                    title="OCR Metnini Görüntüle"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                  <span v-else-if="doc.status === 'PROCESSING'" class="action-hint">
+                    <div class="spinner-xs"></div>
+                  </span>
+                  
+                  <button 
+                    v-if="doc.status !== 'PROCESSING'"
+                    class="action-btn action-btn--danger" 
+                    @click="triggerDelete(doc)"
+                    title="Çöp Kutusuna Gönder"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                </template>
               </td>
             </tr>
             <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight doc-row--dimmed">
@@ -177,11 +271,28 @@
                 Tamamlandı
               </span>
             </div>
-            <button class="modal-close" @click="closeDetail">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
+            <div class="modal-header-actions" style="display:flex; align-items:center; gap:0.75rem">
+              <!-- Orijinal Belgeyi Aç Butonu -->
+              <a 
+                :href="'/uploads/' + selectedDoc.filePath.split('/').pop()" 
+                target="_blank" 
+                class="action-link-btn" 
+                title="Orijinal Belgeyi Yeni Sekmede Aç"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.25rem">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                <span>Belgeyi Aç</span>
+              </a>
+              
+              <button class="modal-close" @click="closeDetail">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <!-- Meta Bilgiler -->
@@ -237,6 +348,34 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Güvenli Silme Onay Modalı (3 Saniye Kilitli) -->
+    <Transition name="modal">
+      <div v-if="deleteModalOpen" class="modal-overlay" @click.self="deleteModalOpen = false">
+        <div class="modal modal--danger">
+          <div class="modal-header">
+            <h3 class="modal-title" style="color: #ef4444">Belgeyi Sil</h3>
+            <button class="modal-close" @click="deleteModalOpen = false">✕</button>
+          </div>
+          <div class="modal-body text-center" style="padding: 1.5rem; text-align: center">
+            <p style="margin-bottom: 1.5rem; font-size: 0.95rem; line-height: 1.5">
+              "<strong>{{ docToDelete?.originalName || docToDelete?.original_name }}</strong>" isimli belgeyi 
+              <span style="color: #ef4444; font-weight: 600">{{ isTrashView ? 'sistemden KALICI olarak silmek' : 'ÇÖP KUTUSUNA göndermek' }}</span> istediğinize emin misiniz?
+            </p>
+            <div class="modal-danger-actions" style="display: flex; gap: 0.75rem; justify-content: center">
+              <button class="btn-cancel" @click="deleteModalOpen = false">Vazgeç</button>
+              <button 
+                class="btn-delete" 
+                :disabled="deleteCountdown > 0 || isDeleting" 
+                @click="confirmDelete"
+              >
+                {{ isDeleting ? 'Siliniyor...' : deleteCountdown > 0 ? `Evet, Sil (${deleteCountdown}s)` : 'Evet, Sil' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -251,6 +390,14 @@ const searchQuery = ref('')
 const selectedDoc = ref(null)
 const detailData = ref(null)
 const isLoadingDetail = ref(false)
+
+// Çöp Kutusu ve Güvenli Silme State'leri
+const isTrashView = ref(false)
+const deleteModalOpen = ref(false)
+const docToDelete = ref(null)
+const deleteCountdown = ref(3)
+let deleteInterval = null
+const isDeleting = ref(false)
 
 let pollInterval = null
 
@@ -280,6 +427,10 @@ const dimmedResults = computed(() => {
 
 async function fetchDocuments() {
   try {
+    if (isTrashView.value) {
+      await fetchTrashDocuments()
+      return
+    }
     const response = await fetch('/api/documents')
     if (response.ok) {
       const data = await response.json()
@@ -289,6 +440,99 @@ async function fetchDocuments() {
     console.error('[DocumentList] Veri çekme hatası:', error)
   } finally {
     isLoading.value = false
+  }
+}
+
+// Çöp kutusundaki silinmiş dökümanları çek
+async function fetchTrashDocuments() {
+  try {
+    const response = await fetch('/api/documents/trash')
+    if (response.ok) {
+      const data = await response.json()
+      documents.value = data.documents || []
+    }
+  } catch (error) {
+    console.error('[DocumentList] Çöp kutusu verisi çekme hatası:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Çöp kutusu görünümünü aç/kapat
+function toggleTrashView() {
+  isTrashView.value = !isTrashView.value
+  isLoading.value = true
+  documents.value = []
+  
+  if (isTrashView.value) {
+    stopPolling()
+    fetchTrashDocuments()
+  } else {
+    fetchDocuments()
+    startPolling()
+  }
+}
+
+// Silme onay modalını tetikle (3 saniye kilitle)
+function triggerDelete(doc) {
+  docToDelete.value = doc
+  deleteCountdown.value = 3
+  deleteModalOpen.value = true
+  
+  if (deleteInterval) clearInterval(deleteInterval)
+  
+  deleteInterval = setInterval(() => {
+    if (deleteCountdown.value > 0) {
+      deleteCountdown.value--
+    } else {
+      clearInterval(deleteInterval)
+      deleteInterval = null
+    }
+  }, 1000)
+}
+
+// Silme işlemini onayla (Soft veya Kalıcı)
+async function confirmDelete() {
+  if (deleteCountdown.value > 0 || !docToDelete.value) return
+  
+  isDeleting.value = true
+  const id = docToDelete.value.id
+  
+  try {
+    let url = `/api/documents/${id}`
+    let method = 'DELETE'
+    
+    if (isTrashView.value) {
+      url = `/api/documents/${id}/force`
+    }
+    
+    const response = await fetch(url, { method })
+    if (response.ok) {
+      deleteModalOpen.value = false
+      docToDelete.value = null
+      
+      if (isTrashView.value) {
+        fetchTrashDocuments()
+      } else {
+        fetchDocuments()
+      }
+    }
+  } catch (error) {
+    console.error('[DocumentList] Silme hatası:', error)
+  } finally {
+    isDeleting.value = false
+  }
+}
+
+// Dokümanı Çöp Kutusundan Kurtar (Restore)
+async function restoreDocument(doc) {
+  try {
+    const response = await fetch(`/api/documents/${doc.id}/restore`, { method: 'POST' })
+    if (response.ok) {
+      fetchTrashDocuments()
+    }
+  } catch (error) {
+    console.error('[DocumentList] Geri yükleme hatası:', error)
   }
 }
 
@@ -1187,5 +1431,147 @@ onUnmounted(() => {
 @keyframes modal-in {
   from { opacity: 0; transform: scale(0.95) translateY(10px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Çöp Kutusu Toggle Buton Stilleri */
+.trash-toggle-btn {
+  background: rgba(15, 23, 42, 0.4);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-right: 0.5rem;
+}
+
+.trash-toggle-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+}
+
+.trash-toggle-btn.trash-active {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+  animation: neon-pulse-danger 2s infinite alternate;
+}
+
+.trash-icon {
+  transition: transform 0.2s;
+}
+
+.trash-toggle-btn:hover .trash-icon {
+  transform: rotate(-10deg) scale(1.1);
+}
+
+/* Orijinal Belgeyi Aç Bağlantısı Butonu */
+.action-link-btn {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-link-btn:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+/* Modal Tehlike / Silme Tasarımları */
+.modal--danger {
+  max-width: 420px;
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 16px 64px rgba(239, 68, 68, 0.15);
+}
+
+.btn-cancel {
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.btn-delete {
+  background: #ef4444;
+  color: #fff;
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.btn-delete:hover:not(:disabled) {
+  background: #dc2626;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.45);
+}
+
+.btn-delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Başarı (Geri Yükleme) Butonu */
+.action-btn--success {
+  background: rgba(34, 197, 94, 0.1) !important;
+  color: #22c55e !important;
+  border-color: rgba(34, 197, 94, 0.25) !important;
+}
+
+.action-btn--success:hover {
+  background: rgba(34, 197, 94, 0.25) !important;
+  border-color: #22c55e !important;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.25);
+}
+
+.action-btn--danger {
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+  margin-left: 0.35rem;
+}
+
+.action-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
+}
+
+/* Neon Pulse Efektleri */
+@keyframes neon-pulse-danger {
+  0% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.3); }
+  100% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.6); }
 }
 </style>

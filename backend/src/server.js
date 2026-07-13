@@ -131,6 +131,39 @@ const startServer = async () => {
   ║   AI: ${AI_SERVICE_URL.padEnd(39)}║
   ╚══════════════════════════════════════════════╝
       `);
+
+      // 30 GÜNLÜK ÇÖP KUTUSU OTOMATİK TEMİZLEME GÖREVİ
+      // Her 24 saatte bir çalışır. 30 günden eski silinmiş belgeleri diskten ve DB'den temizler.
+      setInterval(async () => {
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          const { Op } = require('sequelize');
+          const Document = require('./models/Document');
+
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+          const expiredDocs = await Document.findAll({
+            where: {
+              deletedAt: { [Op.lt]: thirtyDaysAgo }
+            },
+            paranoid: false
+          });
+
+          for (const doc of expiredDocs) {
+            const absolutePath = path.resolve(doc.filePath);
+            if (fs.existsSync(absolutePath)) {
+              fs.unlinkSync(absolutePath);
+            }
+            await doc.destroy({ force: true });
+          }
+
+          if (expiredDocs.length > 0) {
+            console.log(`[CLEANUP] 30 günü geçmiş ${expiredDocs.length} silinmiş doküman diskten ve DB'den kalıcı olarak temizlendi.`);
+          }
+        } catch (err) {
+          console.error('[CLEANUP_ERR] Çöp kutusu temizlenirken hata oluştu:', err.message);
+        }
+      }, 24 * 60 * 60 * 1000); // 24 saat
     });
   } catch (error) {
     console.error('[KRITIK] Sunucu başlatılamadı:', error.message);
