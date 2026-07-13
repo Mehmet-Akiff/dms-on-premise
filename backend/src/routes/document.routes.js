@@ -123,7 +123,7 @@ async function processDocumentWithAI(document, job) {
     console.log(`[AI_SERVICE] POST isteği gönderiliyor → filePath: "${fileName}"`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 dk timeout
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 dk timeout (PDF çok sayfalı olabilir)
 
     let response;
     try {
