@@ -34,6 +34,7 @@
         <thead>
           <tr>
             <th>Dosya Adı</th>
+            <th>Kategori</th>
             <th>Tür</th>
             <th>Durum</th>
             <th>Tarih</th>
@@ -49,6 +50,11 @@
                 <span class="doc-name-text">{{ doc.originalName || doc.original_name }}</span>
                 <span v-if="isSearchMode && doc.matchLocation" class="match-badge" :class="'match--' + doc.matchLocation">
                   {{ doc.matchLocation === 'filename' ? '📌 Adında' : '📄 İçerikte' }}
+                </span>
+              </td>
+              <td>
+                <span class="category-badge" :class="'cat--' + (doc.category || 'diger').toLowerCase()">
+                  {{ doc.category || 'Diğer' }}
                 </span>
               </td>
               <td>
@@ -80,7 +86,7 @@
             </tr>
             <!-- Arama Highlight Satırı -->
             <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight">
-              <td colspan="5">
+              <td colspan="6">
                 <div class="search-highlight" v-html="doc.highlight"></div>
               </td>
             </tr>
@@ -88,7 +94,7 @@
 
           <!-- Olası Eşleşmeler Ayırıcı -->
           <tr v-if="isSearchMode && dimmedResults.length > 0 && primaryResults.length > 0" class="dimmed-separator-row">
-            <td colspan="5">
+            <td colspan="6">
               <div class="dimmed-separator">
                 <div class="dimmed-separator-line"></div>
                 <span class="dimmed-separator-text">💡 Olası Eşleşmeler ({{ dimmedResults.length }})</span>
@@ -105,6 +111,11 @@
                 <span class="doc-name-text">{{ doc.originalName || doc.original_name }}</span>
                 <span v-if="doc.matchLocation" class="match-badge" :class="'match--' + doc.matchLocation">
                   {{ doc.matchLocation === 'filename' ? '📌 Adında' : '📄 İçerikte' }}
+                </span>
+              </td>
+              <td>
+                <span class="category-badge" :class="'cat--' + (doc.category || 'diger').toLowerCase()">
+                  {{ doc.category || 'Diğer' }}
                 </span>
               </td>
               <td>
@@ -135,7 +146,7 @@
               </td>
             </tr>
             <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight doc-row--dimmed">
-              <td colspan="5">
+              <td colspan="6">
                 <div class="search-highlight" v-html="doc.highlight"></div>
               </td>
             </tr>
@@ -775,6 +786,52 @@ onUnmounted(() => {
   border-radius: 4px;
   border: 1px solid var(--border);
   letter-spacing: 0.5px;
+}
+
+/* Kategori Badgeleri */
+.category-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.cat--fatura {
+  background: rgba(234, 179, 8, 0.12);
+  color: #facc15;
+  border-color: rgba(234, 179, 8, 0.25);
+}
+
+.cat--bordro {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+.cat--sozlesme {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.cat--rapor {
+  background: rgba(249, 115, 22, 0.12);
+  color: #f97316;
+  border-color: rgba(249, 115, 22, 0.25);
+}
+
+.cat--dilekce {
+  background: rgba(236, 72, 153, 0.12);
+  color: #f472b6;
+  border-color: rgba(236, 72, 153, 0.25);
+}
+
+.cat--diger {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-color: var(--border);
 }
 
 /* Durum Badge */
