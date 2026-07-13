@@ -179,7 +179,7 @@ async function processDocumentWithAI(document, job) {
           if (classResponse.ok) {
             const classResult = await classResponse.json();
             if (classResult.status === 'success') {
-              category = classResult.category || 'Diger';
+              category = classResult.category || classResult.documentCategory || 'Diger';
               confidence = classResult.confidence || 0.0;
               tags = classResult.tags || [];
               console.log(`[AI_SERVICE] Analiz Başarılı. Kategori: ${category} (Güven: ${confidence}), Etiketler: [${tags.join(', ')}]`);
@@ -713,28 +713,33 @@ router.get('/ai-search', async (req, res) => {
     let cleanedQuery = originalQuery;
     let detectedCategory = null;
     let detectedFileType = null;
+    let excludeCategory = null;
+    let excludeFileType = null;
+    let excludeKeywords = [];
 
     if (originalQuery.length > 0) {
+      try {
+        const aiResponse = await fetch(`${AI_SERVICE_URL}/api/nlp-search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: originalQuery }),
+        });
 
-    try {
-      const aiResponse = await fetch(`${AI_SERVICE_URL}/api/nlp-search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: originalQuery }),
-      });
-
-      if (aiResponse.ok) {
-        const aiResult = await aiResponse.json();
-        if (aiResult.status === 'success') {
-          cleanedQuery = aiResult.q || '';
-          detectedCategory = aiResult.category;
-          detectedFileType = aiResult.fileType;
-          console.log(`[AI_SEARCH_OK] Çözümlendi -> q: "${cleanedQuery}", cat: ${detectedCategory}, type: ${detectedFileType}`);
+        if (aiResponse.ok) {
+          const aiResult = await aiResponse.json();
+          if (aiResult.status === 'success') {
+            cleanedQuery = aiResult.q || '';
+            detectedCategory = aiResult.category;
+            detectedFileType = aiResult.fileType;
+            excludeCategory = aiResult.excludeCategory;
+            excludeFileType = aiResult.excludeFileType;
+            excludeKeywords = aiResult.excludeKeywords || [];
+            console.log(`[AI_SEARCH_OK] Çözümlendi -> q: "${cleanedQuery}", cat: ${detectedCategory}, type: ${detectedFileType}, exCat: ${excludeCategory}, exType: ${excludeFileType}, exKw: ${excludeKeywords}`);
+          }
         }
+      } catch (aiError) {
+        console.error(`[AI_SEARCH_WARN] AI Servis NLP analizi başarısız (direkt aramaya düşülüyor):`, aiError.message);
       }
-    } catch (aiError) {
-      console.error(`[AI_SEARCH_WARN] AI Servis NLP analizi başarısız (direkt aramaya düşülüyor):`, aiError.message);
-    }
     }
 
     const finalSearchTerm = cleanedQuery ? cleanedQuery.trim() : '';
@@ -750,6 +755,12 @@ router.get('/ai-search', async (req, res) => {
       extraFilters += ` AND d.mime_type LIKE 'image/%'`;
     }
 
+    if (excludeFileType === 'pdf') {
+      extraFilters += ` AND d.mime_type != 'application/pdf'`;
+    } else if (excludeFileType === 'image') {
+      extraFilters += ` AND d.mime_type NOT LIKE 'image/%'`;
+    }
+
     if (status === 'completed') {
       extraFilters += ` AND d.status = 'COMPLETED'`;
     } else if (status === 'pending') {
@@ -759,8 +770,22 @@ router.get('/ai-search', async (req, res) => {
     }
 
     if (detectedCategory) {
-      extraFilters += ` AND dm.category = :category`;
-      replacements.category = detectedCategory;
+      replacements.detectedCategory = detectedCategory;
+    } else {
+      replacements.detectedCategory = '';
+    }
+
+    if (excludeCategory) {
+      extraFilters += ` AND (dm.category IS NULL OR dm.category != :excludeCategory)`;
+      replacements.excludeCategory = excludeCategory;
+    }
+
+    if (excludeKeywords && excludeKeywords.length > 0) {
+      excludeKeywords.forEach((exWord, idx) => {
+        const exKey = `exWord${idx}`;
+        replacements[exKey] = exWord;
+        extraFilters += ` AND (d.original_name NOT ILIKE '%' || :${exKey} || '%' AND COALESCE(dm.extracted_text, '') NOT ILIKE '%' || :${exKey} || '%')`;
+      });
     }
 
     // Sıralama
@@ -778,7 +803,7 @@ router.get('/ai-search', async (req, res) => {
       queryStr = `
         SELECT
          d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
-         1.0 AS relevance,
+         (CASE WHEN dm.category = :detectedCategory THEN 15.0 ELSE 1.0 END) AS relevance,
          false AS "isDimmed",
          COALESCE(dm.extracted_text, '') AS "extractedText"
        FROM documents d
@@ -814,7 +839,7 @@ router.get('/ai-search', async (req, res) => {
       queryStr = `
         SELECT
          d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
-         ((${relevanceParts.join(' + ')}) / ${searchWords.length}) AS relevance,
+         (((${relevanceParts.join(' + ')}) / ${searchWords.length}) + (CASE WHEN dm.category = :detectedCategory THEN 15.0 ELSE 0.0 END)) AS relevance,
          (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN false ELSE true END) AS "isDimmed",
          COALESCE(dm.extracted_text, '') AS "extractedText"
        FROM documents d
@@ -826,7 +851,7 @@ router.get('/ai-search', async (req, res) => {
       queryStr = `
         SELECT
          d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
-         1.0 AS relevance,
+         (1.0 + (CASE WHEN dm.category = :detectedCategory THEN 15.0 ELSE 0.0 END)) AS relevance,
          (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN false ELSE true END) AS "isDimmed",
          COALESCE(dm.extracted_text, '') AS "extractedText"
        FROM documents d
@@ -842,17 +867,41 @@ router.get('/ai-search', async (req, res) => {
     });
 
     results.forEach(r => {
-      const name = r.originalName || '';
-      const rawText = r.extractedText || '';
+      const name = (r.originalName || '').toLowerCase();
+      const rawText = (r.extractedText || '').toLowerCase();
+
+      // Akıllı isDimmed hesaplaması
+      let dimmed = true;
 
       if (finalSearchTerm && finalSearchTerm.length > 0) {
-        const inFilename = name.toLowerCase().includes(finalSearchTerm.toLowerCase());
+        // Arama kelimelerinden herhangi biri dosya adında geçiyorsa veya
+        // arama sorgusu doğrudan dosya adında yer alıyorsa soluk yapma!
+        const matchesName = searchWords.some(word => name.includes(word.toLowerCase()));
+        if (matchesName || name.includes(finalSearchTerm.toLowerCase())) {
+          dimmed = false;
+        }
+
+        // Eğer içerikte geçiyorsa ve alaka düzeyi yüksekse (relevance > 2.0) soluk yapma!
+        const matchesContent = searchWords.some(word => rawText.includes(word.toLowerCase()));
+        if (matchesContent && parseFloat(r.relevance) > 2.0) {
+          dimmed = false;
+        }
+      } else {
+        // Arama terimi yoksa hiçbir şey soluk olmasın
+        dimmed = false;
+      }
+
+      r.isDimmed = dimmed;
+
+      if (finalSearchTerm && finalSearchTerm.length > 0) {
+        const inFilename = name.includes(finalSearchTerm.toLowerCase());
         r.matchLocation = inFilename ? 'filename' : 'content';
-        const snippet = getMatchSnippet(rawText, finalSearchTerm, false);
+        const snippet = getMatchSnippet(r.extractedText || '', finalSearchTerm, false);
         r.highlight = applyHighlight(snippet, finalSearchTerm, false);
       } else {
         r.matchLocation = 'filename';
-        r.highlight = rawText.substring(0, 150) + (rawText.length > 150 ? '...' : '');
+        const extracted = r.extractedText || '';
+        r.highlight = extracted.substring(0, 150) + (extracted.length > 150 ? '...' : '');
       }
 
       delete r.extractedText;
@@ -863,7 +912,10 @@ router.get('/ai-search', async (req, res) => {
       aiAnalysis: {
         cleanedQuery: finalSearchTerm,
         category: detectedCategory || 'Tümü',
-        fileType: detectedFileType || 'Tümü'
+        excludeCategory: excludeCategory || null,
+        fileType: detectedFileType || 'Tümü',
+        excludeFileType: excludeFileType || null,
+        excludeKeywords: excludeKeywords || []
       },
       count: results.length,
       results,
@@ -872,6 +924,106 @@ router.get('/ai-search', async (req, res) => {
   } catch (error) {
     console.error('[HATA] AI Search:', error.message);
     res.status(500).json({ error: 'AI Arama sırasında bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// GET /api/documents/trash — Silinmiş Dokümanları Listele
+// ============================================================
+router.get('/trash', async (req, res) => {
+  try {
+    const { Op } = require('sequelize');
+    const documents = await Document.findAll({
+      where: {
+        deletedAt: { [Op.ne]: null }
+      },
+      paranoid: false,
+      order: [['deleted_at', 'DESC']],
+      include: [
+        { association: 'metadata', attributes: ['category', 'extractedTags', 'confidence'] },
+      ],
+    });
+
+    res.status(200).json({
+      count: documents.length,
+      documents,
+    });
+  } catch (error) {
+    console.error('[HATA] Çöp kutusu listeleme:', error.message);
+    res.status(500).json({ error: 'Çöp kutusu listelenirken bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// POST /api/documents/:id/restore — Dokümanı Çöp Kutusundan Geri Yükle
+// ============================================================
+router.post('/:id/restore', async (req, res) => {
+  try {
+    const document = await Document.findByPk(req.params.id, { paranoid: false });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Kurtarılacak doküman bulunamadı.' });
+    }
+
+    await document.restore();
+    console.log(`[RESTORE] Doküman geri yüklendi: ${document.originalName} (${document.id})`);
+
+    res.status(200).json({ message: 'Doküman başarıyla geri yüklendi.', document });
+  } catch (error) {
+    console.error('[HATA] Geri yükleme:', error.message);
+    res.status(500).json({ error: 'Doküman geri yüklenirken bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// DELETE /api/documents/:id/force — Dokümanı Kalıcı Olarak Sil (Diskten de temizler)
+// ============================================================
+router.delete('/:id/force', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const document = await Document.findByPk(req.params.id, { paranoid: false });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Kalıcı silinecek doküman bulunamadı.' });
+    }
+
+    // Diskten dosyayı sil
+    const absolutePath = path.resolve(document.filePath);
+    if (fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+      console.log(`[FORCE_DELETE] Dosya diskten silindi: ${absolutePath}`);
+    }
+
+    // Veritabanından kalıcı sil
+    await document.destroy({ force: true });
+    console.log(`[FORCE_DELETE] Doküman veritabanından kalıcı silindi: ${document.originalName} (${document.id})`);
+
+    res.status(200).json({ message: 'Doküman kalıcı olarak silindi.' });
+  } catch (error) {
+    console.error('[HATA] Kalıcı silme:', error.message);
+    res.status(500).json({ error: 'Doküman kalıcı olarak silinirken bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// DELETE /api/documents/:id — Dokümanı Çöp Kutusuna Gönder (Soft Delete)
+// ============================================================
+router.delete('/:id', async (req, res) => {
+  try {
+    const document = await Document.findByPk(req.params.id);
+
+    if (!document) {
+      return res.status(404).json({ error: 'Silinecek doküman bulunamadı.' });
+    }
+
+    await document.destroy();
+    console.log(`[SOFT_DELETE] Doküman çöp kutusuna gönderildi: ${document.originalName} (${document.id})`);
+
+    res.status(200).json({ message: 'Doküman çöp kutusuna gönderildi.', document });
+  } catch (error) {
+    console.error('[HATA] Soft silme:', error.message);
+    res.status(500).json({ error: 'Doküman çöp kutusuna gönderilirken bir hata oluştu.' });
   }
 });
 

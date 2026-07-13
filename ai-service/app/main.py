@@ -125,6 +125,7 @@ class EntityItem(BaseModel):
 class ClassifyResponse(BaseModel):
     status: str = "success"
     category: str
+    documentCategory: Optional[str] = None
     confidence: float
     entities: List[EntityItem]
     tags: List[str]
@@ -138,7 +139,10 @@ class NLPSearchResponse(BaseModel):
     status: str = "success"
     q: str
     category: Optional[str] = None
+    excludeCategory: Optional[str] = None
     fileType: Optional[str] = None
+    excludeFileType: Optional[str] = None
+    excludeKeywords: Optional[List[str]] = None
     originalQuery: str
 
 
@@ -433,6 +437,7 @@ async def classify_and_extract(request: ClassifyRequest):
         return ClassifyResponse(
             status="success",
             category=best_cat,
+            documentCategory=best_cat,
             confidence=confidence,
             entities=entities[:15],  # ilk 15 varlığı dön
             tags=sorted(list(tags))[:10]  # ilk 10 etiketi dön
@@ -461,8 +466,8 @@ async def classify_and_extract(request: ClassifyRequest):
 async def nlp_search(request: NLPSearchRequest):
     """
     Kullanıcının doğal dilde girdiği arama sorgusunu ayrıştırır.
-    Örn: "bana ahmet faturalarını getir"
-    Çıktı: q="ahmet", category="Fatura", fileType=None
+    Örn: "bana ahmet faturalarını getir" -> q="ahmet", category="Fatura"
+    Örn: "ahmetin maaş bilgisi hariç belgeleri" -> q="ahmet", excludeCategory="Bordro"
     """
     try:
         query = request.query.strip()
@@ -470,8 +475,7 @@ async def nlp_search(request: NLPSearchRequest):
 
         logger.info("Doğal dil arama analizi isteği alındı — Sorgu: '%s'", query)
 
-        # 1. Kategori Çıkarma
-        detected_category = None
+        # 1. Kategori ve Dosya Türü tanımları
         category_mapping = {
             "Fatura": ["fatura", "faturaları", "faturalarını", "faturalar", "makbuz", "makbuzu", "makbuzları", "fiş", "fişi", "fişleri", "faturalari", "faturalarini", "makbuzlari", "fisi", "fisleri"],
             "Bordro": ["bordro", "bordrosu", "bordroları", "bordrolarını", "bordrolar", "maaş", "maaşı", "maaşları", "bordrolari", "bordrolarini", "maas", "maasi", "maaslari"],
@@ -480,78 +484,146 @@ async def nlp_search(request: NLPSearchRequest):
             "Dilekce": ["dilekçe", "dilekçesi", "dilekçeleri", "talep", "başvuru", "başvurusu", "dilekce", "dilekcesi", "dilekceleri", "basvuru", "basvurusu"]
         }
 
-        for cat, keywords in category_mapping.items():
-            for kw in keywords:
-                # kelime bazlı kontrol
-                if re.search(r'\b' + re.escape(kw) + r'\b', query_lower):
-                    detected_category = cat
-                    break
-            if detected_category:
-                break
-
-        # 2. Dosya Türü Çıkarma
-        detected_filetype = None
         pdf_keywords = ["pdf", "pdf'ler", "pdf'leri", "pdfler"]
         image_keywords = ["resim", "resimleri", "görsel", "görselleri", "foto", "fotoğraf", "jpg", "png", "jpeg", "gorsel", "gorselleri", "fotograf"]
+        negation_words = ["hariç", "haric", "dışında", "disinda", "olmayan", "olmasın", "olmasin", "istemiyorum", "hariçtir", "harictir", "olmasi"]
 
-        for kw in pdf_keywords:
-            if re.search(r'\b' + re.escape(kw) + r'\b', query_lower):
-                detected_filetype = "pdf"
-                break
-
-        if not detected_filetype:
-            for kw in image_keywords:
-                if re.search(r'\b' + re.escape(kw) + r'\b', query_lower):
-                    detected_filetype = "image"
-                    break
-
-        # 3. Arama Terimini (Temiz Sorgu) Ayıklama
-        # Sorgudaki gereksiz durdurma kelimelerini ve filtre kelimelerini çıkaracağız
         stop_words = [
             "bana", "getir", "bul", "listele", "göster", "lütfen", "olan", "olanları", 
             "bulunan", "bulunanları", "ilişkin", "ait", "hakkındaki", "ile", "ve", "veya", 
-            "dökümanları", "dokümanları", "dosyalarını", "dosyası", "belgeleri", "belgesi"
+            "dökümanları", "dokümanları", "dosyalarını", "dosyası", "belgeleri", "belgesi",
+            "döküman", "doküman", "belge", "dosya", "tüm", "hepsi", "herkes", "herkesin", 
+            "bilgi", "bilgisi", "bilgileri", "bilgilerini", "hakkında", "hakkinda", 
+            "ilgili", "ilişkin", "iliskin",
+            # Türkçe karaktersiz ve ek varyasyonları
+            "dokumanlari", "dokuman", "dokumanlar", "dokumanlarini", "dokumanlarin",
+            "dokumanlarını", "dokümanlarını", "dökümanlarını",
+            "belgeler", "belgeleri", "belgelerini", "belgesini",
+            "dosyalari", "dosyalarini", "dosyalar", "tum", "tumu", "tümü", "getirsin", "bulsun"
         ]
 
-        # Filtreye dönüştürdüğümüz anahtar kelimeleri de temizlenecek listeye al
-        all_filter_words = []
-        for keywords in category_mapping.values():
-            all_filter_words.extend(keywords)
-        all_filter_words.extend(pdf_keywords)
-        all_filter_words.extend(image_keywords)
-        
-        words_to_remove = stop_words + all_filter_words
+        def clean_turkish_suffixes(word: str) -> str:
+            w = word.lower().strip()
+            w = re.sub(r"['’\"].*$", "", w)
+            suffixes = r"(in|ın|un|ün|nın|nin|nun|nün|a|e|ı|i|u|ü|da|de|ta|te|dan|den|tan|ten|la|le|y|ya|ye|n)$"
+            for _ in range(2):
+                w = re.sub(suffixes, "", w)
+            return w
 
-        # Sorguyu kelimelere bölüp temizleme yapalım
+        # SpaCy ile parse et
         doc = nlp(query)
-        cleaned_tokens = []
 
+        detected_category = None
+        exclude_category = None
+        detected_filetype = None
+        exclude_filetype = None
+        exclude_keywords = []
+
+        # A. Kategori Negation Analizi
+        for i, token in enumerate(doc):
+            t_text = token.text.lower()
+            t_lemma = token.lemma_.lower()
+            
+            found_cat = None
+            for cat, keywords in category_mapping.items():
+                if t_text in keywords or t_lemma in keywords or clean_turkish_suffixes(t_text) in keywords:
+                    found_cat = cat
+                    break
+            
+            if found_cat:
+                is_negated = False
+                for j in range(i + 1, min(i + 4, len(doc))):
+                    next_token = doc[j].text.lower()
+                    if next_token in negation_words:
+                        is_negated = True
+                        break
+                
+                if is_negated:
+                    exclude_category = found_cat
+                else:
+                    detected_category = found_cat
+
+        # B. Dosya Türü Negation Analizi
+        for i, token in enumerate(doc):
+            t_text = token.text.lower()
+            t_lemma = token.lemma_.lower()
+            
+            found_type = None
+            if t_text in pdf_keywords or t_lemma in pdf_keywords:
+                found_type = "pdf"
+            elif t_text in image_keywords or t_lemma in image_keywords or clean_turkish_suffixes(t_text) in image_keywords:
+                found_type = "image"
+                
+            if found_type:
+                is_negated = False
+                for j in range(i + 1, min(i + 4, len(doc))):
+                    next_token = doc[j].text.lower()
+                    if next_token in negation_words:
+                        is_negated = True
+                        break
+                
+                if is_negated:
+                    exclude_filetype = found_type
+                else:
+                    detected_filetype = found_type
+
+        # C. Genel Kelimeler Negation Analizi (Exclude Keywords)
+        for i, token in enumerate(doc):
+            t_text = token.text.lower()
+            t_clean = clean_turkish_suffixes(t_text)
+            t_lemma = token.lemma_.lower()
+            t_lemma_clean = clean_turkish_suffixes(t_lemma)
+            
+            is_candidate = True
+            if (t_clean in stop_words or t_lemma_clean in stop_words or 
+                any(t_clean in kw_list or t_lemma_clean in kw_list for kw_list in category_mapping.values()) or
+                t_clean in pdf_keywords or t_lemma_clean in pdf_keywords or
+                t_clean in image_keywords or t_lemma_clean in image_keywords):
+                is_candidate = False
+                
+            if is_candidate:
+                is_negated = False
+                for j in range(i + 1, min(i + 2, len(doc))):
+                    next_token = doc[j].text.lower()
+                    if next_token in negation_words:
+                        is_negated = True
+                        break
+                if is_negated:
+                    exclude_keywords.append(t_clean)
+
+        # D. Temiz Arama Sorgusu (q) Çıkarımı
+        words_to_remove = set(stop_words + negation_words)
+        for kw_list in category_mapping.values():
+            words_to_remove.update(kw_list)
+        words_to_remove.update(pdf_keywords)
+        words_to_remove.update(image_keywords)
+        words_to_remove.update(exclude_keywords)
+
+        cleaned_tokens = []
         for token in doc:
-            token_text = token.text.strip()
-            token_lower = token_text.lower()
-            
-            # Kelimeyi filtre kelimelerinde ve stop word'lerde ara
-            if token_lower in words_to_remove:
-                continue
-            
-            # Noktalama işaretlerini atla
-            if token.is_punct:
+            t_text = token.text.strip()
+            if not t_text or token.is_punct:
                 continue
                 
-            cleaned_tokens.append(token_text)
+            t_lower = t_text.lower()
+            t_clean = clean_turkish_suffixes(t_lower)
+            t_lemma = token.lemma_.lower()
+            t_lemma_clean = clean_turkish_suffixes(t_lemma)
+            
+            if t_lower in words_to_remove or t_lemma in words_to_remove or t_clean in words_to_remove or t_lemma_clean in words_to_remove:
+                continue
+                
+            cleaned_tokens.append(clean_turkish_suffixes(t_text))
 
-        # Kalan kelimeleri birleştirip arama sorgusu q yap
         cleaned_query = " ".join(cleaned_tokens).strip()
 
-        # Eğer temizleme sonucu hiçbir kelime kalmadıysa ama kategori varsa, 
-        # varsayılan olarak kategori adını veya boş sorguyu gönder
-        if not cleaned_query:
-            cleaned_query = ""
-
         logger.info(
-            "NLP Arama Çözümlemesi — Filtre Kategori: %s — Filtre Tür: %s — Kalan Sorgu: '%s'",
+            "NLP Arama Çözümlemesi — Kategori: %s (Hariç: %s) — Tür: %s (Hariç: %s) — Hariç Kelimeler: %s — Kalan Sorgu: '%s'",
             detected_category,
+            exclude_category,
             detected_filetype,
+            exclude_filetype,
+            exclude_keywords,
             cleaned_query
         )
 
@@ -559,8 +631,18 @@ async def nlp_search(request: NLPSearchRequest):
             status="success",
             q=cleaned_query,
             category=detected_category,
+            excludeCategory=exclude_category,
             fileType=detected_filetype,
+            excludeFileType=exclude_filetype,
+            excludeKeywords=exclude_keywords,
             originalQuery=query
+        )
+
+    except Exception as e:
+        logger.exception("nlp-search işleminde hata")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"NLP arama analizi sırasında hata oluştu: {str(e)}"},
         )
 
     except Exception as e:

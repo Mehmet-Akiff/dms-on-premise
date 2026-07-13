@@ -44,6 +44,10 @@ const Document = sequelize.define('documents', {
     allowNull: true,
     field: 'user_id',
   },
+}, {
+  timestamps: true,
+  underscored: true,
+  paranoid: true,
 });
 
 module.exports = Document;
