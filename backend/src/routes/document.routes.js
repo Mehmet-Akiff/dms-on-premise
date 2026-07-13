@@ -866,6 +866,13 @@ router.get('/ai-search', async (req, res) => {
       type: sequelize.constructor.QueryTypes.SELECT,
     });
 
+    const containsWholeWord = (text, word) => {
+      if (!text || !word) return false;
+      const escaped = word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const regex = new RegExp(`(?:^|[^a-zA-Z0-9çğıöşüÇĞİÖŞÜ])\u200B*${escaped}\u200B*(?:$|[^a-zA-Z0-9çğıöşüÇĞİÖŞÜ])`, 'i');
+      return regex.test(text);
+    };
+
     results.forEach(r => {
       const name = (r.originalName || '').toLowerCase();
       const rawText = (r.extractedText || '').toLowerCase();
@@ -874,15 +881,15 @@ router.get('/ai-search', async (req, res) => {
       let dimmed = true;
 
       if (finalSearchTerm && finalSearchTerm.length > 0) {
-        // Arama kelimelerinden herhangi biri dosya adında geçiyorsa veya
+        // Arama kelimelerinden herhangi biri dosya adında bütün kelime olarak geçiyorsa veya
         // arama sorgusu doğrudan dosya adında yer alıyorsa soluk yapma!
-        const matchesName = searchWords.some(word => name.includes(word.toLowerCase()));
+        const matchesName = searchWords.some(word => containsWholeWord(name, word));
         if (matchesName || name.includes(finalSearchTerm.toLowerCase())) {
           dimmed = false;
         }
 
-        // Eğer içerikte geçiyorsa ve alaka düzeyi yüksekse (relevance > 2.0) soluk yapma!
-        const matchesContent = searchWords.some(word => rawText.includes(word.toLowerCase()));
+        // Eğer içerikte bütün kelime olarak geçiyorsa ve alaka düzeyi yüksekse (relevance > 2.0) soluk yapma!
+        const matchesContent = searchWords.some(word => containsWholeWord(rawText, word));
         if (matchesContent && parseFloat(r.relevance) > 2.0) {
           dimmed = false;
         }
