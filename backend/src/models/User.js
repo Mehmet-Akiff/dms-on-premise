@@ -12,12 +12,12 @@ const User = sequelize.define('users', {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
-  username: {
-    type: DataTypes.STRING(100),
+  fullName: {
+    type: DataTypes.STRING(200),
     allowNull: false,
-    unique: true,
+    field: 'full_name',
     validate: {
-      len: [3, 100],
+      len: [2, 200],
     },
   },
   email: {
@@ -33,6 +33,15 @@ const User = sequelize.define('users', {
     allowNull: false,
     field: 'password_hash',
   },
+  role: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    defaultValue: 'user',
+    comment: 'Kullanıcı rolü (admin, user vb.)'
+  }
+}, {
+  underscored: true, // created_at ve updated_at alanlarını otomatik yılan-kasa yapar
+  timestamps: true
 });
 
 module.exports = User;

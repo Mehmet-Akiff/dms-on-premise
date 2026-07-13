@@ -10,9 +10,14 @@
         </div>
         <p class="subtitle">Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi</p>
       </div>
-      <div class="header-status">
-        <span class="status-indicator status-indicator--online"></span>
-        <span class="status-text">Sistem Aktif</span>
+      <div class="header-actions" style="display:flex; align-items:center; gap:0.75rem">
+        <button class="btn-settings-toggle" @click="isSettingsOpen = true" title="Kasa Ayarları">
+          ⚙️ Kasa Ayarları
+        </button>
+        <div class="header-status">
+          <span class="status-indicator status-indicator--online"></span>
+          <span class="status-text">Sistem Aktif</span>
+        </div>
       </div>
     </header>
 
@@ -48,6 +53,12 @@
     <footer class="dms-footer">
       <p>&copy; 2026 DMS On-Premise — Tüm veriler yerel sunucuda işlenmektedir.</p>
     </footer>
+
+    <!-- Ayarlar Paneli (Drawer) -->
+    <SettingsPanel :isOpen="isSettingsOpen" @close="isSettingsOpen = false" />
+
+    <!-- Kasa Kilit Ekranı (Overlay) -->
+    <KasaLock />
   </div>
 </template>
 
@@ -56,8 +67,11 @@ import { ref } from 'vue'
 import FileUpload from './components/FileUpload.vue'
 import DocumentList from './components/DocumentList.vue'
 import SearchBar from './components/SearchBar.vue'
+import KasaLock from './components/KasaLock.vue'
+import SettingsPanel from './components/SettingsPanel.vue'
 
 const documentListRef = ref(null)
+const isSettingsOpen = ref(false)
 
 function onDocumentUploaded() {
   // Yükleme başarılı olduğunda doküman listesini yenile
@@ -291,5 +305,25 @@ body {
     align-items: flex-start;
     gap: 1rem;
   }
+}
+
+.btn-settings-toggle {
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  color: #a78bfa;
+  padding: 0.5rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.05);
+}
+
+.btn-settings-toggle:hover {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: #a78bfa;
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.25);
+  transform: translateY(-1px);
 }
 </style>

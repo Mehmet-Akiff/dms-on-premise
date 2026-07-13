@@ -8,8 +8,12 @@ const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { sequelize, Document, DocumentMetadata, ProcessingJob } = require('../models');
+const { verifyToken } = require('../middleware/auth.middleware');
 
 const router = express.Router();
+
+// Doküman yönetim rotalarının tamamı için JWT doğrulaması şimdilik devre dışı (kullanıcı isteğiyle)
+// router.use(verifyToken);
 
 // ============================================================
 // Yapılandırma
@@ -271,7 +275,7 @@ router.post('/upload', upload.single('file'), handleMulterError, async (req, res
       mimeType: req.file.mimetype,
       filePath: req.file.path,
       status: 'PENDING',
-      userId: req.body.userId || null,
+      userId: req.user ? req.user.id : null,
     });
 
     // İşleme kuyruğuna yeni iş ekle

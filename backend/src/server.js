@@ -12,6 +12,7 @@ const path = require('path');
 
 const { sequelize } = require('./models');
 const documentRoutes = require('./routes/document.routes');
+const authRoutes = require('./routes/auth.routes');
 
 // ============================================================
 // Uygulama Yapılandırması
@@ -67,6 +68,7 @@ app.get('/api/health', async (req, res) => {
 // API Rotaları
 // ============================================================
 
+app.use('/api/auth', authRoutes);
 app.use('/api/documents', documentRoutes);
 
 // ============================================================
@@ -97,6 +99,28 @@ const startServer = async () => {
       // Tabloları otomatik oluştur/güncelle
       await sequelize.sync({ alter: true });
       console.log('[DB] Tablolar senkronize edildi.');
+
+      // Kasa Varsayılan Ayarlarını Başlat
+      const { SystemSettings } = require('./models');
+      const bcrypt = require('bcryptjs');
+      const defaultSettings = await SystemSettings.findByPk('kasa_settings');
+      if (!defaultSettings) {
+        const salt = await bcrypt.genSalt(10);
+        const masterPasswordHash = await bcrypt.hash('DmsSecureKasa2026!', salt);
+        await SystemSettings.create({
+          key: 'kasa_settings',
+          value: {
+            masterUsername: 'admin',
+            masterPasswordHash: masterPasswordHash,
+            alertEmail: 'admin@dms.com',
+            verifiedAlertEmail: 'admin@dms.com',
+            alertThreshold: 3,
+            verificationCode: null,
+            verificationExpires: null
+          }
+        });
+        console.log('[DB] Kasa varsayılan şifresi ("admin" / "DmsSecureKasa2026!") oluşturuldu.');
+      }
 
       // Fuzzy Search için pg_trgm eklentisini güvenli bir şekilde aktifleştir
       try {
