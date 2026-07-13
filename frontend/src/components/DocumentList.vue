@@ -301,10 +301,6 @@
               <span class="meta-label">Kategori</span>
               <span class="meta-value">{{ detailData.metadata.category }}</span>
             </div>
-            <div class="meta-item" v-if="detailData.metadata?.confidence">
-              <span class="meta-label">Güven Skoru</span>
-              <span class="meta-value">{{ (detailData.metadata.confidence * 100).toFixed(0) }}%</span>
-            </div>
           </div>
 
           <!-- OCR Çıktısı -->
@@ -313,6 +309,17 @@
               <div class="spinner-sm"></div>
               <p>OCR metni yükleniyor...</p>
             </div>
+            
+            <!-- DÜZENLEME MODU (DocumentEditor) -->
+            <div v-else-if="isEditing && detailData" class="ocr-edit-mode">
+              <DocumentEditor
+                :documentId="selectedDoc.id"
+                :initialText="detailData.metadata?.extractedText || detailData.metadata?.extracted_text || ''"
+                @save="handleEditorSave"
+                @cancel="handleEditorCancel"
+              />
+            </div>
+
             <div v-else-if="detailData?.metadata?.extracted_text || detailData?.metadata?.extractedText" class="ocr-output">
               <div class="ocr-header">
                 <span class="ocr-label">
@@ -322,27 +329,76 @@
                   Çıkarılan Metin (OCR)
                 </span>
                 
-                <!-- Doküman içi arama çubuğu -->
-                <div class="doc-search-box">
-                  <input
-                    v-model="docSearchQuery"
-                    type="text"
-                    class="doc-search-input"
-                    placeholder="Metin içinde ara..."
-                    @input="onDocSearch"
-                    @keydown.enter.prevent="nextMatch"
-                  />
-                  <div class="doc-search-nav" v-if="matchCount > 0">
-                    <span class="doc-search-count">{{ activeMatchIndex + 1 }} / {{ matchCount }}</span>
-                    <button class="doc-nav-btn" @click="prevMatch" title="Önceki">▲</button>
-                    <button class="doc-nav-btn" @click="nextMatch" title="Sonraki">▼</button>
+                <div class="ocr-header-actions" style="display:flex; align-items:center; gap:0.75rem">
+                  <button 
+                    class="action-link-btn" 
+                    style="border: 1px solid var(--border); background: rgba(139, 92, 246, 0.08); font-size: 0.75rem; padding: 0.35rem 0.65rem;"
+                    @click="isEditing = true"
+                    title="Metni Düzenle"
+                  >
+                    ✏️ Düzenle
+                  </button>
+                  
+                  <!-- Doküman içi arama çubuğu -->
+                  <div class="doc-search-box">
+                    <input
+                      v-model="docSearchQuery"
+                      type="text"
+                      class="doc-search-input"
+                      placeholder="Metin içinde ara..."
+                      @input="onDocSearch"
+                      @keydown.enter.prevent="nextMatch"
+                    />
+                    <div class="doc-search-nav" v-if="matchCount > 0">
+                      <span class="doc-search-count">{{ activeMatchIndex + 1 }} / {{ matchCount }}</span>
+                      <button class="doc-nav-btn" @click="prevMatch" title="Önceki">▲</button>
+                      <button class="doc-nav-btn" @click="nextMatch" title="Sonraki">▼</button>
+                    </div>
                   </div>
                 </div>
               </div>
-              <pre class="ocr-text" v-html="highlightedOcrHtml"></pre>
+              <!-- Satır/Paragraf Bazlı Yorum Destekli Okuma Alanı -->
+              <div class="ocr-lines-container">
+                <div v-for="line in parsedLines" :key="line.index" class="ocr-line-row">
+                  <div class="ocr-line-main-group">
+                    <div class="ocr-line-text" v-html="line.html"></div>
+                    <button class="btn-comment-trigger" @click="toggleCommentInput(line.index)" title="Bu satıra yorum ekle">
+                      💬
+                    </button>
+                  </div>
+                  
+                  <div v-if="activeCommentLineIndex === line.index" class="line-comment-input-area">
+                    <input 
+                      v-model="newCommentText" 
+                      type="text" 
+                      placeholder="Bu satır hakkında ne düşünüyorsunuz?" 
+                      class="line-comment-input" 
+                      @keydown.enter.prevent="addComment(line.index)"
+                    />
+                    <button class="btn-comment-add" @click="addComment(line.index)">Ekle</button>
+                  </div>
+
+                  <div v-if="line.comments && line.comments.length > 0" class="line-comments-list">
+                    <div v-for="comment in line.comments" :key="comment.id" class="line-comment-box">
+                      <span class="comment-icon">💬</span>
+                      <p class="comment-text">{{ comment.text }}</p>
+                      <button class="btn-comment-delete" @click="deleteComment(comment.id)" title="Yorumu sil">
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div v-else class="modal-empty">
               <p>Bu doküman için henüz çıkarılmış metin bulunmuyor.</p>
+              <button 
+                class="action-link-btn" 
+                style="margin-top: 1rem; border: 1px solid var(--border); background: rgba(139, 92, 246, 0.08);"
+                @click="isEditing = true"
+              >
+                ✏️ Metin Ekle
+              </button>
             </div>
           </div>
         </div>
@@ -381,6 +437,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import DocumentEditor from './DocumentEditor.vue'
 
 const documents = ref([])
 const isLoading = ref(true)
@@ -390,6 +447,7 @@ const searchQuery = ref('')
 const selectedDoc = ref(null)
 const detailData = ref(null)
 const isLoadingDetail = ref(false)
+const isEditing = ref(false)
 
 // Çöp Kutusu ve Güvenli Silme State'leri
 const isTrashView = ref(false)
@@ -562,25 +620,19 @@ function stopPolling() {
 
 function getHighlightedHtml(text, query) {
   if (!text) return '';
-  let escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 
   if (!query || query.trim().length === 0) {
     matchCount.value = 0;
     activeMatchIndex.value = 0;
-    return escaped;
+    return text;
   }
 
   const term = query.trim();
   const escapedTerm = term.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-  const regex = new RegExp(`(${escapedTerm})`, 'gi');
+  const regex = new RegExp(`(${escapedTerm})(?![^<>]*>)`, 'gi');
   
   let matchId = 0;
-  const highlighted = escaped.replace(regex, (match) => {
+  const highlighted = text.replace(regex, (match) => {
     const id = matchId++;
     return `<span class="doc-match" data-match-index="${id}">${match}</span>`;
   });
@@ -637,10 +689,122 @@ watch([docSearchQuery, detailData], () => {
   updateHighlightHtml();
 });
 
+// Yorumlama ve Paragraf Bazlı Ayrıştırma Mantığı
+const activeCommentLineIndex = ref(-1);
+const newCommentText = ref('');
+
+const parsedLines = computed(() => {
+  const htmlText = highlightedOcrHtml.value || '';
+  if (!htmlText) return [];
+  
+  if (!htmlText.trim().startsWith('<p')) {
+    return htmlText.split('\n').map((line, idx) => ({
+      index: idx,
+      html: `<p>${line}</p>`,
+      comments: getCommentsForLine(idx)
+    }));
+  }
+  
+  const regex = /<p[^>]*>.*?<\/p>/gi;
+  const matches = htmlText.match(regex) || [];
+  
+  return matches.map((pHTML, idx) => ({
+    index: idx,
+    html: pHTML,
+    comments: getCommentsForLine(idx)
+  }));
+});
+
+function getCommentsForLine(lineIdx) {
+  const allComments = detailData.value?.metadata?.comments || [];
+  return allComments.filter(c => c.lineIndex === lineIdx);
+}
+
+function toggleCommentInput(lineIdx) {
+  if (activeCommentLineIndex.value === lineIdx) {
+    activeCommentLineIndex.value = -1;
+    newCommentText.value = '';
+  } else {
+    activeCommentLineIndex.value = lineIdx;
+    newCommentText.value = '';
+  }
+}
+
+async function addComment(lineIdx) {
+  if (!newCommentText.value.trim() || !selectedDoc.value) return;
+  
+  const allComments = [...(detailData.value?.metadata?.comments || [])];
+  const newComment = {
+    id: Math.random().toString(36).substring(2, 11),
+    lineIndex: lineIdx,
+    text: newCommentText.value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  
+  allComments.push(newComment);
+  
+  try {
+    const response = await fetch(`/api/documents/${selectedDoc.value.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        comments: allComments
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      detailData.value = data.document;
+      selectedDoc.value = data.document;
+      const idx = documents.value.findIndex(d => d.id === data.document.id);
+      if (idx !== -1) {
+        documents.value[idx] = data.document;
+      }
+      activeCommentLineIndex.value = -1;
+      newCommentText.value = '';
+    }
+  } catch (error) {
+    console.error('[DocumentList] Yorum ekleme hatası:', error);
+  }
+}
+
+async function deleteComment(commentId) {
+  if (!selectedDoc.value) return;
+  
+  const allComments = (detailData.value?.metadata?.comments || []).filter(c => c.id !== commentId);
+  
+  try {
+    const response = await fetch(`/api/documents/${selectedDoc.value.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        comments: allComments
+      })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      detailData.value = data.document;
+      selectedDoc.value = data.document;
+      const idx = documents.value.findIndex(d => d.id === data.document.id);
+      if (idx !== -1) {
+        documents.value[idx] = data.document;
+      }
+    }
+  } catch (error) {
+    console.error('[DocumentList] Yorum silme hatası:', error);
+  }
+}
+
 async function openDetail(doc) {
   selectedDoc.value = doc
   isLoadingDetail.value = true
   detailData.value = null
+  isEditing.value = false
   docSearchQuery.value = searchQuery.value || '' // Arama sorgusuyla başlat
   activeMatchIndex.value = 0
 
@@ -661,10 +825,29 @@ async function openDetail(doc) {
 function closeDetail() {
   selectedDoc.value = null
   detailData.value = null
+  isEditing.value = false
   docSearchQuery.value = ''
   matchCount.value = 0
   activeMatchIndex.value = 0
   highlightedOcrHtml.value = ''
+}
+
+function handleEditorSave(updatedDoc) {
+  if (detailData.value) {
+    detailData.value = updatedDoc;
+  }
+  if (selectedDoc.value) {
+    selectedDoc.value = updatedDoc;
+  }
+  const index = documents.value.findIndex(d => d.id === updatedDoc.id);
+  if (index !== -1) {
+    documents.value[index] = updatedDoc;
+  }
+  isEditing.value = false;
+}
+
+function handleEditorCancel() {
+  isEditing.value = false;
 }
 
 // ============================================================
@@ -1573,5 +1756,151 @@ onUnmounted(() => {
 @keyframes neon-pulse-danger {
   0% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.3); }
   100% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.6); }
+}
+
+/* Satır Bazlı Yorumlama Stilleri */
+.ocr-lines-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  max-height: 450px;
+  overflow-y: auto;
+}
+
+.ocr-line-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding-bottom: 0.5rem;
+  transition: background 0.2s ease;
+}
+
+.ocr-line-row:hover {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.ocr-line-main-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.ocr-line-text {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  flex-grow: 1;
+  word-break: break-word;
+}
+
+.ocr-line-text p {
+  margin: 0;
+}
+
+.btn-comment-trigger {
+  background: transparent;
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+  opacity: 0.3;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.ocr-line-row:hover .btn-comment-trigger,
+.btn-comment-trigger:hover {
+  opacity: 1;
+  transform: scale(1.15);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+/* Yorum Ekleme Alanı */
+.line-comment-input-area {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  background: rgba(30, 41, 59, 0.4);
+  padding: 0.4rem;
+  border-radius: 6px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.line-comment-input {
+  flex-grow: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.btn-comment-add {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-comment-add:hover {
+  background: var(--accent-hover);
+}
+
+/* Yorum Listesi */
+.line-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+  padding-left: 0.75rem;
+}
+
+.line-comment-box {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.76rem;
+  position: relative;
+}
+
+.comment-icon {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.comment-text {
+  margin: 0;
+  color: var(--text-primary);
+  flex-grow: 1;
+  opacity: 0.9;
+}
+
+.btn-comment-delete {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0.4;
+  font-size: 0.7rem;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  padding: 0 4px;
+}
+
+.btn-comment-delete:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 </style>
