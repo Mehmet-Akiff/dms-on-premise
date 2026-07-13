@@ -30,13 +30,45 @@ const getLockoutDuration = (attempts) => {
   }
 };
 
+// Dinamik Transporter Üretici
+const getMailTransporter = (smtp) => {
+  if (smtp && smtp.auth && smtp.auth.user && smtp.auth.pass) {
+    // Gmail veya Özel SMTP
+    const host = smtp.host || 'smtp.gmail.com';
+    const port = parseInt(smtp.port) || 465;
+    const secure = smtp.secure !== undefined ? smtp.secure : (port === 465);
+
+    console.log(`[SMTP] Gerçek SMTP bağlantısı kuruluyor: ${host}:${port} (SSL: ${secure}), User: ${smtp.auth.user}`);
+    
+    return nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: {
+        user: smtp.auth.user,
+        pass: smtp.auth.pass // Google App Password
+      }
+    });
+  }
+  
+  // SMTP bilgileri eksikse console mock'a ve local dev'e fallback
+  console.log(`[SMTP] SMTP bilgileri eksik (şifre boş). Fallback loglama transporter'ı kuruluyor.`);
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'localhost',
+    port: parseInt(process.env.SMTP_PORT) || 1025,
+    ignoreTLS: true
+  });
+};
+
 // Mailer Yardımcı Fonksiyonu
-const sendAlertEmail = async (toEmail, attemptsCount, clientIp) => {
+const sendAlertEmail = async (toEmail, attemptsCount, clientIp, smtpConfig) => {
   if (!toEmail) return;
   try {
-    // Console Mock Mailer (SMTP yoksa hata vermemesi için)
+    const fromUser = (smtpConfig && smtpConfig.auth && smtpConfig.auth.user) || 'security@dms-onpremise.com';
+    
     console.log(`\n=================== [E-POSTA UYARISI] ===================`);
     console.log(`Kime: ${toEmail}`);
+    console.log(`Gönderici: ${fromUser}`);
     console.log(`Konu: DMS - YETKİSİZ ERİŞİM ALARMI!`);
     console.log(`Mesaj: DMS On-Premise sisteminize ardışık hatalı giriş denemeleri yapılmıştır.`);
     console.log(`Hatalı Deneme Sayısı: ${attemptsCount}`);
@@ -44,18 +76,12 @@ const sendAlertEmail = async (toEmail, attemptsCount, clientIp) => {
     console.log(`Güvenlik nedeniyle sistem geçici olarak kilitlenmiştir.`);
     console.log(`=========================================================\n`);
 
-    // SMTP Gönderimi (mock etseler bile kod çalışır durumda olmalıdır)
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'localhost',
-      port: parseInt(process.env.SMTP_PORT) || 1025,
-      ignoreTLS: true
-    });
-
+    const transporter = getMailTransporter(smtpConfig);
     await transporter.sendMail({
-      from: '"DMS Security" <security@dms-onpremise.com>',
+      from: `"DMS Security" <${fromUser}>`,
       to: toEmail,
       subject: 'DMS - YETKİSİZ ERİŞİM ALARMI!',
-      text: `DMS On-Premise sisteminize ardışık hatalı giriş denemeleri yapılmıştır. Hatalı Deneme: ${attemptsCount}, IP: ${clientIp}`
+      text: `DMS On-Premise sisteminize ardışık hatalı giriş denemeleri yapılmıştır. Hatalı Deneme: ${attemptsCount}, IP: ${clientIp}. Güvenlik nedeniyle erişim geçici olarak kilitlenmiştir.`
     });
     console.log(`[MAIL] Uyarı maili başarıyla gönderildi: ${toEmail}`);
   } catch (err) {
@@ -128,7 +154,7 @@ router.post('/kasa-login', async (req, res) => {
         // E-posta uyarısı tetikleme limitini aşmış mı kontrol et
         const threshold = settings.alertThreshold || 3;
         if (attemptsInfo.attempts >= threshold && settings.verifiedAlertEmail) {
-          await sendAlertEmail(settings.verifiedAlertEmail, attemptsInfo.attempts, ip);
+          await sendAlertEmail(settings.verifiedAlertEmail, attemptsInfo.attempts, ip, settings.smtpConfig);
         }
 
         const secondsLeft = Math.ceil(duration / 1000);
@@ -185,7 +211,16 @@ router.get('/settings', async (req, res) => {
         alertEmail: settings.alertEmail,
         verifiedAlertEmail: settings.verifiedAlertEmail,
         alertThreshold: settings.alertThreshold || 3,
-        isEmailVerified: !!settings.verifiedAlertEmail && settings.alertEmail === settings.verifiedAlertEmail
+        isEmailVerified: !!settings.verifiedAlertEmail && settings.alertEmail === settings.verifiedAlertEmail,
+        smtpConfig: {
+          host: settings.smtpConfig?.host || 'smtp.gmail.com',
+          port: settings.smtpConfig?.port || 465,
+          secure: settings.smtpConfig?.secure !== undefined ? settings.smtpConfig.secure : true,
+          auth: {
+            user: settings.smtpConfig?.auth?.user || 'security@gmail.com',
+            pass: settings.smtpConfig?.auth?.pass ? '••••••••' : '' // Şifreyi maskeli dön
+          }
+        }
       }
     });
   } catch (error) {
@@ -194,11 +229,11 @@ router.get('/settings', async (req, res) => {
 });
 
 // ============================================================
-// PUT /api/auth/settings — Kasa Ayarlarını Güncelle (Şifre vb.)
+// PUT /api/auth/settings — Kasa Ayarlarını Güncelle (Şifre ve SMTP vb.)
 // ============================================================
 router.put('/settings', async (req, res) => {
   try {
-    const { masterUsername, newPassword, alertThreshold } = req.body;
+    const { masterUsername, newPassword, alertThreshold, smtpConfig } = req.body;
     const record = await SystemSettings.findByPk('kasa_settings');
     const settings = { ...record.value };
 
@@ -213,6 +248,23 @@ router.put('/settings', async (req, res) => {
 
     if (alertThreshold !== undefined) {
       settings.alertThreshold = parseInt(alertThreshold) || 3;
+    }
+
+    // SMTP Config güncelle
+    if (smtpConfig) {
+      if (!settings.smtpConfig) settings.smtpConfig = {};
+      
+      settings.smtpConfig.host = smtpConfig.host || 'smtp.gmail.com';
+      settings.smtpConfig.port = parseInt(smtpConfig.port) || 465;
+      settings.smtpConfig.secure = smtpConfig.secure !== undefined ? smtpConfig.secure : true;
+      
+      if (!settings.smtpConfig.auth) settings.smtpConfig.auth = {};
+      settings.smtpConfig.auth.user = smtpConfig.auth?.user || 'security@gmail.com';
+      
+      // Maskeli değilse ve boş değilse yeni şifreyi kaydet
+      if (smtpConfig.auth?.pass && smtpConfig.auth.pass !== '••••••••') {
+        settings.smtpConfig.auth.pass = smtpConfig.auth.pass;
+      }
     }
 
     await record.update({ value: settings });
@@ -253,14 +305,10 @@ router.post('/send-verification', async (req, res) => {
     console.log(`========================================================\n`);
 
     try {
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'localhost',
-        port: parseInt(process.env.SMTP_PORT) || 1025,
-        ignoreTLS: true
-      });
-
+      const fromUser = (settings.smtpConfig && settings.smtpConfig.auth && settings.smtpConfig.auth.user) || 'security@dms-onpremise.com';
+      const transporter = getMailTransporter(settings.smtpConfig);
       await transporter.sendMail({
-        from: '"DMS Security" <security@dms-onpremise.com>',
+        from: `"DMS Security" <${fromUser}>`,
         to: email,
         subject: 'DMS - Kasa Bildirim E-posta Doğrulama',
         text: `DMS bildirim e-postası doğrulama kodunuz: ${code}. Bu kod 5 dakika geçerlidir.`

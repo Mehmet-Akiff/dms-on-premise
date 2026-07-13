@@ -38,7 +38,7 @@
         <!-- 2. E-POSTA BILDIRIM AYARLARI -->
         <div class="settings-section">
           <h4>📧 Yetkisiz Erişim Alarmı</h4>
-          <p class="section-desc">Ardışık hatalı denemelerde güvenlik uyarısı ve kilit raporu gönderilecek doğrulanmış e-postayı ayarlayın.</p>
+          <p class="section-desc">Ardışık hatalı denemelerde güvenlik uyarısı gönderilecek doğrulanmış e-postayı ayarlayın.</p>
 
           <!-- Alarm Eşiği -->
           <div class="form-group" style="margin-bottom:1rem">
@@ -113,6 +113,48 @@
             </div>
           </Transition>
         </div>
+
+        <hr class="section-divider" />
+
+        <!-- 3. SMTP GÖNDERİCİ AYARLARI -->
+        <div class="settings-section">
+          <h4>📨 SMTP Gönderici Ayarları</h4>
+          <p class="section-desc">E-postaların gönderileceği Gmail veya SMTP sunucu bilgilerini girin. Gmail için "Google Uygulama Şifresi" girilmelidir.</p>
+          
+          <form @submit.prevent="updateSmtpConfig" class="settings-form">
+            <div class="form-group">
+              <label>SMTP Sunucu Adresi</label>
+              <input v-model="smtpHost" type="text" placeholder="smtp.gmail.com" required />
+            </div>
+            
+            <div class="form-row-custom">
+              <div class="form-group custom-flex-1">
+                <label>Port</label>
+                <input v-model="smtpPort" type="number" placeholder="465" required />
+              </div>
+              <div class="form-group custom-flex-1 checkbox-flex">
+                <label class="smtp-checkbox-label">
+                  <input type="checkbox" v-model="smtpSecure" />
+                  <span>SSL/TLS Güvenli</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Gönderici E-posta (User)</label>
+              <input v-model="smtpUser" type="email" placeholder="security@gmail.com" required />
+            </div>
+
+            <div class="form-group">
+              <label>Google Uygulama Şifresi (Pass)</label>
+              <input v-model="smtpPass" type="password" placeholder="16 haneli uygulama şifresi..." />
+            </div>
+
+            <button type="submit" class="btn-settings-save" :disabled="isSavingSmtp">
+              {{ isSavingSmtp ? 'Kaydediliyor...' : 'SMTP Ayarlarını Kaydet' }}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   </div>
@@ -137,10 +179,17 @@ const verifiedEmail = ref('')
 const alertThreshold = ref(3)
 const isEmailVerified = ref(false)
 
+const smtpHost = ref('smtp.gmail.com')
+const smtpPort = ref(465)
+const smtpSecure = ref(true)
+const smtpUser = ref('security@gmail.com')
+const smtpPass = ref('')
+
 const isSavingCreds = ref(false)
 const isSendingCode = ref(false)
 const isVerifying = ref(false)
 const isCheckingCode = ref(false)
+const isSavingSmtp = ref(false)
 
 const otpDigits = ref(['', '', '', '', '', ''])
 const otpError = ref('')
@@ -162,6 +211,15 @@ async function fetchSettings() {
       verifiedEmail.value = data.settings.verifiedAlertEmail || ''
       alertThreshold.value = data.settings.alertThreshold || 3
       isEmailVerified.value = data.settings.isEmailVerified || false
+
+      // SMTP Ayarlarını yükle
+      if (data.settings.smtpConfig) {
+        smtpHost.value = data.settings.smtpConfig.host || 'smtp.gmail.com'
+        smtpPort.value = data.settings.smtpConfig.port || 465
+        smtpSecure.value = data.settings.smtpConfig.secure !== undefined ? data.settings.smtpConfig.secure : true
+        smtpUser.value = data.settings.smtpConfig.auth?.user || 'security@gmail.com'
+        smtpPass.value = data.settings.smtpConfig.auth?.pass || ''
+      }
     }
   } catch (error) {
     console.error('[Settings] Ayar çekme hatası:', error)
@@ -208,6 +266,40 @@ async function updateKasaCredentials() {
     console.error('[Settings] Kimlik güncelleme hatası:', error)
   } finally {
     isSavingCreds.value = false
+  }
+}
+
+// SMTP Ayarlarını Güncelle
+async function updateSmtpConfig() {
+  isSavingSmtp.value = true
+  try {
+    const response = await fetch('/api/auth/settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('kasa_token')}`
+      },
+      body: JSON.stringify({
+        smtpConfig: {
+          host: smtpHost.value,
+          port: smtpPort.value,
+          secure: smtpSecure.value,
+          auth: {
+            user: smtpUser.value,
+            pass: smtpPass.value
+          }
+        }
+      })
+    })
+
+    if (response.ok) {
+      alert('SMTP Gönderici Ayarları başarıyla kaydedildi!')
+      fetchSettings() // Maskeli halini tekrar çek
+    }
+  } catch (error) {
+    console.error('[Settings] SMTP güncelleme hatası:', error)
+  } finally {
+    isSavingSmtp.value = false
   }
 }
 
@@ -267,7 +359,8 @@ async function verifyCode() {
       verifiedEmail.value = data.verifiedAlertEmail
       isVerifying.value = false
       stopCountdown()
-      alert('E-posta adresi başarıyla doğrulandı ve alarma bağlandı!')
+      alert('E-posta adresi başarıyla doğrulandı ve alarma bağlandı!');
+      fetchSettings(); // Ayarları tekrar yenile
     } else {
       otpError.value = data.error || 'Geçersiz doğrulama kodu.'
     }
@@ -694,6 +787,38 @@ onUnmounted(() => {
 .btn-otp-verify:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Custom SMTP Layout */
+.form-row-custom {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.custom-flex-1 {
+  flex: 1;
+  min-width: 0;
+}
+
+.checkbox-flex {
+  justify-content: center;
+  padding-bottom: 0.6rem;
+}
+
+.smtp-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.74rem;
+  color: #9ca3af;
+  cursor: pointer;
+  user-select: none;
+}
+
+.smtp-checkbox-label input {
+  accent-color: #8b5cf6;
+  cursor: pointer;
 }
 
 /* Transitions */

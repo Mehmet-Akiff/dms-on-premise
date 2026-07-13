@@ -116,7 +116,16 @@ const startServer = async () => {
             verifiedAlertEmail: 'admin@dms.com',
             alertThreshold: 3,
             verificationCode: null,
-            verificationExpires: null
+            verificationExpires: null,
+            smtpConfig: {
+              host: 'smtp.gmail.com',
+              port: 465,
+              secure: true,
+              auth: {
+                user: 'security@gmail.com',
+                pass: ''
+              }
+            }
           }
         });
         console.log('[DB] Kasa varsayılan şifresi ("admin" / "DmsSecureKasa2026!") oluşturuldu.');

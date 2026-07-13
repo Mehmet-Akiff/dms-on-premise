@@ -38,6 +38,14 @@
             />
           </div>
 
+          <!-- Beni Hatırla Seçeneği -->
+          <div class="remember-me-row">
+            <label class="remember-me-label">
+              <input type="checkbox" v-model="rememberMe" :disabled="lockoutSeconds > 0 || isLoading" />
+              <span>Bu cihazda beni hatırla (Cihazı Güvenli Kaydet)</span>
+            </label>
+          </div>
+
           <!-- Kalan Hak ve Hata Mesajı -->
           <div v-if="errorMessage" class="error-banner">
             {{ errorMessage }}
@@ -77,6 +85,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 const isLocked = ref(true)
 const username = ref('')
 const password = ref('')
+const rememberMe = ref(true) // Varsayılan cihaz kaydı aktif
 const remainingAttempts = ref(3)
 const lockoutSeconds = ref(0)
 const isLoading = ref(false)
@@ -143,8 +152,12 @@ async function handleLogin() {
     const data = await response.json()
 
     if (response.ok) {
-      // Başarılı: Token'ı kaydet ve kilidi kaldır
-      localStorage.setItem('kasa_token', data.token)
+      // Başarılı: Seçime göre localStorage veya sessionStorage kullan
+      if (rememberMe.value) {
+        localStorage.setItem('kasa_token', data.token)
+      } else {
+        sessionStorage.setItem('kasa_token', data.token)
+      }
       isLocked.value = false
       // Parent bileşene haber ver
       window.dispatchEvent(new Event('kasa-unlocked'))
@@ -169,9 +182,8 @@ async function handleLogin() {
 
 // Sayfa yüklendiğinde token doğrulaması yap
 onMounted(() => {
-  const token = localStorage.getItem('kasa_token')
+  const token = localStorage.getItem('kasa_token') || sessionStorage.getItem('kasa_token')
   if (token) {
-    // Şimdilik sadece token varlığına güveniyoruz, geçersizse backend API'leri zaten hata döner
     isLocked.value = false
   } else {
     checkKasaStatus()
@@ -280,6 +292,30 @@ onUnmounted(() => {
   border-color: #8b5cf6;
   box-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
   background: rgba(15, 23, 42, 0.8);
+}
+
+/* Beni Hatırla Checkbox Stilleri */
+.remember-me-row {
+  display: flex;
+  align-items: center;
+  margin-top: -0.25rem;
+}
+
+.remember-me-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+  color: #9ca3af;
+  cursor: pointer;
+  user-select: none;
+}
+
+.remember-me-label input {
+  cursor: pointer;
+  accent-color: #8b5cf6;
+  width: 14px;
+  height: 14px;
 }
 
 .error-banner {
