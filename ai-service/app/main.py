@@ -1,6 +1,6 @@
 """
 DMS On-Premise - Yerel Yapay Zeka Servisi
-FastAPI | Tesseract OCR | Pillow
+FastAPI | Tesseract OCR | Pillow | pdf2image
 Port: 8000
 
 Tüm işlemler yerel (on-premise) sunucuda gerçekleşir.
@@ -9,6 +9,7 @@ Hiçbir veri dış servislere gönderilmez.
 
 import os
 import logging
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from pydantic import BaseModel, Field
 
 import pytesseract
 from PIL import Image
+from pdf2image import convert_from_path
 
 # ============================================================
 # Loglama Yapılandırması
@@ -37,7 +39,9 @@ logger = logging.getLogger("dms-ai-service")
 SHARED_UPLOADS_DIR = os.getenv("SHARED_UPLOADS_DIR", "/app/shared-uploads")
 TESSERACT_LANG = os.getenv("TESSERACT_LANG", "tur+eng")
 
-SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
+PDF_EXTENSIONS = {".pdf"}
+SUPPORTED_EXTENSIONS = IMAGE_EXTENSIONS | PDF_EXTENSIONS
 
 # ============================================================
 # FastAPI Uygulama Yapılandırması
@@ -45,8 +49,8 @@ SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp
 
 app = FastAPI(
     title="DMS AI Service",
-    description="On-Premise Doküman İşleme ve Sınıflandırma Servisi — Tesseract OCR",
-    version="0.2.0",
+    description="On-Premise Doküman İşleme ve Sınıflandırma Servisi — Tesseract OCR + PDF Desteği",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -72,7 +76,7 @@ class OCRRequest(BaseModel):
     filePath: str = Field(
         ...,
         description="İşlenecek dosyanın /app/shared-uploads içindeki yolu veya tam yolu",
-        examples=["document.png", "/app/shared-uploads/document.png"],
+        examples=["document.png", "/app/shared-uploads/document.pdf"],
     )
 
 
@@ -81,6 +85,7 @@ class OCRSuccessResponse(BaseModel):
     text: str
     filePath: str
     language: str
+    pageCount: int = 1
     processedAt: str
 
 
@@ -104,6 +109,41 @@ def resolve_file_path(file_path: str) -> Path:
     if path.is_absolute():
         return path
     return Path(SHARED_UPLOADS_DIR) / path
+
+
+def ocr_single_image(image: Image.Image) -> str:
+    """Tek bir Pillow Image nesnesi üzerinde Tesseract OCR çalıştırır."""
+    return pytesseract.image_to_string(image, lang=TESSERACT_LANG).strip()
+
+
+def ocr_pdf(file_path: Path) -> tuple[str, int]:
+    """
+    PDF dosyasını sayfa sayfa görsele dönüştürür ve her sayfada OCR çalıştırır.
+    Sonuçları sayfa ayracı ile birleştirir.
+    Dönüş: (birleşik_metin, sayfa_sayısı)
+    """
+    logger.info("PDF → Görsel dönüşümü başlatılıyor — Dosya: %s", file_path.name)
+
+    with tempfile.TemporaryDirectory(prefix="dms_pdf_") as tmp_dir:
+        pages = convert_from_path(
+            str(file_path),
+            dpi=300,
+            output_folder=tmp_dir,
+            fmt="png",
+            thread_count=2,
+        )
+
+        page_count = len(pages)
+        logger.info("PDF → %d sayfa başarıyla görsele dönüştürüldü.", page_count)
+
+        page_texts = []
+        for i, page_image in enumerate(pages, start=1):
+            logger.info("OCR işleniyor — Sayfa %d/%d", i, page_count)
+            text = ocr_single_image(page_image)
+            page_texts.append(f"--- Sayfa {i} ---\n{text}")
+
+        combined_text = "\n\n".join(page_texts).strip()
+        return combined_text, page_count
 
 
 # ============================================================
@@ -133,7 +173,7 @@ async def root():
 
 
 # ============================================================
-# POST /api/ocr — Tesseract OCR ile Metin Çıkarımı
+# POST /api/ocr — Tesseract OCR ile Metin Çıkarımı (Görsel + PDF)
 # ============================================================
 
 
@@ -148,9 +188,10 @@ async def root():
 )
 async def perform_ocr(request: OCRRequest):
     """
-    Verilen dosya yolundaki görseli Tesseract OCR ile okur ve metni döner.
+    Verilen dosya yolundaki görseli veya PDF'i Tesseract OCR ile okur ve metni döner.
 
     - Dosya, Node.js backend ile paylaşılan `/app/shared-uploads` dizininden okunur.
+    - PDF dosyaları pdf2image (poppler) ile sayfa sayfa görsele dönüştürülür.
     - Dil parametresi varsayılan olarak Türkçe + İngilizce (tur+eng) ayarlıdır.
     """
     resolved_path = resolve_file_path(request.filePath)
@@ -186,17 +227,23 @@ async def perform_ocr(request: OCRRequest):
 
     # --- OCR İşlemi ---
     try:
-        logger.info("OCR işlemi başlatılıyor — Dil: %s — Dosya: %s", TESSERACT_LANG, resolved_path.name)
+        is_pdf = suffix in PDF_EXTENSIONS
+        page_count = 1
 
-        image = Image.open(resolved_path)
-        extracted_text = pytesseract.image_to_string(image, lang=TESSERACT_LANG)
-
-        # Gereksiz boşlukları temizle
-        extracted_text = extracted_text.strip()
+        if is_pdf:
+            # ===== PDF MODU =====
+            logger.info("PDF modu — Çok sayfalı OCR başlatılıyor — Dosya: %s", resolved_path.name)
+            extracted_text, page_count = ocr_pdf(resolved_path)
+        else:
+            # ===== GÖRSEL MODU =====
+            logger.info("Görsel modu — OCR başlatılıyor — Dil: %s — Dosya: %s", TESSERACT_LANG, resolved_path.name)
+            image = Image.open(resolved_path)
+            extracted_text = ocr_single_image(image)
 
         logger.info(
-            "OCR işlemi tamamlandı — Dosya: %s — Çıkarılan karakter sayısı: %d",
+            "OCR işlemi tamamlandı — Dosya: %s — Sayfa: %d — Çıkarılan karakter: %d",
             resolved_path.name,
+            page_count,
             len(extracted_text),
         )
 
@@ -205,6 +252,7 @@ async def perform_ocr(request: OCRRequest):
             text=extracted_text,
             filePath=str(resolved_path),
             language=TESSERACT_LANG,
+            pageCount=page_count,
             processedAt=datetime.utcnow().isoformat(),
         )
 
