@@ -499,7 +499,9 @@ async def nlp_search(request: NLPSearchRequest):
             "dokumanlari", "dokuman", "dokumanlar", "dokumanlarini", "dokumanlarin",
             "dokumanlarını", "dokümanlarını", "dökümanlarını",
             "belgeler", "belgeleri", "belgelerini", "belgesini",
-            "dosyalari", "dosyalarini", "dosyalar", "tum", "tumu", "tümü", "getirsin", "bulsun"
+            "dosyalari", "dosyalarini", "dosyalar", "tum", "tumu", "tümü", "getirsin", "bulsun",
+            # Bağlaçlar ve miktar/kısıt belirteçleri
+            "ama", "sadece", "sadec", "yalnız", "yalniz", "tek", "bir", "ise", "da", "de"
         ]
 
         def clean_turkish_suffixes(word: str) -> str:
