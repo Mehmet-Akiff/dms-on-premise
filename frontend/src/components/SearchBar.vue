@@ -1,8 +1,21 @@
 <template>
-  <div class="search-container">
-    <!-- Üst Satır: Input + Ara Butonu -->
+  <div class="search-container" :class="{ 'ai-theme-active': isAISearch }">
+    <!-- Üst Satır: AI Modu Toggle + Input + Ara Butonu -->
     <div class="search-row">
-      <div class="search-input-group">
+      <!-- Yapay Zeka Arama Modu Toggle -->
+      <button 
+        class="ai-toggle-btn" 
+        :class="{ 'active': isAISearch }"
+        @click="toggleAISearch"
+        title="Yapay Zeka Destekli Doğal Dil Aramasını Aç/Kapat"
+      >
+        <svg class="ai-sparkle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+        </svg>
+        <span>AI Arama</span>
+      </button>
+
+      <div class="search-input-group" :class="{ 'ai-focus': isAISearch }">
         <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
@@ -10,7 +23,7 @@
           v-model="query"
           type="text"
           class="search-input"
-          placeholder="Doküman adı veya içeriğinde ara..."
+          :placeholder="isAISearch ? 'Örn: bana mehmet beyin son faturalarını getir...' : 'Doküman adı veya içeriğinde ara...'"
           @keydown.enter="search"
         />
         <button v-if="query.length > 0" class="search-clear-btn" @click="clearSearch" title="Temizle">
@@ -19,32 +32,71 @@
           </svg>
         </button>
       </div>
-      <button class="search-submit" @click="search" :disabled="isSearching || query.trim().length === 0">
+      <button class="search-submit" :class="{ 'ai-submit': isAISearch }" @click="search" :disabled="isSearching || query.trim().length === 0">
         <svg v-if="!isSearching" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <div v-else class="search-spinner"></div>
+        <div v-else class="search-spinner" :class="{ 'ai-spinner': isAISearch }"></div>
         {{ isSearching ? 'Aranıyor...' : 'Ara' }}
       </button>
     </div>
 
-    <!-- Alt Satır: Filtre Dropdown'ları -->
-    <div class="filter-row">
+    <!-- Yapay Zeka Analiz Sonuç Paneli -->
+    <transition name="fade-slide">
+      <div v-if="aiAnalysisResult && isAISearch" class="ai-analysis-banner">
+        <div class="ai-banner-header">
+          <svg class="sparkle-gold" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+          </svg>
+          <strong>Yapay Zeka Analiz Raporu:</strong>
+        </div>
+        <div class="ai-banner-chips">
+          <div class="ai-chip">
+            <span class="ai-chip-label">Filtrelenen Kategori:</span>
+            <span class="ai-chip-value">{{ aiAnalysisResult.category }}</span>
+          </div>
+          <div class="ai-chip" v-if="aiAnalysisResult.fileType !== 'Tümü'">
+            <span class="ai-chip-label">Dosya Türü:</span>
+            <span class="ai-chip-value uppercase">{{ aiAnalysisResult.fileType }}</span>
+          </div>
+          <div class="ai-chip" v-if="aiAnalysisResult.cleanedQuery">
+            <span class="ai-chip-label">Aranan Terim:</span>
+            <span class="ai-chip-value">"{{ aiAnalysisResult.cleanedQuery }}"</span>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Alt Satır: Filtre Dropdown'ları (AI arama modunda devre dışı bırakılır) -->
+    <div class="filter-row" :class="{ 'disabled-row': isAISearch }">
       <div class="filter-item">
         <label class="filter-label">Arama Modu</label>
-        <select v-model="searchMode" class="filter-select" @change="onFilterChange">
+        <select v-model="searchMode" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
           <option value="fuzzy">🔮 Akıllı — Yazım hatalarını tolere eder, en esnek</option>
           <option value="broad">🔍 Geniş — Kelimenin kökünü veya parçasını arar</option>
-          <option value="exact">🎯 Katı — Birebir yazdığın gibi arar (büyük/küçük harf duyarsız)</option>
+          <option value="exact">🎯 Katı — Birebir yazdığın gibi arar (büyük/küçük harf duyarlı)</option>
+        </select>
+      </div>
+
+      <div class="filter-item filter-item--sm">
+        <label class="filter-label">Kategori</label>
+        <select v-model="categoryFilter" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
+          <option value="all">📁 Tüm Kategoriler</option>
+          <option value="Fatura">🧾 Fatura</option>
+          <option value="Bordro">💵 Bordro</option>
+          <option value="Sozlesme">📝 Sözleşme</option>
+          <option value="Rapor">📊 Rapor</option>
+          <option value="Dilekce">✉️ Dilekçe</option>
+          <option value="Diger">📌 Diğer</option>
         </select>
       </div>
 
       <div class="filter-item filter-item--sm">
         <label class="filter-label">Dosya Türü</label>
-        <select v-model="fileType" class="filter-select" @change="onFilterChange">
+        <select v-model="fileType" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
           <option value="all">📁 Tüm Dosyalar</option>
           <option value="pdf">📕 Sadece PDF</option>
-          <option value="image">🖼️ Sadece Resim (JPG, PNG)</option>
+          <option value="image">🖼️ Resim (JPG, PNG)</option>
         </select>
       </div>
 
@@ -79,9 +131,20 @@ const emit = defineEmits(['results', 'clear', 'loading'])
 const query = ref('')
 const searchMode = ref('fuzzy')
 const fileType = ref('all')
+const categoryFilter = ref('all')
 const statusFilter = ref('all')
 const sortOrder = ref('relevance')
 const isSearching = ref(false)
+
+// AI Arama State'leri
+const isAISearch = ref(false)
+const aiAnalysisResult = ref(null)
+
+function toggleAISearch() {
+  isAISearch.value = !isAISearch.value
+  aiAnalysisResult.value = null
+  if (query.value.trim().length > 0) search()
+}
 
 function onFilterChange() {
   if (query.value.trim().length > 0) search()
@@ -93,19 +156,43 @@ async function search() {
 
   isSearching.value = true
   emit('loading', true)
+  aiAnalysisResult.value = null
 
   try {
-    const params = new URLSearchParams({
-      q: term,
-      mode: searchMode.value,
-      fileType: fileType.value,
-      status: statusFilter.value,
-      sort: sortOrder.value,
-    })
-    const response = await fetch(`/api/documents/search?${params}`)
+    let url = ''
+    let params = null
+
+    if (isAISearch.value) {
+      // 1. Yapay Zeka Arama Modu
+      params = new URLSearchParams({
+        q: term,
+        status: statusFilter.value,
+        sort: sortOrder.value,
+      })
+      url = `/api/documents/ai-search?${params}`
+    } else {
+      // 2. Normal Filtreli Arama Modu
+      params = new URLSearchParams({
+        q: term,
+        mode: searchMode.value,
+        fileType: fileType.value,
+        category: categoryFilter.value,
+        status: statusFilter.value,
+        sort: sortOrder.value,
+      })
+      url = `/api/documents/search?${params}`
+    }
+
+    const response = await fetch(url)
     if (response.ok) {
       const data = await response.json()
-      emit('results', data.results || [], term)
+      
+      // AI analiz raporu varsa kaydet
+      if (data.aiAnalysis) {
+        aiAnalysisResult.value = data.aiAnalysis
+      }
+      
+      emit('results', data.results || [], data.aiAnalysis ? (data.aiAnalysis.cleanedQuery || term) : term)
     } else {
       emit('results', [], term)
     }
@@ -122,14 +209,18 @@ function clearSearch() {
   query.value = ''
   searchMode.value = 'fuzzy'
   fileType.value = 'all'
+  categoryFilter.value = 'all'
   statusFilter.value = 'all'
   sortOrder.value = 'relevance'
+  isAISearch.value = false
+  aiAnalysisResult.value = null
   emit('clear')
 }
 
 watch(query, (newVal) => {
   if (newVal.trim().length === 0) {
     emit('clear')
+    aiAnalysisResult.value = null
   }
 })
 </script>
@@ -143,6 +234,13 @@ watch(query, (newVal) => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.85rem 1rem;
+  transition: all 0.3s ease;
+}
+
+/* AI Arama Modu Aktifken Arka Plan ve Neon Gölge */
+.ai-theme-active {
+  border-color: rgba(167, 139, 250, 0.45);
+  box-shadow: 0 4px 20px rgba(167, 139, 250, 0.06);
 }
 
 /* ===== Üst Satır ===== */
@@ -150,6 +248,49 @@ watch(query, (newVal) => {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+}
+
+/* AI Arama Modu Aç-Kapat Butonu */
+.ai-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 10px;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.ai-toggle-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.ai-toggle-btn.active {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.15), rgba(139, 92, 246, 0.2));
+  color: #c4b5fd;
+  border-color: rgba(167, 139, 250, 0.6);
+  box-shadow: 0 0 10px rgba(167, 139, 250, 0.1);
+}
+
+.ai-sparkle-icon {
+  opacity: 0.7;
+}
+.ai-toggle-btn.active .ai-sparkle-icon {
+  color: #c4b5fd;
+  animation: pulse-glow 2s infinite alternate;
+}
+
+@keyframes pulse-glow {
+  0% { transform: scale(1); filter: drop-shadow(0 0 1px #a78bfa); }
+  100% { transform: scale(1.1); filter: drop-shadow(0 0 4px #a78bfa); }
 }
 
 .search-input-group {
@@ -168,6 +309,11 @@ watch(query, (newVal) => {
 .search-input-group:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.08);
+}
+
+.search-input-group.ai-focus:focus-within {
+  border-color: rgba(167, 139, 250, 0.8);
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
 }
 
 .search-icon {
@@ -235,6 +381,18 @@ watch(query, (newVal) => {
   box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
 }
 
+.search-submit.ai-submit {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.25), rgba(139, 92, 246, 0.2));
+  color: #c4b5fd;
+  border-color: rgba(167, 139, 250, 0.5);
+}
+
+.search-submit.ai-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.35), rgba(139, 92, 246, 0.3));
+  border-color: rgba(167, 139, 250, 0.8);
+  box-shadow: 0 4px 12px rgba(167, 139, 250, 0.2);
+}
+
 .search-submit:disabled {
   opacity: 0.35;
   cursor: not-allowed;
@@ -249,8 +407,64 @@ watch(query, (newVal) => {
   animation: spin-s 0.6s linear infinite;
 }
 
+.search-spinner.ai-spinner {
+  border-color: rgba(167, 139, 250, 0.2);
+  border-top-color: #c4b5fd;
+}
+
 @keyframes spin-s {
   to { transform: rotate(360deg); }
+}
+
+/* ===== Yapay Zeka Analiz Bandı ===== */
+.ai-analysis-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.ai-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #c4b5fd;
+}
+
+.sparkle-gold {
+  color: #f59e0b;
+}
+
+.ai-banner-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.ai-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 5px;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.7rem;
+}
+
+.ai-chip-label {
+  color: #a78bfa;
+  opacity: 0.85;
+}
+
+.ai-chip-value {
+  color: #fef9c3;
+  font-weight: 600;
 }
 
 /* ===== Alt Satır: Filtreler ===== */
@@ -258,6 +472,12 @@ watch(query, (newVal) => {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  transition: all 0.3s ease;
+}
+
+.filter-row.disabled-row {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .filter-item {
@@ -307,5 +527,25 @@ watch(query, (newVal) => {
 .filter-select:focus {
   border-color: var(--accent);
   color: var(--text-primary);
+}
+
+.filter-select:disabled {
+  background-color: var(--bg-primary);
+  border-color: var(--border);
+  color: var(--text-secondary);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Geçiş Animasyonları */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 </style>

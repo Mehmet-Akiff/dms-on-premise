@@ -161,13 +161,42 @@ async function processDocumentWithAI(document, job) {
 
     // 4. AI yanıtını değerlendir
     if (response.ok && result.status === 'success') {
-      // Başarılı: Metni DocumentMetadata tablosuna kaydet
+      const extractedText = result.text || '';
+      let category = 'Diger';
+      let confidence = 0.0;
+      let tags = [];
+
+      // 4.1. Sınıflandırma ve NER Analizi (SpaCy NLP)
+      if (extractedText.trim().length > 0) {
+        console.log(`[AI_SERVICE] Kategori ve NER analizi başlatılıyor...`);
+        try {
+          const classResponse = await fetch(`${AI_SERVICE_URL}/api/classify-and-extract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: extractedText }),
+          });
+          
+          if (classResponse.ok) {
+            const classResult = await classResponse.json();
+            if (classResult.status === 'success') {
+              category = classResult.category || 'Diger';
+              confidence = classResult.confidence || 0.0;
+              tags = classResult.tags || [];
+              console.log(`[AI_SERVICE] Analiz Başarılı. Kategori: ${category} (Güven: ${confidence}), Etiketler: [${tags.join(', ')}]`);
+            }
+          }
+        } catch (classError) {
+          console.error(`[AI_SERVICE_WARN] Kategori sınıflandırma hatası (süreci etkilemez):`, classError.message);
+        }
+      }
+
+      // Başarılı: Metni ve analiz verilerini DocumentMetadata tablosuna kaydet
       await DocumentMetadata.create({
         documentId: document.id,
-        extractedText: result.text,
-        category: 'uncategorized',
-        extractedTags: [],
-        confidence: 0.0,
+        extractedText: extractedText,
+        category: category,
+        extractedTags: tags,
+        confidence: confidence,
       });
 
       const charCount = (result.text || '').length;
@@ -428,22 +457,23 @@ function applyHighlight(snippet, query, isCaseSensitive = false) {
 }
 
 // ============================================================
-// GET /api/documents/search — Arama (mode, fileType, status, sort)
+// GET /api/documents/search — Arama (mode, fileType, status, sort, category)
 // ============================================================
 
 router.get('/search', async (req, res) => {
   try {
-    const { q, mode = 'fuzzy', fileType = 'all', status = 'all', sort = 'relevance' } = req.query;
+    const { q, mode = 'fuzzy', fileType = 'all', status = 'all', sort = 'relevance', category = 'all' } = req.query;
 
     if (!q || q.trim().length === 0) {
       return res.status(400).json({ error: 'Arama sorgusu (q) parametresi gereklidir.' });
     }
 
     const searchTerm = q.trim();
-    console.log(`[ARAMA] Mod: ${mode} | Tür: ${fileType} | Durum: ${status} | Sıra: ${sort} | Sorgu: "${searchTerm}"`);
+    console.log(`[ARAMA] Mod: ${mode} | Tür: ${fileType} | Kategori: ${category} | Durum: ${status} | Sıra: ${sort} | Sorgu: "${searchTerm}"`);
 
     let queryStr = '';
     const isFuzzy = mode === 'fuzzy';
+    const replacements = { searchTerm };
     
     // Filtreler
     let extraFilters = '';
@@ -452,12 +482,18 @@ router.get('/search', async (req, res) => {
     } else if (fileType === 'image') {
       extraFilters += ` AND d.mime_type LIKE 'image/%'`;
     }
+    
     if (status === 'completed') {
       extraFilters += ` AND d.status = 'COMPLETED'`;
     } else if (status === 'pending') {
       extraFilters += ` AND d.status = 'PENDING'`;
     } else if (status === 'failed') {
       extraFilters += ` AND d.status = 'FAILED'`;
+    }
+
+    if (category && category !== 'all') {
+      extraFilters += ` AND dm.category = :category`;
+      replacements.category = category;
     }
 
     // Sıralama
@@ -482,29 +518,71 @@ router.get('/search', async (req, res) => {
        ${orderClause} LIMIT 50`;
        
     } else if (isFuzzy) {
-      // 3. AKILLI ARAMA (Fuzzy Match + Hybrid Scoring)
-      // Eşleşme hassasiyeti (threshold) > 0.30 olarak yükseltildi, alakasız kelimeler getirilmez.
-      queryStr = `
-        SELECT
-         d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
-         (
-           (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN 10 ELSE 0 END) +
-           (word_similarity(:searchTerm, d.original_name) * 5) +
-           (CASE WHEN COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%' THEN 3 ELSE 0 END) +
-           (word_similarity(:searchTerm, COALESCE(dm.extracted_text, '')) * 1)
-         ) AS relevance,
-         (CASE WHEN (d.original_name ILIKE '%' || :searchTerm || '%' OR word_similarity(:searchTerm, d.original_name) > 0.35) THEN false ELSE true END) AS "isDimmed",
-         COALESCE(dm.extracted_text, '') AS "extractedText"
-       FROM documents d
-       LEFT JOIN document_metadata dm ON dm.document_id = d.id
-       WHERE (
-         word_similarity(:searchTerm, d.original_name) > 0.30 
-         OR word_similarity(:searchTerm, COALESCE(dm.extracted_text, '')) > 0.30
-         OR d.original_name ILIKE '%' || :searchTerm || '%'
-         OR COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%'
-       )
-       ${extraFilters}
-       ${orderClause} LIMIT 50`;
+      // 3. AKILLI ARAMA (Fuzzy Match + Ağırlıklı Kelime Bazlı Trigram)
+      // Arama terimini kelimelere ayırarak dinamik trigram eşleşmesi hesaplıyoruz.
+      const searchWords = searchTerm.split(/\s+/).filter(w => w.length > 0);
+      
+      if (searchWords.length > 0) {
+        const relevanceParts = [];
+        const whereParts = [];
+        
+        searchWords.forEach((word, idx) => {
+          const key = `word${idx}`;
+          replacements[key] = word;
+          
+          relevanceParts.push(`
+            (CASE WHEN d.original_name ILIKE '%' || :${key} || '%' THEN 10 ELSE 0 END) +
+            (word_similarity(:${key}, d.original_name) * 5) +
+            (CASE WHEN COALESCE(dm.extracted_text, '') ILIKE '%' || :${key} || '%' THEN 3 ELSE 0 END) +
+            (word_similarity(:${key}, COALESCE(dm.extracted_text, '')) * 1)
+          `);
+          
+          whereParts.push(`
+            (
+              word_similarity(:${key}, d.original_name) > 0.30
+              OR word_similarity(:${key}, COALESCE(dm.extracted_text, '')) > 0.30
+              OR d.original_name ILIKE '%' || :${key} || '%'
+              OR COALESCE(dm.extracted_text, '') ILIKE '%' || :${key} || '%'
+            )
+          `);
+        });
+
+        // isDimmed bayrağı: eğer başlıkta aranan tüm sorgu doğrudan geçmiyorsa soluk gösterilir
+        queryStr = `
+          SELECT
+           d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
+           ((${relevanceParts.join(' + ')}) / ${searchWords.length}) AS relevance,
+           (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN false ELSE true END) AS "isDimmed",
+           COALESCE(dm.extracted_text, '') AS "extractedText"
+         FROM documents d
+         LEFT JOIN document_metadata dm ON dm.document_id = d.id
+         WHERE (${whereParts.join(' OR ')})
+         ${extraFilters}
+         ${orderClause} LIMIT 50`;
+      } else {
+        // Fallback düz fuzzy
+        queryStr = `
+          SELECT
+           d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
+           (
+             (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN 10 ELSE 0 END) +
+             (word_similarity(:searchTerm, d.original_name) * 5) +
+             (CASE WHEN COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%' THEN 3 ELSE 0 END) +
+             (word_similarity(:searchTerm, COALESCE(dm.extracted_text, '')) * 1)
+           ) AS relevance,
+           (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN false ELSE true END) AS "isDimmed",
+           COALESCE(dm.extracted_text, '') AS "extractedText"
+         FROM documents d
+         LEFT JOIN document_metadata dm ON dm.document_id = d.id
+         WHERE (
+           word_similarity(:searchTerm, d.original_name) > 0.30 
+           OR word_similarity(:searchTerm, COALESCE(dm.extracted_text, '')) > 0.30
+           OR d.original_name ILIKE '%' || :searchTerm || '%'
+           OR COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%'
+         )
+         ${extraFilters}
+         ${orderClause} LIMIT 50`;
+      }
        
     } else {
       // 2. GENİŞ ARAMA (Broad Match): plainto_tsquery
@@ -528,7 +606,7 @@ router.get('/search', async (req, res) => {
     }
 
     const results = await sequelize.query(queryStr, {
-      replacements: { searchTerm },
+      replacements,
       type: sequelize.constructor.QueryTypes.SELECT,
     });
 
@@ -556,12 +634,190 @@ router.get('/search', async (req, res) => {
       fileType,
       status,
       sort,
+      category,
       count: results.length,
       results,
     });
   } catch (error) {
     console.error('[HATA] Full-Text Search:', error.message);
     res.status(500).json({ error: 'Arama sırasında bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// GET /api/documents/ai-search — Yapay Zeka Destekli Doğal Dil Arama
+// ============================================================
+
+router.get('/ai-search', async (req, res) => {
+  try {
+    const { q, status = 'all', sort = 'relevance' } = req.query;
+
+    if (!q || q.trim().length === 0) {
+      return res.status(400).json({ error: 'Arama sorgusu (q) parametresi gereklidir.' });
+    }
+
+    const originalQuery = q.trim();
+    console.log(`[AI_SEARCH] Doğal Dil Sorgusu: "${originalQuery}"`);
+
+    // 1. AI Servisinden NLP Analizi iste
+    let cleanedQuery = originalQuery;
+    let detectedCategory = null;
+    let detectedFileType = null;
+
+    try {
+      const aiResponse = await fetch(`${AI_SERVICE_URL}/api/nlp-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: originalQuery }),
+      });
+
+      if (aiResponse.ok) {
+        const aiResult = await aiResponse.json();
+        if (aiResult.status === 'success') {
+          cleanedQuery = aiResult.q || '';
+          detectedCategory = aiResult.category;
+          detectedFileType = aiResult.fileType;
+          console.log(`[AI_SEARCH_OK] Çözümlendi -> q: "${cleanedQuery}", cat: ${detectedCategory}, type: ${detectedFileType}`);
+        }
+      }
+    } catch (aiError) {
+      console.error(`[AI_SEARCH_WARN] AI Servis NLP analizi başarısız (direkt aramaya düşülüyor):`, aiError.message);
+    }
+
+    // Eğer temizleme sonucu arama kelimesi boş kaldıysa ama kategori varsa, 
+    // aramayı kategorinin kendisiyle tetikleyelim veya boş q araması yaptıralım
+    const finalSearchTerm = cleanedQuery || detectedCategory || '';
+
+    if (finalSearchTerm.length === 0) {
+      // Eğer kelime bulunamadıysa, direkt boş sonuç dön
+      return res.status(200).json({
+        query: originalQuery,
+        aiAnalysis: {
+          cleanedQuery: '',
+          category: detectedCategory || 'Tümü',
+          fileType: detectedFileType || 'Tümü'
+        },
+        count: 0,
+        results: []
+      });
+    }
+
+    // 2. Çözümlenen parametrelerle iç arama sorgumuzu çalıştıralım
+    // Filtreler
+    let extraFilters = '';
+    const replacements = { searchTerm: finalSearchTerm };
+
+    if (detectedFileType === 'pdf') {
+      extraFilters += ` AND d.mime_type = 'application/pdf'`;
+    } else if (detectedFileType === 'image') {
+      extraFilters += ` AND d.mime_type LIKE 'image/%'`;
+    }
+
+    if (status === 'completed') {
+      extraFilters += ` AND d.status = 'COMPLETED'`;
+    } else if (status === 'pending') {
+      extraFilters += ` AND d.status = 'PENDING'`;
+    } else if (status === 'failed') {
+      extraFilters += ` AND d.status = 'FAILED'`;
+    }
+
+    if (detectedCategory) {
+      extraFilters += ` AND dm.category = :category`;
+      replacements.category = detectedCategory;
+    }
+
+    // Sıralama
+    let orderClause = 'ORDER BY relevance DESC';
+    if (sort === 'newest') orderClause = 'ORDER BY d.created_at DESC';
+    else if (sort === 'oldest') orderClause = 'ORDER BY d.created_at ASC';
+    else if (sort === 'name_asc') orderClause = 'ORDER BY d.original_name ASC';
+    else if (sort === 'name_desc') orderClause = 'ORDER BY d.original_name DESC';
+
+    // Fuzzy arama kelimelerini ayır
+    const searchWords = finalSearchTerm.split(/\s+/).filter(w => w.length > 0);
+    let queryStr = '';
+
+    if (searchWords.length > 0) {
+      const relevanceParts = [];
+      const whereParts = [];
+
+      searchWords.forEach((word, idx) => {
+        const key = `word${idx}`;
+        replacements[key] = word;
+
+        relevanceParts.push(`
+          (CASE WHEN d.original_name ILIKE '%' || :${key} || '%' THEN 10 ELSE 0 END) +
+          (word_similarity(:${key}, d.original_name) * 5) +
+          (CASE WHEN COALESCE(dm.extracted_text, '') ILIKE '%' || :${key} || '%' THEN 3 ELSE 0 END) +
+          (word_similarity(:${key}, COALESCE(dm.extracted_text, '')) * 1)
+        `);
+
+        whereParts.push(`
+          (
+            word_similarity(:${key}, d.original_name) > 0.25
+            OR word_similarity(:${key}, COALESCE(dm.extracted_text, '')) > 0.25
+            OR d.original_name ILIKE '%' || :${key} || '%'
+            OR COALESCE(dm.extracted_text, '') ILIKE '%' || :${key} || '%'
+          )
+        `);
+      });
+
+      queryStr = `
+        SELECT
+         d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
+         ((${relevanceParts.join(' + ')}) / ${searchWords.length}) AS relevance,
+         (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN false ELSE true END) AS "isDimmed",
+         COALESCE(dm.extracted_text, '') AS "extractedText"
+       FROM documents d
+       LEFT JOIN document_metadata dm ON dm.document_id = d.id
+       WHERE (${whereParts.join(' OR ')})
+       ${extraFilters}
+       ${orderClause} LIMIT 50`;
+    } else {
+      queryStr = `
+        SELECT
+         d.id, d.title, d.original_name AS "originalName", d.mime_type AS "mimeType", d.status, d.created_at AS "createdAt", dm.category, dm.confidence,
+         1.0 AS relevance,
+         (CASE WHEN d.original_name ILIKE '%' || :searchTerm || '%' THEN false ELSE true END) AS "isDimmed",
+         COALESCE(dm.extracted_text, '') AS "extractedText"
+       FROM documents d
+       LEFT JOIN document_metadata dm ON dm.document_id = d.id
+       WHERE (d.original_name ILIKE '%' || :searchTerm || '%' OR COALESCE(dm.extracted_text, '') ILIKE '%' || :searchTerm || '%')
+       ${extraFilters}
+       ${orderClause} LIMIT 50`;
+    }
+
+    const results = await sequelize.query(queryStr, {
+      replacements,
+      type: sequelize.constructor.QueryTypes.SELECT,
+    });
+
+    results.forEach(r => {
+      const name = r.originalName || '';
+      const inFilename = name.toLowerCase().includes(finalSearchTerm.toLowerCase());
+      r.matchLocation = inFilename ? 'filename' : 'content';
+
+      const rawText = r.extractedText || '';
+      const snippet = getMatchSnippet(rawText, finalSearchTerm, false);
+      r.highlight = applyHighlight(snippet, finalSearchTerm, false);
+
+      delete r.extractedText;
+    });
+
+    res.status(200).json({
+      query: originalQuery,
+      aiAnalysis: {
+        cleanedQuery: finalSearchTerm,
+        category: detectedCategory || 'Tümü',
+        fileType: detectedFileType || 'Tümü'
+      },
+      count: results.length,
+      results,
+    });
+
+  } catch (error) {
+    console.error('[HATA] AI Search:', error.message);
+    res.status(500).json({ error: 'AI Arama sırasında bir hata oluştu.' });
   }
 });
 

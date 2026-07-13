@@ -23,6 +23,9 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Türkçe NLP modeli indir (turkish-nlp-suite tr_core_news_md - ~15MB)
+RUN pip install https://huggingface.co/turkish-nlp-suite/tr_core_news_md/resolve/main/tr_core_news_md-1.0-py3-none-any.whl
+
 # Uygulama kaynak kodlarını kopyala
 COPY . .
 
