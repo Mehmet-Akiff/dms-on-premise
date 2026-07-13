@@ -1105,4 +1105,59 @@ router.get('/jobs/:jobId', async (req, res) => {
   }
 });
 
+// ============================================================
+// PUT /api/documents/:id — Doküman Güncelleme (Rich Text Editor)
+// ============================================================
+router.put('/:id', async (req, res) => {
+  try {
+    const { title, extractedText, category, comments } = req.body;
+    const document = await Document.findByPk(req.params.id, {
+      include: [{ association: 'metadata' }]
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Güncellenecek doküman bulunamadı.' });
+    }
+
+    // 1. Doküman Başlığını güncelle
+    if (title !== undefined) {
+      document.title = title;
+      await document.save();
+    }
+
+    // 2. Metadata Metnini güncelle
+    if (document.metadata) {
+      if (extractedText !== undefined) {
+        document.metadata.extractedText = extractedText;
+      }
+      if (category !== undefined) {
+        document.metadata.category = category;
+      }
+      if (comments !== undefined) {
+        document.metadata.comments = comments;
+      }
+      await document.metadata.save();
+    } else if (extractedText !== undefined || category !== undefined || comments !== undefined) {
+      await DocumentMetadata.create({
+        documentId: document.id,
+        extractedText: extractedText || '',
+        category: category || 'Diger',
+        comments: comments || [],
+        confidence: 1.0
+      });
+    }
+
+    console.log(`[UPDATE] Doküman güncellendi: ${document.originalName || document.title} (${document.id})`);
+
+    const updatedDocument = await Document.findByPk(req.params.id, {
+      include: [{ association: 'metadata' }]
+    });
+
+    res.status(200).json({ message: 'Doküman başarıyla güncellendi.', document: updatedDocument });
+  } catch (error) {
+    console.error('[HATA] Doküman güncelleme:', error.message);
+    res.status(500).json({ error: 'Doküman güncellenirken bir hata oluştu.' });
+  }
+});
+
 module.exports = router;

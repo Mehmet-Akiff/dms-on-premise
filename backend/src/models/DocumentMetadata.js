@@ -41,6 +41,12 @@ const DocumentMetadata = sequelize.define('document_metadata', {
     defaultValue: 0.0,
     comment: 'Sınıflandırma güven skoru (0.0 - 1.0)',
   },
+  comments: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    defaultValue: [],
+    comment: 'Satır bazlı kullanıcı yorumları',
+  },
 });
 
 module.exports = DocumentMetadata;
