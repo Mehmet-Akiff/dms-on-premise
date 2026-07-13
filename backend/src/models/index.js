@@ -8,6 +8,7 @@ const User = require('./User');
 const Document = require('./Document');
 const DocumentMetadata = require('./DocumentMetadata');
 const ProcessingJob = require('./ProcessingJob');
+const SystemSettings = require('./SystemSettings');
 
 // ============================================================
 // Model İlişkileri (Associations)
@@ -56,4 +57,5 @@ module.exports = {
   Document,
   DocumentMetadata,
   ProcessingJob,
+  SystemSettings,
 };
