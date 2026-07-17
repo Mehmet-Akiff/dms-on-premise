@@ -1412,6 +1412,7 @@ onMounted(() => {
   height: 100vh;
   pointer-events: none;
   z-index: 9999;
+  overflow: hidden;
 }
 
 .settings-drawer-wrapper.drawer-open {
