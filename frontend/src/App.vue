@@ -32,6 +32,9 @@
               {{ pendingApprovalsCount }}
             </span>
           </button>
+          <button v-if="currentUserRole === 'admin' || currentUserRole === 'ciso'" class="btn-settings-toggle" @click="isUsersModalOpen = true" title="Kullanıcı Listesi & Çevrimiçi Takip">
+            👥 Kullanıcı Listesi
+          </button>
           <button class="btn-settings-toggle" @click="isSettingsOpen = true" title="Kasa Ayarları">
             ⚙️ Kasa Ayarları
           </button>
@@ -68,7 +71,7 @@
 
         <!-- Sağ Panel: Dashboard + Arama + Doküman Listesi -->
         <section class="panel panel--list">
-          <Dashboard ref="dashboardRef" />
+          <Dashboard ref="dashboardRef" @stat-click="onStatClick" />
           <SearchBar @results="onSearchResults" @clear="onSearchClear" @loading="onSearchLoading" />
           <DocumentList ref="documentListRef" />
         </section>
@@ -100,6 +103,19 @@
               :userId="currentUserId" 
               @refresh-count="fetchPendingApprovalsCount"
             />
+          </div>
+        </div>
+      </div>
+
+      <!-- Kullanıcı Listesi Modalı -->
+      <div v-if="isUsersModalOpen" class="audit-log-modal-overlay" @click.self="isUsersModalOpen = false">
+        <div class="audit-log-modal-content" style="max-width: 800px;">
+          <div class="modal-close-header">
+            <h3>👥 Sistem Kullanıcıları & Oturum Bilgileri</h3>
+            <button class="btn-close-modal" @click="isUsersModalOpen = false">✕ Kapat</button>
+          </div>
+          <div class="modal-body-scroll" style="padding: 1.25rem;">
+            <UsersPanel :userRole="currentUserRole" />
           </div>
         </div>
       </div>
@@ -141,6 +157,7 @@ import SearchBar from './components/SearchBar.vue'
 import KasaLock from './components/KasaLock.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import NotificationsPanel from './components/NotificationsPanel.vue'
+import UsersPanel from './components/UsersPanel.vue'
 import Dashboard from './components/Dashboard.vue'
 import AuditLog from './components/AuditLog.vue'
 
@@ -148,6 +165,7 @@ const documentListRef = ref(null)
 const dashboardRef = ref(null)
 const isSettingsOpen = ref(false)
 const isAuditLogOpen = ref(false)
+const isUsersModalOpen = ref(false)
 const isNotificationsOpen = ref(false)
 const isKasaLocked = ref(true)
 
@@ -169,10 +187,12 @@ async function fetchPendingApprovalsCount() {
     })
     if (response.ok) {
       const data = await response.json()
-      // pending olanları say (kendi isteği değilse ve onay yetkisi varsa)
+      const seen = JSON.parse(localStorage.getItem('seen_approvals') || '[]')
       const list = data.approvals || []
       const activePending = list.filter(req => {
         if (req.status !== 'pending') return false
+        // Okunmuş/Görülmüş mü?
+        if (seen.includes(req.id)) return false
         // Kendi isteği mi?
         const isOwn = req.targetId === currentUserId.value || req.requestData?.requesterId === currentUserId.value
         if (isOwn) return false
@@ -190,6 +210,12 @@ async function fetchPendingApprovalsCount() {
     }
   } catch (e) {
     console.warn('[App] Bekleyen onay sayısı alınamadı:', e)
+  }
+}
+
+function onStatClick(type) {
+  if (documentListRef.value) {
+    documentListRef.value.filterFromDashboard(type)
   }
 }
 
@@ -245,7 +271,11 @@ function confirmLockKasa() {
 }
 
 function lockKasa() {
-  window.dispatchEvent(new Event('kasa-lock'))
+  localStorage.removeItem('token');
+  localStorage.removeItem('kasa_token');
+  localStorage.removeItem('currentUser');
+  updateUserInfo();
+  window.dispatchEvent(new Event('kasa-lock'));
 }
 
 onMounted(() => {
