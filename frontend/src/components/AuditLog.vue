@@ -55,7 +55,7 @@
         <input type="date" v-model="filterEndDate" @change="fetchLogs(1)" class="filter-input" style="height:32px;" />
       </div>
       <button class="filter-clear-btn" style="height:32px; align-self:flex-end;" @click="clearFilters" title="Filtreleri Temizle">
-        🔄 Sıfırla
+        🧹 Filtreleri Temizle
       </button>
     </div>
 

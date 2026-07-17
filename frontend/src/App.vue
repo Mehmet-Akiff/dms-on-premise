@@ -1,110 +1,135 @@
 <template>
   <div id="dms-app">
-    <!-- Header -->
-    <header class="dms-header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">📄</span>
-          <h1>DMS</h1>
-          <span class="badge">On-Premise</span>
-        </div>
-        <p class="subtitle">Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi</p>
-      </div>
-      <div class="header-actions" style="display:flex; align-items:center; gap:0.75rem">
-        <!-- Rol ve İsim Gösterimi -->
-        <div v-if="currentUserRole" class="user-role-badge-wrap" style="display: flex; align-items: center; gap: 0.5rem; margin-right: 0.5rem;">
-          <span :class="['role-badge', 'role-badge--' + currentUserRole]">
-            {{ getRoleLabel(currentUserRole) }}
-          </span>
-          <span class="header-username" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.05); padding: 0.25rem 0.6rem; border-radius: 6px;">{{ currentUserFullName }}</span>
-        </div>
-
-        <button v-if="isCiso" class="btn-audit-toggle" @click="isAuditLogOpen = true" title="Sistem Günlükleri">
-          📋 Sistem Günlükleri
-        </button>
-        <button class="btn-settings-toggle" @click="isSettingsOpen = true" title="Kasa Ayarları">
-          ⚙️ Kasa Ayarları
-        </button>
-        <button class="btn-lock-toggle" @click="promptLockKasa" title="Güvenli Çıkış (Sistemi Kilitle)">
-          🔒 Güvenli Çıkış
-        </button>
-        <div class="header-status">
-          <span class="status-indicator status-indicator--online"></span>
-          <span class="status-text">Sistem Aktif</span>
-        </div>
-      </div>
-    </header>
-
-    <!-- Ana İçerik -->
-    <main class="dms-main">
-      <!-- Sol Panel: Dosya Yükleme -->
-      <section class="panel panel--upload">
-        <h3 class="panel-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          Doküman Yükle
-        </h3>
-        <FileUpload @uploaded="onDocumentUploaded" />
-        <div class="panel-hint">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          Tüm dosyalar yerel sunucuda güvenle işlenir. Veri dışarı çıkmaz.
-        </div>
-      </section>
-
-      <!-- Sağ Panel: Dashboard + Arama + Doküman Listesi -->
-      <section class="panel panel--list">
-        <Dashboard ref="dashboardRef" />
-        <SearchBar @results="onSearchResults" @clear="onSearchClear" @loading="onSearchLoading" />
-        <DocumentList ref="documentListRef" />
-      </section>
-    </main>
-
-    <!-- CISO Audit Log Modalı -->
-    <div v-if="isAuditLogOpen" class="audit-log-modal-overlay" @click.self="isAuditLogOpen = false">
-      <div class="audit-log-modal-content">
-        <div class="modal-close-header">
-          <h3>📋 Sistem Günlükleri (CISO Yetkili Alanı)</h3>
-          <button class="btn-close-modal" @click="isAuditLogOpen = false">✕ Kapat</button>
-        </div>
-        <div class="modal-body-scroll">
-          <AuditLog />
-        </div>
-      </div>
-    </div>
-
-    <!-- Çıkış Onay Modalı -->
-    <div v-if="isLogoutConfirmOpen" class="logout-confirm-overlay" @click.self="isLogoutConfirmOpen = false">
-      <div class="logout-confirm-card">
-        <h4>🔒 Güvenli Çıkış Onayı</h4>
-        <p>Sistemi kilitlemek ve oturumu sonlandırmak istediğinizden emin misiniz?</p>
-        <div class="confirm-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.2rem;">
-          <button class="btn-confirm-cancel" @click="isLogoutConfirmOpen = false">Vazgeç</button>
-          <button 
-            class="btn-confirm-logout" 
-            :disabled="logoutConfirmTimer > 0"
-            @click="confirmLockKasa"
-          >
-            {{ logoutConfirmTimer > 0 ? `Evet, Çıkış Yap (${logoutConfirmTimer}s)` : 'Evet, Çıkış Yap' }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <footer class="dms-footer">
-      <p>&copy; 2026 DMS On-Premise — Tüm veriler yerel sunucuda işlenmektedir.</p>
-    </footer>
-
-    <!-- Ayarlar Paneli (Drawer) -->
-    <SettingsPanel :isOpen="isSettingsOpen" @close="isSettingsOpen = false" />
-
     <!-- Kasa Kilit Ekranı (Overlay) -->
-    <KasaLock />
+    <KasaLock v-if="isKasaLocked" />
+
+    <template v-else>
+      <!-- Header -->
+      <header class="dms-header">
+        <div class="header-inner">
+          <div class="logo">
+            <span class="logo-icon">📄</span>
+            <h1>DMS</h1>
+            <span class="badge">On-Premise</span>
+          </div>
+          <p class="subtitle">Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi</p>
+        </div>
+        <div class="header-actions" style="display:flex; align-items:center; gap:0.75rem">
+          <!-- Rol ve İsim Gösterimi -->
+          <div v-if="currentUserRole" class="user-role-badge-wrap" style="display: flex; align-items: center; gap: 0.5rem; margin-right: 0.5rem;">
+            <span :class="['role-badge', 'role-badge--' + currentUserRole]">
+              {{ getRoleLabel(currentUserRole) }}
+            </span>
+            <span class="header-username" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.05); padding: 0.25rem 0.6rem; border-radius: 6px;">{{ currentUserFullName }}</span>
+          </div>
+
+          <button v-if="isCiso" class="btn-audit-toggle" @click="isAuditLogOpen = true" title="Sistem Günlükleri">
+            📋 Sistem Günlükleri
+          </button>
+          <button class="btn-settings-toggle" @click="isNotificationsOpen = true" title="Bildirimler & Onay Talepleri" style="position:relative;">
+            🔔 Bildirimler
+            <span v-if="pendingApprovalsCount > 0" class="notif-badge" style="position:absolute; top:-5px; right:-5px; background:#ef4444; color:#fff; font-size:0.65rem; font-weight:800; padding:0.15rem 0.35rem; border-radius:999px; border:2px solid var(--bg-secondary); min-width:18px; text-align:center; box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);">
+              {{ pendingApprovalsCount }}
+            </span>
+          </button>
+          <button class="btn-settings-toggle" @click="isSettingsOpen = true" title="Kasa Ayarları">
+            ⚙️ Kasa Ayarları
+          </button>
+          <button class="btn-lock-toggle" @click="promptLockKasa" title="Güvenli Çıkış (Sistemi Kilitle)">
+            🔒 Güvenli Çıkış
+          </button>
+          <div class="header-status">
+            <span class="status-indicator status-indicator--online"></span>
+            <span class="status-text">Sistem Aktif</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Ana İçerik -->
+      <main class="dms-main">
+        <!-- Sol Panel: Dosya Yükleme -->
+        <section class="panel panel--upload">
+          <h3 class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Doküman Yükle
+          </h3>
+          <FileUpload @uploaded="onDocumentUploaded" />
+          <div class="panel-hint">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            Tüm dosyalar yerel sunucuda güvenle işlenir. Veri dışarı çıkmaz.
+          </div>
+        </section>
+
+        <!-- Sağ Panel: Dashboard + Arama + Doküman Listesi -->
+        <section class="panel panel--list">
+          <Dashboard ref="dashboardRef" />
+          <SearchBar @results="onSearchResults" @clear="onSearchClear" @loading="onSearchLoading" />
+          <DocumentList ref="documentListRef" />
+        </section>
+      </main>
+
+      <!-- CISO Audit Log Modalı -->
+      <div v-if="isAuditLogOpen" class="audit-log-modal-overlay" @click.self="isAuditLogOpen = false">
+        <div class="audit-log-modal-content">
+          <div class="modal-close-header">
+            <h3>📋 Sistem Günlükleri (CISO Yetkili Alanı)</h3>
+            <button class="btn-close-modal" @click="isAuditLogOpen = false">✕ Kapat</button>
+          </div>
+          <div class="modal-body-scroll">
+            <AuditLog />
+          </div>
+        </div>
+      </div>
+
+      <!-- Bildirimler & Onay Talepleri Modalı -->
+      <div v-if="isNotificationsOpen" class="audit-log-modal-overlay" @click.self="isNotificationsOpen = false">
+        <div class="audit-log-modal-content" style="max-width: 650px;">
+          <div class="modal-close-header">
+            <h3>🔔 Bildirimler ve Onay Talepleri</h3>
+            <button class="btn-close-modal" @click="isNotificationsOpen = false">✕ Kapat</button>
+          </div>
+          <div class="modal-body-scroll" style="padding: 1.25rem;">
+            <NotificationsPanel 
+              :userRole="currentUserRole" 
+              :userId="currentUserId" 
+              @refresh-count="fetchPendingApprovalsCount"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Çıkış Onay Modalı -->
+      <div v-if="isLogoutConfirmOpen" class="logout-confirm-overlay" @click.self="isLogoutConfirmOpen = false">
+        <div class="logout-confirm-card">
+          <h4>🔒 Güvenli Çıkış Onayı</h4>
+          <p>Sistemi kilitlemek ve oturumu sonlandırmak istediğinizden emin misiniz?</p>
+          <div class="confirm-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.2rem;">
+            <button class="btn-confirm-cancel" @click="isLogoutConfirmOpen = false">Vazgeç</button>
+            <button 
+              class="btn-confirm-logout" 
+              :disabled="logoutConfirmTimer > 0"
+              @click="confirmLockKasa"
+            >
+              {{ logoutConfirmTimer > 0 ? `Evet, Çıkış Yap (${logoutConfirmTimer}s)` : 'Evet, Çıkış Yap' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <footer class="dms-footer">
+        <p>&copy; 2026 DMS On-Premise — Tüm veriler yerel sunucuda işlenmektedir.</p>
+      </footer>
+
+      <!-- Ayarlar Paneli (Drawer) -->
+      <SettingsPanel :isOpen="isSettingsOpen" @close="isSettingsOpen = false" />
+    </template>
   </div>
 </template>
 
@@ -115,6 +140,7 @@ import DocumentList from './components/DocumentList.vue'
 import SearchBar from './components/SearchBar.vue'
 import KasaLock from './components/KasaLock.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
+import NotificationsPanel from './components/NotificationsPanel.vue'
 import Dashboard from './components/Dashboard.vue'
 import AuditLog from './components/AuditLog.vue'
 
@@ -122,6 +148,8 @@ const documentListRef = ref(null)
 const dashboardRef = ref(null)
 const isSettingsOpen = ref(false)
 const isAuditLogOpen = ref(false)
+const isNotificationsOpen = ref(false)
+const isKasaLocked = ref(true)
 
 const isLogoutConfirmOpen = ref(false)
 const logoutConfirmTimer = ref(0)
@@ -129,6 +157,41 @@ let logoutTimerInterval = null
 
 const currentUserRole = ref('')
 const currentUserFullName = ref('')
+const currentUserId = ref('')
+const pendingApprovalsCount = ref(0)
+
+async function fetchPendingApprovalsCount() {
+  const token = localStorage.getItem('token')
+  if (!token) return
+  try {
+    const response = await fetch('/api/auth/approvals', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (response.ok) {
+      const data = await response.json()
+      // pending olanları say (kendi isteği değilse ve onay yetkisi varsa)
+      const list = data.approvals || []
+      const activePending = list.filter(req => {
+        if (req.status !== 'pending') return false
+        // Kendi isteği mi?
+        const isOwn = req.targetId === currentUserId.value || req.requestData?.requesterId === currentUserId.value
+        if (isOwn) return false
+        
+        // Onay yetkisi var mı?
+        if (req.type === 'STANDARD_USER_CREATION' || req.type === 'ADMIN_CREATION') {
+          return currentUserRole.value === 'admin'
+        }
+        if (req.type === 'NAME_CHANGE' || req.type === 'USERNAME_CHANGE') {
+          return currentUserRole.value === 'ciso'
+        }
+        return true
+      })
+      pendingApprovalsCount.value = activePending.length
+    }
+  } catch (e) {
+    console.warn('[App] Bekleyen onay sayısı alınamadı:', e)
+  }
+}
 
 function getRoleLabel(role) {
   if (role === 'ciso') return '🛡️ CISO'
@@ -138,9 +201,12 @@ function getRoleLabel(role) {
 
 function updateUserInfo() {
   const token = localStorage.getItem('token');
+  isKasaLocked.value = !token;
   if (!token) {
     currentUserRole.value = '';
     currentUserFullName.value = '';
+    currentUserId.value = '';
+    pendingApprovalsCount.value = 0;
     return;
   }
   try {
@@ -149,9 +215,14 @@ function updateUserInfo() {
     const payload = JSON.parse(window.atob(base64));
     currentUserRole.value = payload.role || '';
     currentUserFullName.value = payload.fullName || payload.username || '';
+    currentUserId.value = payload.id || '';
+    
+    // Bekleyen onayları getir
+    fetchPendingApprovalsCount()
   } catch (e) {
     currentUserRole.value = '';
     currentUserFullName.value = '';
+    currentUserId.value = '';
   }
 }
 

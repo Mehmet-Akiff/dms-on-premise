@@ -611,22 +611,30 @@ router.post('/upload', verifyToken, requireWritePermission, upload.single('file'
       }
     }
 
-    // Dokümanı veritabanına PENDING statüsüyle kaydet
-    const document = await Document.create({
-      title: req.body.title || path.parse(req.file.originalname).name,
-      originalName: req.file.originalname,
-      mimeType: req.file.mimetype,
-      filePath: req.file.path,
-      status: 'PENDING',
-      userId: req.user ? req.user.id : null,
-      tags: Array.isArray(tagsArr) ? tagsArr : [],
-    });
+    // Doküman ve ProcessingJob oluşturma işlemlerini transaction içine al
+    const t = await sequelize.transaction();
+    let document, job;
+    try {
+      document = await Document.create({
+        title: req.body.title || path.parse(req.file.originalname).name,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        filePath: req.file.path,
+        status: 'PENDING',
+        userId: req.user ? req.user.id : null,
+        tags: Array.isArray(tagsArr) ? tagsArr : [],
+      }, { transaction: t });
 
-    // İşleme kuyruğuna yeni iş ekle
-    const job = await ProcessingJob.create({
-      documentId: document.id,
-      jobStatus: 'QUEUED',
-    });
+      job = await ProcessingJob.create({
+        documentId: document.id,
+        jobStatus: 'QUEUED',
+      }, { transaction: t });
+
+      await t.commit();
+    } catch (dbErr) {
+      await t.rollback();
+      throw dbErr;
+    }
 
     console.log(`[UPLOAD] Doküman yüklendi — ID: ${document.id} — Dosya: ${req.file.originalname}`);
 
