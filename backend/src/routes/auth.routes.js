@@ -502,6 +502,7 @@ router.get('/approve', async (req, res) => {
 
   if (!token) {
     return res.status(400).send('<h1>Hata: Geçersiz onay kodu</h1>');
+  }
   try {
     const request = await ApprovalRequest.findOne({ where: { token, status: 'pending' } });
     if (!request) {
@@ -1682,6 +1683,7 @@ router.post('/import-log-file', verifyToken, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Log dosyası yüklenirken hata oluştu.', details: err.message });
   }
+});
 // ============================================================
 // ŞİFREMI UNUTTUM - IPUCU SORGULAMA
 // ============================================================
