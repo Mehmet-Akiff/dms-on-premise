@@ -208,8 +208,8 @@ const startServer = async () => {
       await sequelize.authenticate();
       console.log('[DB] PostgreSQL bağlantısı başarılı.');
 
-      // Tabloları otomatik oluştur/güncelle
-      await sequelize.sync({ alter: true });
+      // Tabloları otomatik oluştur/güncelle (drop:false → mevcut kolonları/kısıtları korur)
+      await sequelize.sync({ alter: { drop: false } });
       console.log('[DB] Tablolar senkronize edildi.');
 
       // Kasa Varsayılan Ayarlarını Başlat
