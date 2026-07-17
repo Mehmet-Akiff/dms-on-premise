@@ -13,18 +13,23 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dms_jwt_secret_key_2026';
  */
 const verifyToken = async (req, res, next) => {
   try {
+    let token = null;
     const authHeader = req.headers['authorization'];
     
-    if (!authHeader) {
+    if (authHeader) {
+      const parts = authHeader.split(' ');
+      if (parts.length === 2 && parts[0] === 'Bearer') {
+        token = parts[1];
+      }
+    }
+
+    if (!token && req.query.token) {
+      token = req.query.token;
+    }
+
+    if (!token) {
       return res.status(401).json({ error: 'Erişim engellendi. Kimlik doğrulama token\'ı bulunamadı.' });
     }
-
-    const parts = authHeader.split(' ');
-    if (parts.length !== 2 || parts[0] !== 'Bearer') {
-      return res.status(401).json({ error: 'Token formatı geçersiz. "Bearer <token>" formatında olmalıdır.' });
-    }
-
-    const token = parts[1];
 
     jwt.verify(token, JWT_SECRET, async (err, decoded) => {
       if (err) {

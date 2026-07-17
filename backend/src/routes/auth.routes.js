@@ -116,10 +116,12 @@ const getLockoutDuration = (attempts) => {
 // SMTP Transporter
 const getMailTransporter = (smtp) => {
   if (smtp && smtp.auth && smtp.auth.user && smtp.auth.pass) {
+    const port = parseInt(smtp.port) || 465;
+    const isSecure = port === 465;
     return nodemailer.createTransport({
       host: smtp.host || 'smtp.gmail.com',
-      port: parseInt(smtp.port) || 465,
-      secure: smtp.secure !== undefined ? smtp.secure : true,
+      port: port,
+      secure: isSecure,
       auth: {
         user: smtp.auth.user,
         pass: smtp.auth.pass
@@ -190,14 +192,12 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Hatalı kullanıcı adı veya şifre.' });
     }
 
-    // E-posta Çakışma Kontrolü (Tek e-posta kuralı)
+    // E-posta Çakışma Kontrolü (Bloke etmeden sadece uyarı bayrağı set edilir)
+    let hasDuplicateEmail = false;
     if (user.email) {
       const emailUsageCount = await User.count({ where: { email: user.email } });
       if (emailUsageCount > 1) {
-        return res.status(409).json({ 
-          error: 'E-posta çakışması tespit edildi.', 
-          message: 'Bu e-posta adresi sistemde birden fazla hesapta tanımlanmıştır. Lütfen giriş yapabilmek için e-postanızı değiştirin veya sistem yöneticinizle görüşün.' 
-        });
+        hasDuplicateEmail = true;
       }
     }
 
@@ -217,7 +217,7 @@ router.post('/login', async (req, res) => {
     await user.save();
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role, fullName: user.fullName, email: user.email },
+      { id: user.id, username: user.username, role: user.role, fullName: user.fullName, email: user.email, hasDuplicateEmail },
       JWT_SECRET,
       { expiresIn: '12h' }
     );
@@ -231,6 +231,7 @@ router.post('/login', async (req, res) => {
     res.status(200).json({
       message: 'Giriş başarılı.',
       token,
+      hasDuplicateEmail,
       user: {
         id: user.id,
         fullName: user.fullName,
@@ -583,7 +584,7 @@ router.get('/approve', async (req, res) => {
         await request.save();
 
         const oldName = user.fullName;
-        user.fullName = request.requestData.newFullName;
+        user.fullName = request.requestData.fullName || request.requestData.newFullName;
         await user.save();
 
         logCisoAction('NAME_CHANGE_APPROVED', `İsim değişikliği onaylandı (Çift Onay). Eski: ${oldName}, Yeni: ${user.fullName}`, ip);
@@ -843,8 +844,17 @@ router.put('/profile', verifyToken, async (req, res) => {
     const cisoUser = await User.findOne({ where: { role: 'ciso' } });
     const cisoEmail = cisoUser ? cisoUser.email : 'ciso@dms.com';
 
-    // 0. E-posta Değiştirme (OTP doğrulı)
-    if (email && email !== user.email) {
+    // 0. E-posta Değiştirme (OTP doğrulamalı)
+    if (email) {
+      if (email === user.email) {
+        return res.status(400).json({ error: 'Zaten bu e-posta adresini kullanmaktasınız.' });
+      }
+
+      const emailExistsBefore = await User.findOne({ where: { email } });
+      if (emailExistsBefore && emailExistsBefore.id !== user.id) {
+        return res.status(409).json({ error: 'Bu e-posta adresi zaten başka bir hesap tarafından kullanılıyor.' });
+      }
+
       if (!emailOtp) {
         // OTP yoksa — OTP gönder
         const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -960,7 +970,7 @@ router.put('/profile', verifyToken, async (req, res) => {
         await ApprovalRequest.create({
           type: 'NAME_CHANGE',
           targetId: user.id,
-          requestData: { newFullName: fullName, expiresAt },
+          requestData: { fullName: fullName, oldFullName: user.fullName, newFullName: fullName, expiresAt },
           approvalsRequired: 1,
           status: 'pending',
           token
@@ -999,8 +1009,10 @@ router.put('/profile', verifyToken, async (req, res) => {
 
     await user.save();
 
+    const hasDuplicateEmail = user.email ? (await User.count({ where: { email: user.email } }) > 1) : false;
+
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role, fullName: user.fullName, email: user.email },
+      { id: user.id, username: user.username, role: user.role, fullName: user.fullName, email: user.email, hasDuplicateEmail },
       JWT_SECRET,
       { expiresIn: '12h' }
     );
@@ -1071,10 +1083,12 @@ router.put('/settings', verifyToken, requireAdmin, async (req, res) => {
 
       if (smtpConfig.auth?.user && finalPass) {
         try {
+          const testPort = parseInt(smtpConfig.port) || 465;
+          const testSecure = testPort === 465;
           const testTransporter = nodemailer.createTransport({
             host: smtpConfig.host || 'smtp.gmail.com',
-            port: parseInt(smtpConfig.port) || 465,
-            secure: smtpConfig.secure !== undefined ? smtpConfig.secure : true,
+            port: testPort,
+            secure: testSecure,
             auth: {
               user: smtpConfig.auth.user,
               pass: finalPass
@@ -1318,7 +1332,10 @@ router.get('/approvals', verifyToken, async (req, res) => {
       }
     }
 
-    res.status(200).json({ approvals: list });
+    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
+    const doubleApprovalEnabled = settingsRecord?.value?.doubleApprovalEnabled || false;
+
+    res.status(200).json({ approvals: list, doubleApprovalEnabled });
   } catch (error) {
     res.status(500).json({ error: 'Onay talepleri listelenemedi.' });
   }
@@ -1332,6 +1349,8 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'ciso') {
     return res.status(403).json({ error: 'Bu işlem için yetkiniz yok.' });
   }
+
+  const { code } = req.body;
 
   const t = await sequelize.transaction();
   try {
@@ -1362,20 +1381,41 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Yeni kullanıcı onaylama/reddetme işlemini sadece Sistem Yöneticisi (Admin) yapabilir.' });
     }
 
+    const received = request.approvalsReceived || [];
+
+    // E-posta Kodu ile mi onaylanıyor, yoksa arayüzden butonla mı?
+    if (code) {
+      if (code.trim() !== request.token) {
+        await t.rollback();
+        return res.status(400).json({ error: 'Geçersiz güvenlik onay kodu.' });
+      }
+      
+      const sig = (request.type === 'NAME_CHANGE' || request.type === 'USERNAME_CHANGE') 
+        ? 'CISO (E-posta)' 
+        : 'Yönetici (E-posta)';
+        
+      if (!received.includes(sig)) {
+        received.push(sig);
+      }
+    } else {
+      const sig = (request.type === 'NAME_CHANGE' || request.type === 'USERNAME_CHANGE') 
+        ? 'CISO (Arayüz)' 
+        : 'Yönetici (Arayüz)';
+        
+      if (!received.includes(sig)) {
+        received.push(sig);
+      }
+    }
+
+    request.approvalsReceived = received;
+    request.changed('approvalsReceived', true);
+
     if (request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') {
       const user = await User.findByPk(request.targetId, { transaction: t });
       if (!user) {
         await t.rollback();
         return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
       }
-
-      const received = request.approvalsReceived || [];
-      const sig = 'Yönetici (Arayüz)';
-      if (!received.includes(sig)) {
-        received.push(sig);
-      }
-      request.approvalsReceived = received;
-      request.changed('approvalsReceived', true);
 
       const isApproved = doubleApprovalEnabled 
         ? (received.includes('Yönetici (E-posta)') && received.includes('Yönetici (Arayüz)'))
@@ -1391,7 +1431,7 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
         await t.commit();
 
         archiveEmailVerification(user.email, user.username, ip);
-        logAction('APPROVE_USER', req.user.id, req.user.fullName, user.id, user.fullName, `Kullanıcı kaydı arayüzden onaylandı.`, ip);
+        logAction('APPROVE_USER', req.user.id, req.user.fullName, user.id, user.fullName, `Kullanıcı kaydı onaylandı.`, ip);
       } else {
         await request.save({ transaction: t });
         await t.commit();
@@ -1403,20 +1443,14 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
         return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
       }
 
-      const received = request.approvalsReceived || [];
-      const sig = 'CISO (Arayüz)';
-      if (!received.includes(sig)) {
-        received.push(sig);
-      }
-      request.approvalsReceived = received;
-      request.changed('approvalsReceived', true);
+      const isApproved = (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)'));
 
-      if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
+      if (isApproved) {
         request.status = 'approved';
         await request.save({ transaction: t });
 
         const oldName = user.fullName;
-        user.fullName = request.requestData.newFullName;
+        user.fullName = request.requestData.fullName || request.requestData.newFullName;
         await user.save({ transaction: t });
 
         await t.commit();
@@ -1433,20 +1467,14 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
         return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
       }
 
-      const received = request.approvalsReceived || [];
-      const sig = 'CISO (Arayüz)';
-      if (!received.includes(sig)) {
-        received.push(sig);
-      }
-      request.approvalsReceived = received;
-      request.changed('approvalsReceived', true);
-
       const oldUsername = user.username;
-      if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
+      const isApproved = (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)'));
+
+      if (isApproved) {
         request.status = 'approved';
         await request.save({ transaction: t });
 
-        user.username = request.requestData.newUsername;
+        user.username = request.requestData.username || request.requestData.newUsername;
         await user.save({ transaction: t });
 
         await t.commit();
@@ -1457,14 +1485,6 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
         await t.commit();
       }
     } else if (request.type === 'MODE_CHANGE') {
-      const received = request.approvalsReceived || [];
-      const sig = 'Yönetici (Arayüz)';
-      if (!received.includes(sig)) {
-        received.push(sig);
-      }
-      request.approvalsReceived = received;
-      request.changed('approvalsReceived', true);
-
       const isApproved = doubleApprovalEnabled
         ? (received.includes('Yönetici (E-posta)') && received.includes('Yönetici (Arayüz)'))
         : true;

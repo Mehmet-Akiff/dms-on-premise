@@ -14,7 +14,7 @@
           </div>
           <p class="subtitle">Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi</p>
         </div>
-        <div class="header-actions" style="display:flex; align-items:center; gap:0.75rem">
+        <div class="header-actions" style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
           <!-- Rol ve İsim Gösterimi -->
           <div v-if="currentUserRole" class="user-role-badge-wrap" style="display: flex; align-items: center; gap: 0.5rem; margin-right: 0.5rem;">
             <span :class="['role-badge', 'role-badge--' + currentUserRole]">
@@ -47,6 +47,14 @@
           </div>
         </div>
       </header>
+
+      <!-- E-posta Çakışma Alarmı -->
+      <div v-if="hasDuplicateEmailWarning" class="email-collision-alert">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-text">
+          <strong>KRİTİK GÜVENLİK UYARISI:</strong> E-posta adresiniz sistemdeki başka bir hesapla çakışıyor! Lütfen güvenlik nedeniyle e-posta adresinizi <strong>Kasa Ayarları</strong>'ndan acilen güncelleyin veya sistem yöneticinizle görüşün.
+        </div>
+      </div>
 
       <!-- Ana İçerik -->
       <main class="dms-main">
@@ -173,6 +181,8 @@ const isLogoutConfirmOpen = ref(false)
 const logoutConfirmTimer = ref(0)
 let logoutTimerInterval = null
 
+const hasDuplicateEmailWarning = ref(false)
+
 const currentUserRole = ref('')
 const currentUserFullName = ref('')
 const currentUserId = ref('')
@@ -233,6 +243,7 @@ function updateUserInfo() {
     currentUserFullName.value = '';
     currentUserId.value = '';
     pendingApprovalsCount.value = 0;
+    hasDuplicateEmailWarning.value = false;
     return;
   }
   try {
@@ -242,6 +253,7 @@ function updateUserInfo() {
     currentUserRole.value = payload.role || '';
     currentUserFullName.value = payload.fullName || payload.username || '';
     currentUserId.value = payload.id || '';
+    hasDuplicateEmailWarning.value = !!payload.hasDuplicateEmail;
     
     // Bekleyen onayları getir
     fetchPendingApprovalsCount()
@@ -249,6 +261,7 @@ function updateUserInfo() {
     currentUserRole.value = '';
     currentUserFullName.value = '';
     currentUserId.value = '';
+    hasDuplicateEmailWarning.value = false;
   }
 }
 
@@ -540,13 +553,14 @@ body {
   background: rgba(139, 92, 246, 0.08);
   border: 1px solid rgba(139, 92, 246, 0.25);
   color: #a78bfa;
-  padding: 0.5rem 1rem;
-  font-size: 0.78rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.74rem;
   font-weight: 600;
   border-radius: 999px;
   cursor: pointer;
   transition: all 0.25s ease;
   box-shadow: 0 0 10px rgba(139, 92, 246, 0.05);
+  white-space: nowrap;
 }
 
 .btn-settings-toggle:hover {
@@ -560,13 +574,14 @@ body {
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.25);
   color: #f87171;
-  padding: 0.5rem 1rem;
-  font-size: 0.78rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.74rem;
   font-weight: 600;
   border-radius: 999px;
   cursor: pointer;
   transition: all 0.25s ease;
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.05);
+  white-space: nowrap;
 }
 
 .btn-lock-toggle:hover {
@@ -580,13 +595,14 @@ body {
   background: rgba(16, 185, 129, 0.08);
   border: 1px solid rgba(16, 185, 129, 0.25);
   color: #34d399;
-  padding: 0.5rem 1rem;
-  font-size: 0.78rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.74rem;
   font-weight: 600;
   border-radius: 999px;
   cursor: pointer;
   transition: all 0.25s ease;
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
+  white-space: nowrap;
 }
 
 .btn-audit-toggle:hover {
@@ -802,5 +818,37 @@ body {
 .Vue-Toastification__progress-bar {
   background: rgba(255, 255, 255, 0.2) !important;
   height: 2px !important;
+}
+/* E-posta Çakışma Alarmı Stilleri */
+.email-collision-alert {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #fca5a5;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+  animation: alertPulse 2s infinite ease-in-out;
+}
+.alert-icon {
+  font-size: 1.5rem;
+}
+.alert-text strong {
+  color: #f87171;
+}
+@keyframes alertPulse {
+  0%, 100% {
+    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+  }
+  50% {
+    border-color: rgba(239, 68, 68, 0.8);
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.35);
+  }
 }
 </style>

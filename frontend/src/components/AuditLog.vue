@@ -220,21 +220,41 @@ function exportLogs(format) {
         dlAnchorElem.setAttribute("download", `dms_audit_logs_${new Date().toISOString().split('T')[0]}.json`);
         dlAnchorElem.click();
       } else if (format === 'csv') {
-        let csvContent = "data:text/csv;charset=utf-8,Tarih,Kullanici,Aksiyon,Belge,Detay,IP\n";
+        const toEnglishChars = (str) => {
+          if (!str) return '';
+          return str
+            .replace(/ı/g, 'i')
+            .replace(/ğ/g, 'g')
+            .replace(/ü/g, 'u')
+            .replace(/ş/g, 's')
+            .replace(/ö/g, 'o')
+            .replace(/ç/g, 'c')
+            .replace(/İ/g, 'I')
+            .replace(/Ğ/g, 'G')
+            .replace(/Ü/g, 'U')
+            .replace(/Ş/g, 'S')
+            .replace(/Ö/g, 'O')
+            .replace(/Ç/g, 'C')
+            .replace(/[^a-zA-Z0-9\s,;:._\-@()\/+*]/g, '');
+        };
+
+        let csvContent = "Tarih,Kullanici,Aksiyon,Belge,Detay,IP\n";
         exportList.forEach(log => {
           const row = [
             log.createdAt,
-            log.userName,
-            log.action,
-            log.documentName || '',
-            (log.details || '').replace(/,/g, ';'),
+            toEnglishChars(log.userName),
+            toEnglishChars(log.action),
+            toEnglishChars(log.documentName || ''),
+            toEnglishChars(log.details || '').replace(/,/g, ';'),
             log.ipAddress || ''
           ].join(",");
           csvContent += row + "\n";
         });
-        const encodedUri = encodeURI(csvContent);
+
+        const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
+        link.setAttribute("href", url);
         link.setAttribute("download", `dms_audit_logs_${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
