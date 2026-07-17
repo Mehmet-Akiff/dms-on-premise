@@ -80,6 +80,12 @@
             </div>
           </div>
 
+          <div style="text-align: right; margin-top: -0.5rem; margin-bottom: 1rem;">
+            <button type="button" @click="openForgotPassword" style="background: transparent; border: none; color: #a78bfa; font-size: 0.72rem; font-weight: 700; cursor: pointer; text-decoration: underline;">
+              Şifremi Unuttum?
+            </button>
+          </div>
+
           <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
 
           <button type="submit" class="btn-unlock" :disabled="isLoading">
@@ -234,6 +240,16 @@
           </div>
 
           <div class="input-group">
+            <label>Şifre İpucu (Password Hint)</label>
+            <input 
+              v-model="regPasswordHint" 
+              type="text" 
+              placeholder="Şifrenizi hatırlatacak ipucu..." 
+              :disabled="isLoading"
+            />
+          </div>
+
+          <div class="input-group">
             <label>Talep Edilen Rol</label>
             <select v-model="regRole" class="role-select" required :disabled="isLoading">
               <option value="user">Standart Kullanıcı (Oturum)</option>
@@ -250,6 +266,43 @@
           </button>
         </form>
 
+      </div>
+
+      <!-- Şifremi Unuttum Modalı -->
+      <div v-if="isForgotModalOpen" class="forgot-modal-overlay" @click.self="isForgotModalOpen = false">
+        <div class="forgot-modal-card">
+          <div class="forgot-header">
+            <h4>🔑 Şifremi Unuttum</h4>
+            <button type="button" @click="isForgotModalOpen = false" class="btn-close-forgot">✕</button>
+          </div>
+
+          <div class="forgot-body">
+            <div class="input-group">
+              <label>Kayıtlı E-posta Adresiniz</label>
+              <input 
+                v-model="forgotEmail" 
+                type="email" 
+                placeholder="guvenlik@sirketiniz.com"
+                required
+                style="width:100%; box-sizing:border-box;"
+              />
+            </div>
+
+            <div v-if="forgotHint" class="hint-display-box">
+              <strong>💡 Şifre İpucunuz:</strong>
+              <p>{{ forgotHint }}</p>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem;">
+              <button type="button" class="btn-forgot-action" @click="getForgotPasswordHint" :disabled="isForgotLoading">
+                {{ isForgotLoading ? 'Sorgulanıyor...' : '💡 Şifre İpucunu Göster' }}
+              </button>
+              <button type="button" class="btn-forgot-action btn-forgot-action--email" @click="sendForgotPasswordEmail" :disabled="isForgotLoading">
+                {{ isForgotLoading ? 'Gönderiliyor...' : '📧 E-posta ile Sıfırlama Linki Gönder' }}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </Transition>
@@ -282,6 +335,13 @@ const regEmail = ref('')
 const regPassword = ref('')
 const regRole = ref('user')
 const isRegPassVisible = ref(false)
+const regPasswordHint = ref('')
+
+// Şifremi Unuttum Modalı State'leri
+const isForgotModalOpen = ref(false)
+const forgotEmail = ref('')
+const forgotHint = ref('')
+const isForgotLoading = ref(false)
 
 // Dinamik Şifre Validasyonu
 const regPasswordErrors = computed(() => {
@@ -518,7 +578,8 @@ async function handleRegister() {
         username: regUsername.value,
         email: regEmail.value,
         password: regPassword.value,
-        role: regRole.value
+        role: regRole.value,
+        passwordHint: regPasswordHint.value
       })
     })
 
@@ -531,6 +592,7 @@ async function handleRegister() {
       regUsername.value = ''
       regEmail.value = ''
       regPassword.value = ''
+      regPasswordHint.value = ''
       isRegEmailVerified.value = false
     } else {
       errorMessage.value = data.error || 'Kayıt işlemi başarısız.'
@@ -576,6 +638,65 @@ onUnmounted(() => {
   window.removeEventListener('kasa-lock', handleLockEvent);
   if (regInterval) clearInterval(regInterval);
 })
+
+function openForgotPassword() {
+  forgotEmail.value = ''
+  forgotHint.value = ''
+  isForgotModalOpen.value = true
+}
+
+async function getForgotPasswordHint() {
+  if (!forgotEmail.value) {
+    forgotHint.value = 'Lütfen önce e-posta adresinizi girin.'
+    return
+  }
+  isForgotLoading.value = true
+  forgotHint.value = ''
+  try {
+    const response = await fetch('/api/auth/forgot-password-hint', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: forgotEmail.value })
+    })
+    const data = await response.json()
+    if (response.ok) {
+      forgotHint.value = data.hint
+    } else {
+      forgotHint.value = data.error || 'İpucu sorgulanırken bir hata oluştu.'
+    }
+  } catch (err) {
+    forgotHint.value = 'Bağlantı hatası oluştu.'
+  } finally {
+    isForgotLoading.value = false
+  }
+}
+
+async function sendForgotPasswordEmail() {
+  if (!forgotEmail.value) {
+    forgotHint.value = 'Lütfen önce e-posta adresinizi girin.'
+    return
+  }
+  isForgotLoading.value = true
+  try {
+    const response = await fetch('/api/auth/forgot-password-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: forgotEmail.value })
+    })
+    const data = await response.json()
+    if (response.ok) {
+      isForgotModalOpen.value = false
+      successMessage.value = data.message || 'Sıfırlama e-postası başarıyla gönderildi.'
+      errorMessage.value = ''
+    } else {
+      forgotHint.value = data.error || 'Sıfırlama e-postası gönderilemedi.'
+    }
+  } catch (err) {
+    forgotHint.value = 'Bağlantı hatası oluştu.'
+  } finally {
+    isForgotLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -804,5 +925,95 @@ onUnmounted(() => {
 .slide-up-enter-from, .slide-up-leave-to {
   transform: translateY(30px);
   opacity: 0;
+}
+/* Şifremi Unuttum Modalı Stilleri */
+.forgot-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 7, 18, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 15000;
+}
+.forgot-modal-card {
+  background: #111827;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 380px;
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7);
+}
+.forgot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.75rem;
+}
+.forgot-header h4 {
+  margin: 0;
+  color: #a78bfa;
+  font-size: 1.05rem;
+}
+.btn-close-forgot {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.forgot-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.hint-display-box {
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px dashed rgba(139, 92, 246, 0.25);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.8rem;
+}
+.hint-display-box strong {
+  color: #a78bfa;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+.hint-display-box p {
+  margin: 0;
+  color: #fff;
+  font-weight: 500;
+}
+.btn-forgot-action {
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  color: #a78bfa;
+  padding: 0.65rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-forgot-action:hover {
+  background: #8b5cf6;
+  color: #fff;
+}
+.btn-forgot-action--email {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #cbd5e1;
+}
+.btn-forgot-action--email:hover {
+  background: #6366f1;
+  color: #fff;
 }
 </style>

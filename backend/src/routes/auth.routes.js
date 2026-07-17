@@ -212,6 +212,10 @@ router.post('/login', async (req, res) => {
     attemptsInfo.attempts = 0;
     attemptsInfo.lockUntil = null;
 
+    user.lastLogin = new Date();
+    user.lastActive = new Date();
+    await user.save();
+
     const token = jwt.sign(
       { id: user.id, username: user.username, role: user.role, fullName: user.fullName, email: user.email },
       JWT_SECRET,
@@ -362,7 +366,7 @@ router.post('/register-verify-code', async (req, res) => {
 // ============================================================
 router.post('/register', async (req, res) => {
   const ip = req.ip || req.connection.remoteAddress;
-  const { fullName, username, email, password, role } = req.body;
+  const { fullName, username, email, password, role, passwordHint } = req.body;
 
   if (!fullName || !username || !email || !password || !role) {
     return res.status(400).json({ error: 'Tüm alanlar zorunludur.' });
@@ -398,6 +402,7 @@ router.post('/register', async (req, res) => {
       passwordHash,
       role: role === 'admin' ? 'admin' : 'user',
       status: 'pending_approval',
+      passwordHint: passwordHint || null,
       permissions: {
         canRead: true,
         canWrite: role === 'admin'
@@ -497,8 +502,6 @@ router.get('/approve', async (req, res) => {
 
   if (!token) {
     return res.status(400).send('<h1>Hata: Geçersiz onay kodu</h1>');
-  }
-
   try {
     const request = await ApprovalRequest.findOne({ where: { token, status: 'pending' } });
     if (!request) {
@@ -512,6 +515,9 @@ router.get('/approve', async (req, res) => {
       return res.status(400).send('<h1>Hata: Onay talebinin süresi dolmuş.</h1>');
     }
 
+    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
+    const doubleApprovalEnabled = settingsRecord?.value?.doubleApprovalEnabled || false;
+
     if (request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') {
       const user = await User.findByPk(request.targetId);
       if (!user) {
@@ -519,11 +525,18 @@ router.get('/approve', async (req, res) => {
       }
 
       const received = request.approvalsReceived || [];
-      received.push(ip);
+      const sig = 'Yönetici (E-posta)';
+      if (!received.includes(sig)) {
+        received.push(sig);
+      }
       request.approvalsReceived = received;
       request.changed('approvalsReceived', true);
 
-      if (received.length >= request.approvalsRequired) {
+      const isApproved = doubleApprovalEnabled 
+        ? (received.includes('Yönetici (E-posta)') && received.includes('Yönetici (Arayüz)'))
+        : true;
+
+      if (isApproved) {
         request.status = 'approved';
         await request.save();
 
@@ -543,8 +556,8 @@ router.get('/approve', async (req, res) => {
         await request.save();
         return res.status(200).send(`
           <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #fbbf24;">Onay Alındı</h1>
-            <p>Onayınız kaydedildi. Toplam onay: ${received.length} / Gereken: ${request.approvalsRequired}</p>
+            <h1 style="color: #fbbf24;">Onay Alındı (E-posta)</h1>
+            <p>E-posta onayınız başarıyla kaydedildi. Çift onay devrede olduğundan arayüzdeki bildirimler panelinden de onaylamanız gerekmektedir.</p>
           </div>
         `);
       }
@@ -585,7 +598,7 @@ router.get('/approve', async (req, res) => {
         return res.status(200).send(`
           <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
             <h1 style="color: #fbbf24;">Onay Alındı (E-posta)</h1>
-            <p>E-posta onayınız kaydedildi. Şimdi ayarlar panelindeki onay bekleyen talepler kısmından da onaylamanız gerekmektedir (Çift Onay).</p>
+            <p>E-posta onayınız kaydedildi. Şimdi bildirimler panelinden de onaylamanız gerekmektedir (CISO Çift Onayı).</p>
           </div>
         `);
       }
@@ -597,30 +610,55 @@ router.get('/approve', async (req, res) => {
         return res.status(404).send('<h1>Hata: Kullanıcı bulunamadı.</h1>');
       }
 
-      request.status = 'approved';
-      await request.save();
+      const received = request.approvalsReceived || [];
+      const sig = 'CISO (E-posta)';
+      if (!received.includes(sig)) {
+        received.push(sig);
+      }
+      request.approvalsReceived = received;
+      request.changed('approvalsReceived', true);
 
-      const oldUsername = user.username;
-      user.username = request.requestData.newUsername;
-      await user.save();
+      if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
+        request.status = 'approved';
+        await request.save();
 
-      logCisoAction('USERNAME_CHANGE_APPROVED', `CISO, admin ${oldUsername} kullanıcı adını değiştirdi. Yeni: ${user.username}`, ip);
+        const oldUsername = user.username;
+        user.username = request.requestData.newUsername;
+        await user.save();
 
-      return res.status(200).send(`
-        <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-          <h1 style="color: #4ade80;">✓ Kullanıcı Adı Onaylandı</h1>
-          <p>Kullanıcı adı ${user.username} olarak güncellendi.</p>
-        </div>
-      `);
+        logCisoAction('USERNAME_CHANGE_APPROVED', `Kullanıcı adı değişikliği onaylandı (Çift Onay). Eski: ${oldUsername}, Yeni: ${user.username}`, ip);
+
+        return res.status(200).send(`
+          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+            <h1 style="color: #4ade80;">✓ Kullanıcı Adı Onaylandı</h1>
+            <p>Kullanıcı adı ${user.username} olarak güncellendi.</p>
+          </div>
+        `);
+      } else {
+        await request.save();
+        return res.status(200).send(`
+          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+            <h1 style="color: #fbbf24;">Onay Alındı (E-posta)</h1>
+            <p>E-posta onayınız kaydedildi. Şimdi bildirimler panelinden de onaylamanız gerekmektedir (CISO Çift Onayı).</p>
+          </div>
+        `);
+      }
     }
 
     if (request.type === 'MODE_CHANGE') {
       const received = request.approvalsReceived || [];
-      received.push(ip);
+      const sig = 'Yönetici (E-posta)';
+      if (!received.includes(sig)) {
+        received.push(sig);
+      }
       request.approvalsReceived = received;
       request.changed('approvalsReceived', true);
 
-      if (received.length >= request.approvalsRequired) {
+      const isApproved = doubleApprovalEnabled
+        ? (received.includes('Yönetici (E-posta)') && received.includes('Yönetici (Arayüz)'))
+        : true;
+
+      if (isApproved) {
         request.status = 'approved';
         await request.save();
 
@@ -641,8 +679,8 @@ router.get('/approve', async (req, res) => {
         await request.save();
         return res.status(200).send(`
           <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #fbbf24;">Onay Kaydedildi</h1>
-            <p>Mod değişikliği için onayınız kaydedildi. (${received.length}/${request.approvalsRequired})</p>
+            <h1 style="color: #fbbf24;">Onay Kaydedildi (E-posta)</h1>
+            <p>Mod değişikliği için e-posta onayınız kaydedildi. Çift onay devrede olduğundan bildirimler panelinden de onaylamanız gerekmektedir.</p>
           </div>
         `);
       }
@@ -988,7 +1026,7 @@ router.put('/profile', verifyToken, async (req, res) => {
 router.put('/settings', verifyToken, requireAdmin, async (req, res) => {
   const ip = req.ip || req.connection.remoteAddress;
   try {
-    const { masterUsername, newPassword, alertThreshold, smtpConfig, mode } = req.body;
+    const { masterUsername, newPassword, alertThreshold, smtpConfig, mode, doubleApprovalEnabled } = req.body;
     
     if (mode) {
       const { Op } = require('sequelize');
@@ -1022,6 +1060,7 @@ router.put('/settings', verifyToken, requireAdmin, async (req, res) => {
       settings.masterPasswordHash = await bcrypt.hash(newPassword, salt);
     }
     if (alertThreshold !== undefined) settings.alertThreshold = parseInt(alertThreshold);
+    if (doubleApprovalEnabled !== undefined) settings.doubleApprovalEnabled = !!doubleApprovalEnabled;
 
     if (smtpConfig) {
       let finalPass = smtpConfig.auth?.pass || '';
@@ -1100,6 +1139,7 @@ router.get('/settings', verifyToken, async (req, res) => {
         verifiedAlertEmail: settings.verifiedAlertEmail || '',
         alertThreshold: settings.alertThreshold || 3,
         isEmailVerified: !!settings.verifiedAlertEmail,
+        doubleApprovalEnabled: settings.doubleApprovalEnabled !== undefined ? settings.doubleApprovalEnabled : false,
         smtpConfig: {
           host: settings.smtpConfig?.host || 'smtp.gmail.com',
           port: settings.smtpConfig?.port || 465,
@@ -1294,6 +1334,9 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
 
   const t = await sequelize.transaction();
   try {
+    const settingsRecord = await SystemSettings.findByPk('kasa_settings', { transaction: t });
+    const doubleApprovalEnabled = settingsRecord?.value?.doubleApprovalEnabled || false;
+
     const request = await ApprovalRequest.findByPk(req.params.id, { transaction: t });
     if (!request || request.status !== 'pending') {
       await t.rollback();
@@ -1326,14 +1369,18 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
       }
 
       const received = request.approvalsReceived || [];
-      const approverName = `${req.user.fullName} (${req.user.role === 'ciso' ? 'CISO' : 'Yönetici'})`;
-      if (!received.includes(approverName)) {
-        received.push(approverName);
+      const sig = 'Yönetici (Arayüz)';
+      if (!received.includes(sig)) {
+        received.push(sig);
       }
       request.approvalsReceived = received;
       request.changed('approvalsReceived', true);
 
-      if (received.length >= request.approvalsRequired) {
+      const isApproved = doubleApprovalEnabled 
+        ? (received.includes('Yönetici (E-posta)') && received.includes('Yönetici (Arayüz)'))
+        : true;
+
+      if (isApproved) {
         request.status = 'approved';
         await request.save({ transaction: t });
 
@@ -1410,14 +1457,18 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
       }
     } else if (request.type === 'MODE_CHANGE') {
       const received = request.approvalsReceived || [];
-      const approverName = `${req.user.fullName} (${req.user.role === 'ciso' ? 'CISO' : 'Yönetici'})`;
-      if (!received.includes(approverName)) {
-        received.push(approverName);
+      const sig = 'Yönetici (Arayüz)';
+      if (!received.includes(sig)) {
+        received.push(sig);
       }
       request.approvalsReceived = received;
       request.changed('approvalsReceived', true);
 
-      if (received.length >= request.approvalsRequired) {
+      const isApproved = doubleApprovalEnabled
+        ? (received.includes('Yönetici (E-posta)') && received.includes('Yönetici (Arayüz)'))
+        : true;
+
+      if (isApproved) {
         request.status = 'approved';
         await request.save({ transaction: t });
 
@@ -1630,6 +1681,465 @@ router.post('/import-log-file', verifyToken, async (req, res) => {
     res.status(200).json({ message: 'Log dosyası başarıyla içe aktarıldı ve aktif olarak ayarlandı.' });
   } catch (err) {
     res.status(500).json({ error: 'Log dosyası yüklenirken hata oluştu.', details: err.message });
+  }
+// ============================================================
+// ŞİFREMI UNUTTUM - IPUCU SORGULAMA
+// ============================================================
+router.post('/forgot-password-hint', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'E-posta adresi gereklidir.' });
+  try {
+    const user = await User.findOne({ where: { email, status: 'active' } });
+    if (!user) {
+      return res.status(400).json({ error: 'Bu e-posta adresi ile kayıtlı aktif bir kullanıcı bulunamadı.' });
+    }
+    return res.status(200).json({ 
+      hint: user.passwordHint || 'Tanımlanmış bir şifre ipucunuz bulunmuyor.' 
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Sunucu hatası oluştu.' });
+  }
+});
+
+// ============================================================
+// ŞİFREMI UNUTTUM - SIFIRLAMA MAİLİ GÖNDERME
+// ============================================================
+router.post('/forgot-password-email', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'E-posta adresi gereklidir.' });
+  try {
+    const user = await User.findOne({ where: { email, status: 'active' } });
+    if (!user) {
+      return res.status(400).json({ error: 'Bu e-posta adresi ile kayıtlı aktif bir kullanıcı bulunamadı.' });
+    }
+
+    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
+    const settings = settingsRecord ? settingsRecord.value : {};
+    if (!settings.smtpConfig?.auth?.user || !settings.smtpConfig?.auth?.pass) {
+      return res.status(400).json({ error: 'Sistem SMTP ayarları yapılandırılmamış. Lütfen yöneticiyle iletişime geçin.' });
+    }
+
+    const token = uuidv4();
+    const expiresAt = Date.now() + 60 * 60 * 1000; // 1 Saat
+
+    await ApprovalRequest.create({
+      type: 'PASSWORD_RESET',
+      targetId: user.id,
+      requestData: { email: user.email, expiresAt },
+      approvalsRequired: 1,
+      approvalsReceived: [],
+      status: 'pending',
+      token
+    });
+
+    const transporter = getMailTransporter(settings.smtpConfig);
+    const fromUser = settings.smtpConfig.auth.user;
+    const resetLink = `http://localhost/api/auth/reset-password-page?token=${token}`;
+
+    await transporter.sendMail({
+      from: `"DMS Güvenlik Portalı" <${fromUser}>`,
+      to: user.email,
+      subject: 'DMS On-Premise - Şifre Sıfırlama Talebi',
+      html: `
+        <div style="font-family: sans-serif; padding: 2.5rem; background: #0f172a; color: #fff; border-radius: 12px; max-width: 500px; margin: 0 auto; border: 1px solid rgba(139, 92, 246, 0.2);">
+          <h2 style="color: #a78bfa; margin-top:0;">Şifrenizi Sıfırlayın</h2>
+          <p style="color: #9ca3af; line-height: 1.5;">DMS On-Premise hesabınız için şifre sıfırlama talebi aldık. Aşağıdaki butona tıklayarak yeni şifrenizi güvenle belirleyebilirsiniz:</p>
+          <div style="margin: 2rem 0; text-align: center;">
+            <a href="${resetLink}" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); color: #fff; padding: 0.9rem 2rem; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 0.95rem; box-shadow: 0 4px 15px rgba(99,102,241,0.4); display: inline-block;">Yeni Şifre Belirle</a>
+          </div>
+          <p style="font-size: 0.8rem; color: #6b7280; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1rem; margin-top: 2rem;">Eğer bu talebi siz yapmadıysanız bu e-postayı dikkate almayınız. Bu onay linki 1 saat geçerlidir.</p>
+        </div>
+      `
+    });
+
+    logAction('PASSWORD_RESET_REQUESTED', user.id, user.fullName, null, null, `Şifre sıfırlama talebi gönderildi: ${user.email}`, req.ip);
+    return res.status(200).json({ message: 'Şifre sıfırlama linki e-posta adresinize gönderildi.' });
+  } catch (err) {
+    console.error('[RESET_EMAIL_ERR]', err.message);
+    return res.status(500).json({ error: 'Şifre sıfırlama postası gönderilirken hata oluştu.', details: err.message });
+  }
+});
+
+// ============================================================
+// GET /api/auth/reset-password-page — Şifre Sıfırlama Sayfası (HTML)
+// ============================================================
+router.get('/reset-password-page', async (req, res) => {
+  const { token } = req.query;
+  if (!token) {
+    return res.status(400).send('<h1>Hata: Geçersiz şifre sıfırlama kodu</h1>');
+  }
+
+  try {
+    const request = await ApprovalRequest.findOne({ where: { token, type: 'PASSWORD_RESET', status: 'pending' } });
+    if (!request || request.requestData?.expiresAt < Date.now()) {
+      return res.status(400).send('<h1>Hata: Şifre sıfırlama talebinin süresi dolmuş veya geçersiz.</h1>');
+    }
+
+    res.status(200).send(`
+      <!DOCTYPE html>
+      <html lang="tr">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>DMS On-Premise - Şifre Sıfırlama</title>
+        <style>
+          body {
+            margin: 0;
+            padding: 0;
+            background: #030712;
+            color: #f3f4f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+          }
+          .card {
+            background: rgba(17, 24, 39, 0.8);
+            border: 1.5px solid rgba(139, 92, 246, 0.25);
+            backdrop-filter: blur(16px);
+            border-radius: 16px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7);
+            text-align: center;
+          }
+          h2 {
+            color: #a78bfa;
+            margin-top: 0;
+            font-size: 1.45rem;
+            font-weight: 800;
+          }
+          p {
+            color: #9ca3af;
+            font-size: 0.85rem;
+            margin-bottom: 2rem;
+          }
+          .form-group {
+            text-align: left;
+            margin-bottom: 1.25rem;
+            position: relative;
+          }
+          label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #9ca3af;
+            margin-bottom: 0.45rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+          }
+          input {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            padding: 0.75rem 2.5rem 0.75rem 0.75rem;
+            color: #fff;
+            font-size: 0.9rem;
+            outline: none;
+            box-sizing: border-box;
+          }
+          input:focus {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+          }
+          .btn-eye {
+            position: absolute;
+            right: 10px;
+            background: transparent;
+            border: none;
+            color: #a78bfa;
+            cursor: pointer;
+            font-size: 1rem;
+            opacity: 0.7;
+          }
+          .btn-eye:hover {
+            opacity: 1;
+          }
+          .info-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            background: rgba(255,255,255,0.15);
+            color: #a78bfa;
+            border-radius: 50%;
+            font-size: 0.65rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-left: 0.35rem;
+          }
+          .info-tooltip {
+            display: none;
+            position: absolute;
+            background: #1e1b4b;
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            border-radius: 6px;
+            padding: 0.65rem;
+            width: 250px;
+            z-index: 10;
+            color: #cbd5e1;
+            font-size: 0.72rem;
+            top: 25px;
+            left: 0;
+            box-shadow: 0 10px 15px rgba(0,0,0,0.5);
+            line-height: 1.4;
+          }
+          .info-trigger:hover + .info-tooltip, .info-tooltip:hover {
+            display: block;
+          }
+          .btn-submit {
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.85rem;
+            width: 100%;
+            font-weight: 700;
+            font-size: 0.92rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            transition: all 0.2s ease;
+            margin-top: 1rem;
+          }
+          .btn-submit:hover {
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+            transform: translateY(-1px);
+          }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h2>🔒 Şifrenizi Yenileyin</h2>
+          <p>Lütfen DMS On-Premise hesabınız için belirlemek istediğiniz yeni şifreyi girin.</p>
+          
+          <form action="/api/auth/reset-password-submit" method="POST">
+            <input type="hidden" name="token" value="${token}" />
+            
+            <div class="form-group">
+              <div style="display:flex; align-items:center; margin-bottom: 0.45rem; position: relative;">
+                <label>Yeni Şifre</label>
+                <span class="info-trigger">i</span>
+                <div class="info-tooltip">
+                  Şifreniz en az 8 karakter uzunluğunda olmalı; en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter (!@#$%^&*) içermelidir.
+                </div>
+              </div>
+              <div class="input-wrapper">
+                <input type="password" name="password" id="password" required placeholder="••••••••" />
+                <button type="button" class="btn-eye" onclick="togglePass('password')">👁️</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Şifreyi Doğrula</label>
+              <div class="input-wrapper">
+                <input type="password" name="confirmPassword" id="confirmPassword" required placeholder="••••••••" />
+                <button type="button" class="btn-eye" onclick="togglePass('confirmPassword')">👁️</button>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-submit">Şifreyi Güncelle</button>
+          </form>
+        </div>
+
+        <script>
+          function togglePass(id) {
+            const input = document.getElementById(id);
+            if (input.type === 'password') {
+              input.type = 'text';
+            } else {
+              input.type = 'password';
+            }
+          }
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    res.status(500).send('<h1>Şifre sıfırlama sayfası yüklenirken hata oluştu.</h1>');
+  }
+});
+
+// ============================================================
+// POST /api/auth/reset-password-submit — Yeni Şifreyi Kaydet ve Otomatik Giriş Yaptır
+// ============================================================
+router.post('/reset-password-submit', async (req, res) => {
+  const { token, password, confirmPassword } = req.body;
+  if (!token || !password || !confirmPassword) {
+    return res.status(400).send('<h1>Hata: Tüm alanlar zorunludur.</h1>');
+  }
+
+  if (password !== confirmPassword) {
+    return res.status(400).send('<h1>Hata: Şifreler uyuşmuyor.</h1>');
+  }
+
+  // Şifre kuralları
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+  if (!passwordRegex.test(password)) {
+    return res.status(400).send('<h1>Hata: Şifre güvenlik kurallarına uygun değil (En az 8 karakter, büyük-küçük harf, rakam ve özel karakter içermelidir).</h1>');
+  }
+
+  const t = await sequelize.transaction();
+  try {
+    const request = await ApprovalRequest.findOne({ 
+      where: { token, type: 'PASSWORD_RESET', status: 'pending' },
+      transaction: t
+    });
+
+    if (!request || request.requestData?.expiresAt < Date.now()) {
+      await t.rollback();
+      return res.status(400).send('<h1>Hata: Geçersiz veya süresi dolmuş sıfırlama kodu.</h1>');
+    }
+
+    const user = await User.findByPk(request.targetId, { transaction: t });
+    if (!user) {
+      await t.rollback();
+      return res.status(404).send('<h1>Hata: Kullanıcı bulunamadı.</h1>');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    user.passwordHash = passwordHash;
+    await user.save({ transaction: t });
+
+    request.status = 'consumed';
+    await request.save({ transaction: t });
+
+    await t.commit();
+
+    // Otomatik login için JWT token üretelim
+    const jwtToken = jwt.sign(
+      { id: user.id, username: user.username, role: user.role, fullName: user.fullName, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+
+    logAction('PASSWORD_RESET_SUCCESSFUL', user.id, user.fullName, null, null, `E-posta üzerinden şifre başarıyla yenilendi: ${user.email}`, req.ip);
+
+    // Otomatik giriş yapacak şık başarılı ekranı dönüyoruz!
+    res.status(200).send(`
+      <!DOCTYPE html>
+      <html lang="tr">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Şifre Güncellendi</title>
+        <style>
+          body {
+            margin: 0;
+            padding: 0;
+            background: #030712;
+            color: #f3f4f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+          }
+          .card {
+            background: rgba(17, 24, 39, 0.8);
+            border: 1.5px solid #10b981;
+            backdrop-filter: blur(16px);
+            border-radius: 16px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7);
+            text-align: center;
+          }
+          h2 {
+            color: #34d399;
+            margin-top: 0;
+            font-size: 1.45rem;
+          }
+          p {
+            color: #9ca3af;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin-bottom: 2rem;
+          }
+          .btn-login {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.9rem;
+            width: 100%;
+            font-weight: 700;
+            font-size: 0.92rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: block;
+            box-sizing: border-box;
+            margin-bottom: 0.75rem;
+          }
+          .btn-login:hover {
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+            transform: translateY(-1px);
+          }
+          .btn-mail {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            border-radius: 8px;
+            padding: 0.85rem;
+            width: 100%;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: block;
+            box-sizing: border-box;
+          }
+          .btn-mail:hover {
+            background: rgba(255, 255, 255, 0.1);
+          }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h2>✓ Şifre Değiştirildi!</h2>
+          <p>Yeni şifreniz başarıyla kaydedilmiştir. Aşağıdaki butona tıklayarak doğrudan sisteme giriş yapabilirsiniz.</p>
+          
+          <button class="btn-login" onclick="autoLogin()">Sisteme Giriş Yap ve Oturumu Aç</button>
+          <a href="https://mail.google.com" target="_blank" class="btn-mail">Mail Hesabıma Git</a>
+        </div>
+
+        <script>
+          function autoLogin() {
+            // JWT Tokenı localStorage'a yazarak anında oturum açıyoruz
+            localStorage.setItem('token', '${jwtToken}');
+            localStorage.setItem('kasa_token', '${jwtToken}');
+            
+            // Kullanıcı bilgilerini de yazalım
+            const userObj = {
+              id: '${user.id}',
+              fullName: '${user.fullName}',
+              username: '${user.username}',
+              role: '${user.role}',
+              email: '${user.email}'
+            };
+            localStorage.setItem('currentUser', JSON.stringify(userObj));
+            
+            // Kasa kilit durumunu kaldır ve ana siteye yönlendir
+            window.location.href = 'http://' + window.location.hostname;
+          }
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    if (t) await t.rollback();
+    res.status(500).send('<h1>Şifre güncellenirken hata oluştu.</h1>');
   }
 });
 

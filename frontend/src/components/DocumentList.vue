@@ -596,6 +596,25 @@ const isEditing = ref(false)
 
 // Etiket Filtreleme
 const activeTagFilter = ref('')
+const timeFilter = ref('all') // 'all', 'last24h', 'last7d'
+
+const filteredDocuments = computed(() => {
+  const list = documents.value
+  if (timeFilter.value === 'all') return list
+  const now = Date.now()
+  const oneDay = 24 * 60 * 60 * 1000
+  const sevenDays = 7 * oneDay
+  return list.filter(d => {
+    const docTime = new Date(d.createdAt || d.created_at).getTime()
+    if (timeFilter.value === 'last24h') {
+      return (now - docTime) <= oneDay
+    }
+    if (timeFilter.value === 'last7d') {
+      return (now - docTime) <= sevenDays
+    }
+    return true
+  })
+})
 
 async function filterByTag(tag) {
   activeTagFilter.value = tag
@@ -700,13 +719,13 @@ const highlightedOcrHtml = ref('')
 // ============================================================
 
 const primaryResults = computed(() => {
-  if (!isSearchMode.value) return documents.value
-  return documents.value.filter(d => !d.isDimmed)
+  if (!isSearchMode.value) return filteredDocuments.value
+  return filteredDocuments.value.filter(d => !d.isDimmed)
 })
 
 const dimmedResults = computed(() => {
   if (!isSearchMode.value) return []
-  return documents.value.filter(d => d.isDimmed)
+  return filteredDocuments.value.filter(d => d.isDimmed)
 })
 
 // ============================================================
@@ -1231,7 +1250,7 @@ function clearSearch() {
   startPolling()
 }
 
-defineExpose({ refresh, setLoading, setSearchResults, clearSearch })
+defineExpose({ refresh, setLoading, setSearchResults, clearSearch, filterFromDashboard, fetchDocuments })
 
 // ============================================================
 // Yardımcı Fonksiyonlar
@@ -1341,6 +1360,21 @@ onUnmounted(() => {
     eventSource.close()
   }
 })
+
+async function filterFromDashboard(type) {
+  timeFilter.value = 'all'
+  if (type === 'trash') {
+    isTrashView.value = true
+    await fetchDocuments()
+  } else if (type === 'all') {
+    isTrashView.value = false
+    await fetchDocuments()
+  } else if (type === 'last24h' || type === 'last7d') {
+    isTrashView.value = false
+    timeFilter.value = type
+    await fetchDocuments()
+  }
+}
 </script>
 
 <style scoped>

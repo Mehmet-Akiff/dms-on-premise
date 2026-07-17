@@ -59,6 +59,21 @@ const User = sequelize.define('users', {
     allowNull: false,
     defaultValue: 'pending_approval',
   },
+  lastLogin: {
+    type: DataTypes.DATE,
+    field: 'last_login',
+    allowNull: true,
+  },
+  lastActive: {
+    type: DataTypes.DATE,
+    field: 'last_active',
+    allowNull: true,
+  },
+  passwordHint: {
+    type: DataTypes.STRING(255),
+    field: 'password_hint',
+    allowNull: true,
+  },
 }, {
   underscored: true,
   timestamps: true,

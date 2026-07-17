@@ -56,6 +56,8 @@ const verifyToken = async (req, res, next) => {
           return res.status(403).json({ error: 'Hesabınız henüz onaylanmamış veya askıya alınmış.' });
         }
         req.user = user;
+        user.lastActive = new Date();
+        user.save().catch(() => {});
         next();
       } catch (dbError) {
         console.error('[MIDDLEWARE_DB_HATA]', dbError.message);

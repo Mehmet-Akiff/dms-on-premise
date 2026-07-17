@@ -2,7 +2,7 @@
   <div class="dashboard-container">
     <!-- Ana İstatistik Kartları -->
     <div class="stats-grid">
-      <div class="stat-card stat-card--total">
+      <div class="stat-card stat-card--total" @click="handleCardClick('all')" style="cursor: pointer;">
         <div class="stat-icon">📊</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.totalDocuments }}</span>
@@ -11,7 +11,7 @@
         <div class="stat-glow stat-glow--blue"></div>
       </div>
 
-      <div class="stat-card stat-card--recent">
+      <div class="stat-card stat-card--recent" @click="handleCardClick('last24h')" style="cursor: pointer;">
         <div class="stat-icon">⏱️</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.last24h }}</span>
@@ -20,7 +20,7 @@
         <div class="stat-glow stat-glow--green"></div>
       </div>
 
-      <div class="stat-card stat-card--weekly">
+      <div class="stat-card stat-card--weekly" @click="handleCardClick('last7d')" style="cursor: pointer;">
         <div class="stat-icon">📅</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.last7d }}</span>
@@ -29,7 +29,7 @@
         <div class="stat-glow stat-glow--purple"></div>
       </div>
 
-      <div class="stat-card stat-card--trash">
+      <div class="stat-card stat-card--trash" @click="handleCardClick('trash')" style="cursor: pointer;">
         <div class="stat-icon">🗑️</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.trashCount }}</span>
@@ -78,6 +78,12 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+
+const emit = defineEmits(['stat-click'])
+
+function handleCardClick(type) {
+  emit('stat-click', type)
+}
 
 const stats = ref({
   totalDocuments: 0,

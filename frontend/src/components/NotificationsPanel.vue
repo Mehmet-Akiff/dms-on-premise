@@ -99,6 +99,29 @@ const props = defineProps({
   }
 })
 
+const emit = defineEmits(['refresh-count'])
+const seenApprovals = ref(JSON.parse(localStorage.getItem('seen_approvals') || '[]'))
+
+function isSeen(id) {
+  return seenApprovals.value.includes(id)
+}
+
+function markAllAsSeen(list) {
+  const currentSeen = JSON.parse(localStorage.getItem('seen_approvals') || '[]')
+  let changed = false
+  list.forEach(req => {
+    if (req.status === 'pending' && !currentSeen.includes(req.id)) {
+      currentSeen.push(req.id)
+      changed = true
+    }
+  })
+  if (changed) {
+    localStorage.setItem('seen_approvals', JSON.stringify(currentSeen))
+    seenApprovals.value = currentSeen
+    emit('refresh-count')
+  }
+}
+
 const isAdminOrCiso = computed(() => {
   return props.userRole === 'admin' || props.userRole === 'ciso'
 })
@@ -113,6 +136,7 @@ async function fetchApprovals() {
     if (response.ok) {
       const data = await response.json()
       approvals.value = data.approvals || []
+      markAllAsSeen(data.approvals || [])
     } else {
       toast.error('Talepler yüklenemedi.')
     }

@@ -354,10 +354,28 @@
           </div>
         </div>
 
-        <hr class="section-divider" v-if="isAdminOrCiso" />
+        <!-- 6B. ÇİFT ONAY YETKİLENDİRMESİ -->
+        <div class="settings-section" v-if="isAdminOrCiso" style="margin-top: 1rem;">
+          <h4>🔐 Çift Onay Yetkilendirmesi</h4>
+          <p class="section-desc">Onay taleplerinin işleme alınması için hem sistem arayüzünden hem de e-postadaki butona tıklanarak onaylanmasını zorunlu kılın. (CISO için zorunlu ve kapatılamazdır).</p>
+          
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <label class="perm-check-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input 
+                type="checkbox" 
+                v-model="doubleApprovalEnabled" 
+                @change="updateDoubleApproval"
+                :disabled="currentUserRole === 'ciso'"
+              />
+              <span style="font-size: 0.8rem; font-weight: 700; color: #fff;">E-posta + Arayüz Çift Onayı Zorunlu</span>
+            </label>
+          </div>
+        </div>
+
+        <hr class="section-divider" v-if="currentUserRole === 'ciso'" />
 
         <!-- 7. SMTP GÖNDERİCİ AYARLARI -->
-        <div class="settings-section" v-if="isAdminOrCiso">
+        <div class="settings-section" v-if="currentUserRole === 'ciso'">
           <h4>📨 SMTP Gönderici Ayarları</h4>
           <p class="section-desc">Onay ve alarm e-postalarını göndermek için kullanılacak SMTP hesabını doğrulayın.</p>
           
@@ -616,6 +634,7 @@ const alertEmail = ref('')
 const verifiedEmail = ref('')
 const alertThreshold = ref(3)
 const isEmailVerified = ref(false)
+const doubleApprovalEnabled = ref(false)
 
 const smtpHost = ref('smtp.gmail.com')
 const smtpPort = ref(465)
@@ -774,6 +793,10 @@ async function fetchSettings() {
       alertThreshold.value = data.settings.alertThreshold || 3
       isEmailVerified.value = data.settings.isEmailVerified || false
       systemMode.value = data.mode || 'single_pc'
+      doubleApprovalEnabled.value = data.settings.doubleApprovalEnabled || false
+      if (currentUserRole.value === 'ciso') {
+        doubleApprovalEnabled.value = true
+      }
 
       if (data.settings.smtpConfig) {
         smtpHost.value = data.settings.smtpConfig.host || 'smtp.gmail.com'
@@ -1056,6 +1079,32 @@ async function updateThreshold() {
     })
   } catch (error) {
     console.error('[Settings] Eşik güncelleme hatası:', error)
+  }
+}
+
+async function updateDoubleApproval() {
+  if (currentUserRole.value === 'ciso') {
+    doubleApprovalEnabled.value = true
+    return
+  }
+  try {
+    const token = getKasaToken()
+    const response = await fetch('/api/auth/settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ doubleApprovalEnabled: doubleApprovalEnabled.value })
+    })
+    if (response.ok) {
+      toast.success('Çift onay yetkilendirme ayarı güncellendi.')
+    } else {
+      const data = await response.json()
+      toast.error(data.error || 'Ayar güncellenemedi.')
+    }
+  } catch (error) {
+    toast.error('Bağlantı hatası oluştu.')
   }
 }
 
