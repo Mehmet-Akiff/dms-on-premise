@@ -27,6 +27,7 @@
             </span>
             <h5>{{ currentUserFullName }}</h5>
             <p>@{{ currentUsername }}</p>
+            <p style="font-size:0.75rem; color:#9ca3af; margin-top:0.15rem; font-weight:500;">📧 {{ currentUserEmail }}</p>
           </div>
         </div>
 
@@ -188,61 +189,7 @@
 
         <hr class="section-divider" />
 
-        <!-- 2. ONAY BEKLEYEN DİĞER TALEPLER -->
-        <div class="settings-section" v-if="isAdminOrCiso && otherApprovals.length > 0">
-          <h4>⏳ Onay Bekleyen Profil & Sistem Talepleri</h4>
-          <p class="section-desc">Profil ismi veya sistem dağıtım modu değişikliklerini onaylayın.</p>
-          
-          <div class="approvals-list-wrapper">
-            <div v-for="req in otherApprovals" :key="req.id" class="approval-row-card">
-              <div class="approval-info-brief">
-                <span class="approval-type-badge">{{ getApprovalTypeLabel(req.type) }}</span>
-                <p class="approval-detail-text">{{ getApprovalDetailText(req) }}</p>
-                <div class="approval-status-badge-wrap" style="margin-top: 0.25rem;">
-                  <span class="status-badge" :class="'status--' + req.status">
-                    Durum: {{ getStatusLabel(req.status) }}
-                  </span>
-                </div>
-                <small class="approval-meta-sub">
-                  Verilen Onaylar: {{ req.approvalsReceived?.length > 0 ? req.approvalsReceived.join(', ') : 'Henüz onay verilmedi' }} ({{ req.approvalsReceived?.length || 0 }}/{{ req.approvalsRequired }} Onay)
-                </small>
-                
-                <!-- Geri sayım sayacı gösterimi (NAME_CHANGE ise) -->
-                <div v-if="req.type === 'NAME_CHANGE' && req.status === 'pending'" style="margin-top:0.4rem; font-size:0.7rem; color:#f59e0b; font-weight:600;">
-                  ⏳ CISO Onayı İçin Kalan Süre: {{ getWorkingDaysCountdown(req.createdAt, req.requestData?.expiresAt) }}
-                </div>
-              </div>
-              <div class="approval-actions" style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;" v-if="req.status === 'pending'">
-                <button class="btn-approval btn-approval--reject" @click="askConfirm('Bu profil/sistem talebini reddetmek istediğinize emin misiniz?', () => handleApprovalAction(req.id, 'reject'))">Reddet</button>
-                <button class="btn-approval btn-approval--approve" @click="askConfirm('Bu profil/sistem talebini onaylamak istediğinize emin misiniz?', () => handleApprovalAction(req.id, 'approve'))">Onayla</button>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- 2B. YENİ KULLANICI BAŞVURULARI (Sadece Admin Yönetebilir) -->
-        <div class="settings-section" v-if="currentUserRole === 'admin' && registrationApprovals.length > 0">
-          <h4>🔔 Yeni Kullanıcı Başvuruları</h4>
-          <p class="section-desc">Sisteme yeni kaydolmak isteyen kullanıcıların onay işlemlerini gerçekleştirin.</p>
-          
-          <div class="approvals-list-wrapper">
-            <div v-for="req in registrationApprovals" :key="req.id" class="approval-row-card">
-              <div class="approval-info-brief">
-                <span class="approval-type-badge">{{ getApprovalTypeLabel(req.type) }}</span>
-                <p class="approval-detail-text">{{ getApprovalDetailText(req) }}</p>
-                <small class="approval-meta-sub">
-                  Onay Verenler: {{ req.approvalsReceived?.length > 0 ? req.approvalsReceived.join(', ') : 'Henüz onay verilmedi' }} ({{ req.approvalsReceived?.length || 0 }}/{{ req.approvalsRequired }} Onay)
-                </small>
-              </div>
-              <div class="approval-actions" style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;" v-if="req.status === 'pending'">
-                <button class="btn-approval btn-approval--reject" @click="askConfirm('Bu kullanıcı başvurusunu reddetmek istediğinize emin misiniz?', () => handleApprovalAction(req.id, 'reject'))">Reddet</button>
-                <button class="btn-approval btn-approval--approve" @click="askConfirm('Bu kullanıcı başvurusunu onaylamak istediğinize emin misiniz?', () => handleApprovalAction(req.id, 'approve'))">Onayla</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <hr class="section-divider" v-if="isAdminOrCiso && approvalsList.length > 0" />
 
         <!-- 3. KASA KİMLİK & ŞİFRE BİLGİLERİ -->
         <div class="settings-section" v-if="currentUserRole === 'admin'">
@@ -335,9 +282,9 @@
               <div class="user-info-brief">
                 <strong>{{ user.fullName }}</strong>
                 <span class="user-meta-sub">@{{ user.username }} ({{ user.email || 'E-posta yok' }})</span>
-                <!-- CISO için Detay Butonu -->
+                <!-- Detay Butonu -->
                 <button 
-                  v-if="currentUserRole === 'ciso'" 
+                  v-if="currentUserRole === 'ciso' || currentUserRole === 'admin'" 
                   @click="openCisoDetail(user)" 
                   type="button"
                   style="margin-top:0.3rem; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a78bfa; padding:0.2rem 0.6rem; font-size:0.65rem; border-radius:4px; cursor:pointer; font-weight:600;"
@@ -422,7 +369,25 @@
 
             <div class="form-group">
               <label>SMTP Şifresi (Pass)</label>
-              <input v-model="smtpPass" type="password" placeholder="Şifre..." />
+              <div class="password-input-wrapper">
+                <input 
+                  v-model="smtpPass" 
+                  :type="isSmtpPassVisible ? 'text' : 'password'" 
+                  placeholder="Şifre..." 
+                />
+                <button 
+                  type="button" 
+                  class="btn-eye" 
+                  @mousedown="isSmtpPassVisible = true" 
+                  @mouseup="isSmtpPassVisible = false"
+                  @mouseleave="isSmtpPassVisible = false"
+                  @touchstart="isSmtpPassVisible = true" 
+                  @touchend="isSmtpPassVisible = false"
+                  title="Şifreyi görmek için basılı tutun"
+                >
+                  👁️
+                </button>
+              </div>
             </div>
 
             <div v-if="smtpErrorText" class="mail-error-detail-banner" style="margin-bottom:0.5rem;">
@@ -534,7 +499,7 @@
         </div>
         
         <!-- İşlem Logları -->
-        <div>
+        <div v-if="currentUserRole === 'ciso'">
           <h5 style="margin:0 0 0.5rem; font-size:0.78rem; color:#9ca3af; font-weight:600;">SON 50 İŞLEM</h5>
           <div v-if="isLoadingCisoDetail" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">Yükleniyor...</div>
           <div v-else-if="cisoDetailLogs.length === 0" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">Bu kullanıcıya ait kayıtlı işlem bulunamadı.</div>
@@ -552,6 +517,9 @@
               <span style="font-size:0.62rem; color:#6b7280; white-space:nowrap;">{{ formatDetailDate(log.createdAt || log.created_at) }}</span>
             </div>
           </div>
+        </div>
+        <div v-else style="background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.15); border-radius:8px; padding:0.85rem; text-align:center; color:#f87171; font-size:0.75rem;">
+          ⚠️ Kullanıcının detaylı işlem geçmişi (Audit Logs) sadece CISO yetkisindedir.
         </div>
       </div>
     </div>
@@ -654,6 +622,7 @@ const smtpPort = ref(465)
 const smtpSecure = ref(true)
 const smtpUser = ref('')
 const smtpPass = ref('')
+const isSmtpPassVisible = ref(false)
 
 const mailErrorDetail = ref('')
 const smtpErrorText = ref('')
@@ -724,6 +693,7 @@ const currentUserRole = ref('')
 const currentUserFullName = ref('')
 const currentUsername = ref('')
 const currentUserId = ref('')
+const currentUserEmail = ref('')
 
 // Dinamik Şifre Validasyonları
 const regPasswordErrors = computed(() => {
@@ -767,6 +737,7 @@ function updateProfileInfo() {
     currentUserFullName.value = payload.fullName || payload.username || '';
     currentUsername.value = payload.username || '';
     currentUserId.value = payload.id || '';
+    currentUserEmail.value = payload.email || '';
 
     // Form alanlarına doldur
     userFullName.value = payload.fullName || '';
@@ -1735,9 +1706,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  margin-top: 0.2rem;
+  margin-top: 0.25rem;
   border-top: 1px solid rgba(255, 255, 255, 0.03);
   padding-top: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .perm-check-label {

@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
-const { User, SystemSettings, ApprovalRequest } = require('../models');
+const { User, SystemSettings, ApprovalRequest, sequelize } = require('../models');
 const { verifyToken, requireAdmin, requireCiso } = require('../middleware/auth.middleware');
 const { logCisoAction, archiveEmailVerification } = require('../utils/cisoLogger');
 const { logAction } = require('../utils/auditLogger');
@@ -213,7 +213,7 @@ router.post('/login', async (req, res) => {
     attemptsInfo.lockUntil = null;
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role, fullName: user.fullName },
+      { id: user.id, username: user.username, role: user.role, fullName: user.fullName, email: user.email },
       JWT_SECRET,
       { expiresIn: '12h' }
     );
@@ -368,22 +368,26 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Tüm alanlar zorunludur.' });
   }
 
+  const t = await sequelize.transaction();
   try {
     const otpApproved = await ApprovalRequest.findOne({
-      where: { type: 'REGISTRATION_OTP', targetId: email, status: 'approved' }
+      where: { type: 'REGISTRATION_OTP', targetId: email, status: 'approved' },
+      transaction: t
     });
 
     if (!otpApproved) {
+      await t.rollback();
       return res.status(400).json({ error: 'Lütfen kayıt işleminden önce e-posta adresinizi doğrulayın.' });
     }
 
-    const userExists = await User.findOne({ where: { username } });
+    const userExists = await User.findOne({ where: { username }, transaction: t });
     if (userExists) {
+      await t.rollback();
       return res.status(400).json({ error: 'Bu kullanıcı adı zaten kullanımda.' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
+    const settingsRecord = await SystemSettings.findByPk('kasa_settings', { transaction: t });
     const settings = settingsRecord ? settingsRecord.value : {};
     const alertEmail = settings.alertEmail || '';
 
@@ -398,16 +402,16 @@ router.post('/register', async (req, res) => {
         canRead: true,
         canWrite: role === 'admin'
       }
-    });
+    }, { transaction: t });
 
     otpApproved.status = 'consumed';
-    await otpApproved.save();
+    await otpApproved.save({ transaction: t });
 
     const token = uuidv4();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 saat onay süresi
 
     if (role === 'admin') {
-      const activeAdmins = await User.findAll({ where: { role: 'admin', status: 'active' } });
+      const activeAdmins = await User.findAll({ where: { role: 'admin', status: 'active' }, transaction: t });
       const requiredCount = Math.max(1, activeAdmins.length);
 
       await ApprovalRequest.create({
@@ -418,8 +422,12 @@ router.post('/register', async (req, res) => {
         approvalsReceived: [],
         status: 'pending',
         token
-      });
+      }, { transaction: t });
 
+      // Veritabanı işlemlerini commit et
+      await t.commit();
+
+      // Commit sonrası asenkron e-posta gönderimi
       for (const adm of activeAdmins) {
         try {
           const transporter = getMailTransporter(settings.smtpConfig);
@@ -443,8 +451,12 @@ router.post('/register', async (req, res) => {
         approvalsReceived: [],
         status: 'pending',
         token
-      });
+      }, { transaction: t });
 
+      // Veritabanı işlemlerini commit et
+      await t.commit();
+
+      // Commit sonrası asenkron e-posta gönderimi
       if (alertEmail) {
         try {
           const transporter = getMailTransporter(settings.smtpConfig);
@@ -468,6 +480,9 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({ message: 'Kayıt talebiniz alındı. Yönetici onayı bekleniyor.' });
   } catch (error) {
+    if (!t.finished) {
+      await t.rollback();
+    }
     console.error('[REGISTER_HATA]', error.message);
     res.status(500).json({ error: 'Kayıt sırasında bir hata oluştu.' });
   }
@@ -946,7 +961,7 @@ router.put('/profile', verifyToken, async (req, res) => {
     await user.save();
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role, fullName: user.fullName },
+      { id: user.id, username: user.username, role: user.role, fullName: user.fullName, email: user.email },
       JWT_SECRET,
       { expiresIn: '12h' }
     );
@@ -1010,7 +1025,7 @@ router.put('/settings', verifyToken, requireAdmin, async (req, res) => {
 
     if (smtpConfig) {
       let finalPass = smtpConfig.auth?.pass || '';
-      if (finalPass === '••••••••') {
+      if (finalPass === '••••••••' || finalPass === '        ' || !finalPass.trim()) {
         finalPass = settings.smtpConfig?.auth?.pass || '';
       }
 
@@ -1212,10 +1227,6 @@ router.post('/verify-code', verifyToken, async (req, res) => {
 // GET /api/auth/approvals — Onay Bekleyen Talepleri Listele (Admin/CISO)
 // ============================================================
 router.get('/approvals', verifyToken, async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'ciso') {
-    return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
-  }
-
   try {
     const approvals = await ApprovalRequest.findAll({
       order: [['createdAt', 'DESC']]
@@ -1232,6 +1243,15 @@ router.get('/approvals', verifyToken, async (req, res) => {
       }
 
       let shouldShow = true;
+
+      // Standart kullanıcı sadece kendi taleplerini görebilir
+      if (req.user.role === 'user') {
+        const isRequester = reqRecord.requestData?.requesterId === req.user.id;
+        const isTarget = reqRecord.targetId === req.user.id;
+        if (!isRequester && !isTarget) {
+          shouldShow = false;
+        }
+      }
 
       // Admin veya CISO profil talepleri: Sadece CISO görebilir.
       if (reqRecord.type === 'NAME_CHANGE' || reqRecord.type === 'USERNAME_CHANGE') {
@@ -1272,30 +1292,38 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
     return res.status(403).json({ error: 'Bu işlem için yetkiniz yok.' });
   }
 
+  const t = await sequelize.transaction();
   try {
-    const request = await ApprovalRequest.findByPk(req.params.id);
+    const request = await ApprovalRequest.findByPk(req.params.id, { transaction: t });
     if (!request || request.status !== 'pending') {
+      await t.rollback();
       return res.status(404).json({ error: 'Onay talebi bulunamadı veya süresi dolmuş/işlenmiş.' });
     }
 
     // Süre dolma kontrolü
     if (request.requestData?.expiresAt && request.requestData.expiresAt < Date.now()) {
       request.status = 'rejected';
-      await request.save();
+      await request.save({ transaction: t });
+      await t.commit();
       return res.status(400).json({ error: 'Bu talebin onay süresi dolmuştur.' });
     }
 
     if ((request.type === 'NAME_CHANGE' || request.type === 'USERNAME_CHANGE') && req.user.role !== 'ciso') {
+      await t.rollback();
       return res.status(403).json({ error: 'Yönetici profil değişikliklerini sadece CISO onaylayabilir.' });
     }
 
     if ((request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') && req.user.role === 'ciso') {
+      await t.rollback();
       return res.status(403).json({ error: 'Yeni kullanıcı onaylama/reddetme işlemini sadece Sistem Yöneticisi (Admin) yapabilir.' });
     }
 
     if (request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') {
-      const user = await User.findByPk(request.targetId);
-      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      const user = await User.findByPk(request.targetId, { transaction: t });
+      if (!user) {
+        await t.rollback();
+        return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      }
 
       const received = request.approvalsReceived || [];
       const approverName = `${req.user.fullName} (${req.user.role === 'ciso' ? 'CISO' : 'Yönetici'})`;
@@ -1307,19 +1335,25 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
 
       if (received.length >= request.approvalsRequired) {
         request.status = 'approved';
-        await request.save();
+        await request.save({ transaction: t });
 
         user.status = 'active';
-        await user.save();
+        await user.save({ transaction: t });
+
+        await t.commit();
 
         archiveEmailVerification(user.email, user.username, ip);
         logAction('APPROVE_USER', req.user.id, req.user.fullName, user.id, user.fullName, `Kullanıcı kaydı arayüzden onaylandı.`, ip);
       } else {
-        await request.save();
+        await request.save({ transaction: t });
+        await t.commit();
       }
     } else if (request.type === 'NAME_CHANGE') {
-      const user = await User.findByPk(request.targetId);
-      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      const user = await User.findByPk(request.targetId, { transaction: t });
+      if (!user) {
+        await t.rollback();
+        return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      }
 
       const received = request.approvalsReceived || [];
       const sig = 'CISO (Arayüz)';
@@ -1331,19 +1365,25 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
 
       if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
         request.status = 'approved';
-        await request.save();
+        await request.save({ transaction: t });
 
         const oldName = user.fullName;
         user.fullName = request.requestData.newFullName;
-        await user.save();
+        await user.save({ transaction: t });
+
+        await t.commit();
 
         logCisoAction('NAME_CHANGE_APPROVED', `İsim değişikliği onaylandı (Çift Onay). Eski: ${oldName}, Yeni: ${user.fullName}`, ip);
       } else {
-        await request.save();
+        await request.save({ transaction: t });
+        await t.commit();
       }
     } else if (request.type === 'USERNAME_CHANGE') {
-      const user = await User.findByPk(request.targetId);
-      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      const user = await User.findByPk(request.targetId, { transaction: t });
+      if (!user) {
+        await t.rollback();
+        return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      }
 
       const received = request.approvalsReceived || [];
       const sig = 'CISO (Arayüz)';
@@ -1353,20 +1393,21 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
       request.approvalsReceived = received;
       request.changed('approvalsReceived', true);
 
+      const oldUsername = user.username;
       if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
         request.status = 'approved';
-        await request.save();
+        await request.save({ transaction: t });
 
-        const oldUsername = user.username;
         user.username = request.requestData.newUsername;
-        await user.save();
+        await user.save({ transaction: t });
+
+        await t.commit();
 
         logCisoAction('USERNAME_CHANGE_APPROVED', `Kullanıcı adı değişikliği onaylandı (Çift Onay). Eski: ${oldUsername}, Yeni: ${user.username}`, ip);
       } else {
-        await request.save();
+        await request.save({ transaction: t });
+        await t.commit();
       }
-
-      logCisoAction('USERNAME_CHANGE_APPROVED', `Kullanıcı adı değişikliği onaylandı. Eski: ${oldUsername}, Yeni: ${user.username}`, ip);
     } else if (request.type === 'MODE_CHANGE') {
       const received = request.approvalsReceived || [];
       const approverName = `${req.user.fullName} (${req.user.role === 'ciso' ? 'CISO' : 'Yönetici'})`;
@@ -1378,16 +1419,19 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
 
       if (received.length >= request.approvalsRequired) {
         request.status = 'approved';
-        await request.save();
+        await request.save({ transaction: t });
 
-        const record = await SystemSettings.findByPk('deployment_mode') || await SystemSettings.create({ key: 'deployment_mode', value: { mode: 'single_pc' } });
+        const record = await SystemSettings.findByPk('deployment_mode', { transaction: t }) || await SystemSettings.create({ key: 'deployment_mode', value: { mode: 'single_pc' } }, { transaction: t });
         record.value = { mode: request.requestData.mode };
         record.changed('value', true);
-        await record.save();
+        await record.save({ transaction: t });
+
+        await t.commit();
 
         logAction('MODE_CHANGE', req.user.id, req.user.fullName, null, 'System', `Sistem modu ${request.requestData.mode} olarak değiştirildi.`, ip);
       } else {
-        await request.save();
+        await request.save({ transaction: t });
+        await t.commit();
       }
     }
 
@@ -1396,7 +1440,7 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
     if (request.targetId === req.user.id) {
       const updatedUser = await User.findByPk(req.user.id);
       responseToken = jwt.sign(
-        { id: updatedUser.id, username: updatedUser.username, role: updatedUser.role, fullName: updatedUser.fullName },
+        { id: updatedUser.id, username: updatedUser.username, role: updatedUser.role, fullName: updatedUser.fullName, email: updatedUser.email },
         JWT_SECRET,
         { expiresIn: '12h' }
       );
