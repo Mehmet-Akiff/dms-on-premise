@@ -1,5 +1,5 @@
 <template>
-  <div id="dms-app">
+  <div id="dms-app" :class="{ 'app-unlocked': !isKasaLocked }">
     <!-- Kasa Kilit Ekranı (Overlay) -->
     <KasaLock v-if="isKasaLocked" />
 
@@ -748,7 +748,7 @@ body {
 /* =============================
    FADE-IN SAYFA ANİMASYONU
    ============================= */
-#dms-app {
+#dms-app.app-unlocked {
   animation: dms-fade-in 0.4s ease both;
 }
 @keyframes dms-fade-in {
