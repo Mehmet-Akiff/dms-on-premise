@@ -14,8 +14,10 @@ const { sequelize } = require('./models');
 const documentRoutes = require('./routes/document.routes');
 const authRoutes = require('./routes/auth.routes');
 
+const IS_PROD = process.env.NODE_ENV === 'production';
+
 // ============================================================
-// Uygulama Yapılandırması
+// Merkezi Yapılandırma
 // ============================================================
 
 const app = express();
@@ -116,12 +118,82 @@ app.use('/api/documents', documentRoutes);
 // ============================================================
 
 app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint bulunamadı', path: req.originalUrl });
+  res.status(404).json({
+    error: 'Endpoint bulunamadı',
+    path: req.originalUrl,
+    timestamp: new Date().toISOString()
+  });
 });
 
+// ============================================================
+// MERKEZİ HATA YÖNETİMİ MIDDLEWARE’u (Global Error Handler)
+// ============================================================
+
+// Yardımcı: Sequelize veya bilinen hata tiplerini temiz mesajlara çevirir
+function formatError(err) {
+  // Sequelize: UniqueConstraintError
+  if (err.name === 'SequelizeUniqueConstraintError') {
+    const field = err.errors?.[0]?.path || 'alan';
+    const labelMap = {
+      email: 'Bu e-posta adresi zaten kullanımda.',
+      username: 'Bu kullanıcı adı zaten alınmış.',
+    };
+    return { status: 409, message: labelMap[field] || 'Bu değer zaten kayıtlı.' };
+  }
+  // Sequelize: ValidationError
+  if (err.name === 'SequelizeValidationError') {
+    const messages = err.errors.map(e => e.message).join(', ');
+    return { status: 400, message: `Geçersiz veri: ${messages}` };
+  }
+  // JWT: TokenExpiredError / JsonWebTokenError
+  if (err.name === 'TokenExpiredError') {
+    return { status: 401, message: 'Oturum süreniz dolmuştur. Lütfen tekrar giriş yapın.' };
+  }
+  if (err.name === 'JsonWebTokenError') {
+    return { status: 401, message: 'Geçersiz oturum belirteci.' };
+  }
+  // Multer: LIMIT_FILE_SIZE
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return { status: 413, message: 'Dosya boyutu izin verilen sınırı aşıyor.' };
+  }
+  // Multer: LIMIT_UNEXPECTED_FILE
+  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    return { status: 400, message: 'Beklenmeyen dosya alanı tespit edildi.' };
+  }
+  // HTTP statusCode zaten ayarlanmış
+  if (err.status || err.statusCode) {
+    return { status: err.status || err.statusCode, message: err.message || 'Bir hata oluştu.' };
+  }
+  // Varsayılan: 500
+  return { status: 500, message: IS_PROD ? 'Sunucuda beklenmeyen bir hata oluştu.' : (err.message || 'Sunucu hatası') };
+}
+
 app.use((err, req, res, next) => {
-  console.error('[HATA]', err.stack);
-  res.status(500).json({ error: 'Sunucu hatası', message: err.message });
+  const { status, message } = formatError(err);
+  // Production'da hassas stack bilgisi loglanmaz
+  if (!IS_PROD) {
+    console.error('[HATA]', err.stack || err.message);
+  } else {
+    console.error(`[HATA] ${req.method} ${req.originalUrl} -> ${status}: ${message}`);
+  }
+  res.status(status).json({
+    error: message,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ============================================================
+// SÜREÇ DÜZEYİNDE HATA YAKALAMA (Uygulamanın çökmesini önler)
+// ============================================================
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[unhandledRejection] :', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException] :', err.message);
+  // Production'da graceful shutdown yap
+  if (IS_PROD) process.exit(1);
 });
 
 // ============================================================

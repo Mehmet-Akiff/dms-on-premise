@@ -512,7 +512,10 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useToast } from 'vue-toastification'
 import DocumentEditor from './DocumentEditor.vue'
+
+const toast = useToast()
 
 const documents = ref([])
 const isLoading = ref(true)
@@ -542,7 +545,7 @@ function isPdf(mime) {
 
 function copyFilePath(path) {
   navigator.clipboard.writeText(path);
-  alert('Dosya yolu kopyalandı: ' + path);
+  toast.success('Dosya yolu panoya kopyalandı.');
   if (selectedDoc.value) {
     trackAction('COPY_PATH', selectedDoc.value.id, selectedDoc.value.originalName || selectedDoc.value.original_name, `Belge dosya yolu kopyalandı: ${path}`);
   }
@@ -831,7 +834,6 @@ function startPolling() {
   pollInterval = setInterval(() => {
     fetchDocuments()
   }, 5000)
-  console.log('[DocumentList] Polling başlatıldı (5s aralık)')
 }
 
 function stopPolling() {
@@ -1043,7 +1045,6 @@ async function openDetail(doc) {
     if (response.ok) {
       const data = await response.json()
       detailData.value = data.document || data
-      console.log('[DocumentList] Detay yüklendi:', doc.id)
     }
   } catch (error) {
     console.error('[DocumentList] Detay yükleme hatası:', error)
@@ -1187,7 +1188,6 @@ function startSseConnection() {
   eventSource.addEventListener('document_updated', (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log('[SSE_EVENT] Canlı durum güncellemesi alındı:', data);
       
       const index = documents.value.findIndex(d => d.id === data.id);
       if (index !== -1) {

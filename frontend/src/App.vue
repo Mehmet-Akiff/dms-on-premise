@@ -642,4 +642,63 @@ body {
   border: 1px solid rgba(16, 185, 129, 0.3);
   color: #34d399;
 }
+
+/* =============================
+   FADE-IN SAYFA ANİMASYONU
+   ============================= */
+#dms-app {
+  animation: dms-fade-in 0.4s ease both;
+}
+@keyframes dms-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =============================
+   DMS TOAST BİLDİRİMLERİ STİLLERİ
+   ============================= */
+:root {
+  --toastification-container-top: 1rem;
+  --toastification-container-right: 1rem;
+}
+.dms-toast-container {
+  z-index: 99999 !important;
+}
+.dms-toast {
+  font-family: 'Inter', 'Outfit', system-ui, sans-serif !important;
+  font-size: 0.82rem !important;
+  border-radius: 10px !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+  padding: 0.75rem 1rem !important;
+  min-width: 240px !important;
+  max-width: 380px !important;
+}
+
+/* Toast Tip Renkleri */
+.Vue-Toastification__toast--success.dms-toast {
+  background: rgba(5, 46, 22, 0.95) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+  color: #bbf7d0 !important;
+}
+.Vue-Toastification__toast--error.dms-toast {
+  background: rgba(69, 10, 10, 0.95) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #fecaca !important;
+}
+.Vue-Toastification__toast--warning.dms-toast {
+  background: rgba(67, 36, 0, 0.95) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  color: #fde68a !important;
+}
+.Vue-Toastification__toast--info.dms-toast {
+  background: rgba(8, 47, 73, 0.95) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+  color: #bfdbfe !important;
+}
+.Vue-Toastification__progress-bar {
+  background: rgba(255, 255, 255, 0.2) !important;
+  height: 2px !important;
+}
 </style>
