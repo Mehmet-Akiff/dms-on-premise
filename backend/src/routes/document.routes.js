@@ -602,6 +602,15 @@ router.post('/upload', verifyToken, requireWritePermission, upload.single('file'
       return res.status(400).json({ error: 'Dosya bulunamadı. Lütfen bir dosya yükleyin.' });
     }
 
+    let tagsArr = [];
+    if (req.body.tags) {
+      try {
+        tagsArr = typeof req.body.tags === 'string' ? JSON.parse(req.body.tags) : req.body.tags;
+      } catch (e) {
+        tagsArr = req.body.tags.split(',').map(t => t.trim()).filter(Boolean);
+      }
+    }
+
     // Dokümanı veritabanına PENDING statüsüyle kaydet
     const document = await Document.create({
       title: req.body.title || path.parse(req.file.originalname).name,
@@ -610,6 +619,7 @@ router.post('/upload', verifyToken, requireWritePermission, upload.single('file'
       filePath: req.file.path,
       status: 'PENDING',
       userId: req.user ? req.user.id : null,
+      tags: Array.isArray(tagsArr) ? tagsArr : [],
     });
 
     // İşleme kuyruğuna yeni iş ekle
@@ -1397,7 +1407,18 @@ router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
 
 router.get('/', verifyToken, requireReadPermission, async (req, res) => {
   try {
+    const { tag } = req.query;
+    const { Op } = require('sequelize');
+    
+    const whereClause = {};
+    if (tag) {
+      whereClause.tags = {
+        [Op.contains]: [tag]
+      };
+    }
+
     const documents = await Document.findAll({
+      where: whereClause,
       order: [['created_at', 'DESC']],
       include: [
         { association: 'metadata', attributes: ['category', 'extractedTags', 'confidence'] },
@@ -1467,7 +1488,7 @@ router.get('/jobs/:jobId', async (req, res) => {
 // ============================================================
 router.put('/:id', verifyToken, requireWritePermission, async (req, res) => {
   try {
-    const { title, extractedText, category, comments } = req.body;
+    const { title, extractedText, category, comments, tags } = req.body;
     const document = await Document.findByPk(req.params.id, {
       include: [{ association: 'metadata' }]
     });
@@ -1476,9 +1497,14 @@ router.put('/:id', verifyToken, requireWritePermission, async (req, res) => {
       return res.status(404).json({ error: 'Güncellenecek doküman bulunamadı.' });
     }
 
-    // 1. Doküman Başlığını güncelle
+    // 1. Doküman Başlığı ve Etiketleri güncelle
     if (title !== undefined) {
       document.title = title;
+    }
+    if (tags !== undefined) {
+      document.tags = Array.isArray(tags) ? tags : [];
+    }
+    if (title !== undefined || tags !== undefined) {
       await document.save();
     }
 

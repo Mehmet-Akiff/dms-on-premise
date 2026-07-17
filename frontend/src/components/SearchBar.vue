@@ -194,7 +194,12 @@ async function search() {
       url = `/api/documents/search?${params}`
     }
 
-    const response = await fetch(url)
+    const token = localStorage.getItem('token')
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
     if (response.ok) {
       const data = await response.json()
       

@@ -44,6 +44,12 @@ const Document = sequelize.define('documents', {
     allowNull: true,
     field: 'user_id',
   },
+  tags: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+    defaultValue: [],
+  },
+
 }, {
   timestamps: true,
   underscored: true,

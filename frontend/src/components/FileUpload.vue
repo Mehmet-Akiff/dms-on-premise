@@ -67,6 +67,29 @@
       </div>
     </div>
 
+    <!-- Dosya Etiketleri (Yüklemeden Önce) -->
+    <div v-if="selectedFile && !isUploading" class="upload-tags-section" style="margin: 0.5rem 0; text-align: left; display: flex; flex-direction: column; gap: 0.35rem;">
+      <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Etiketler (Enter veya Virgül ile ekleyin)</label>
+      <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; align-items: center;">
+        <span 
+          v-for="(tag, idx) in tags" 
+          :key="tag" 
+          style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.68rem; font-weight: 700; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 0.15rem 0.45rem; border-radius: 4px;"
+        >
+          {{ tag }}
+          <button type="button" @click="removeTag(idx)" style="background: transparent; border: none; color: #f87171; font-weight: 700; cursor: pointer; font-size: 0.65rem; padding: 0;">✕</button>
+        </span>
+        <input 
+          v-model="tagInput" 
+          type="text" 
+          placeholder="Etiket ekleyin..." 
+          @keydown.enter.prevent="addTag"
+          @keydown.comma.prevent="addTag"
+          style="flex: 1; border: none; background: transparent; outline: none; color: #fff; font-size: 0.78rem; min-width: 100px; padding: 0.1rem;"
+        />
+      </div>
+    </div>
+
     <!-- Yükle Butonu -->
     <button
       v-if="selectedFile && !isUploading"
@@ -101,6 +124,21 @@ const isUploading = ref(false)
 const selectedFile = ref(null)
 const fileInput = ref(null)
 const toast = ref({ show: false, message: '', type: 'success' })
+
+const tags = ref([])
+const tagInput = ref('')
+
+function addTag() {
+  const val = tagInput.value.trim().replace(/,/g, '')
+  if (val && !tags.value.includes(val)) {
+    tags.value.push(val)
+  }
+  tagInput.value = ''
+}
+
+function removeTag(index) {
+  tags.value.splice(index, 1)
+}
 
 let dragCounter = 0
 let toastTimer = null
@@ -168,6 +206,8 @@ function handleFile(file) {
 
 function clearFile() {
   selectedFile.value = null
+  tags.value = []
+  tagInput.value = ''
   if (fileInput.value) {
     fileInput.value.value = ''
   }
@@ -183,9 +223,14 @@ async function uploadFile() {
     const formData = new FormData()
     formData.append('file', selectedFile.value)
     formData.append('title', selectedFile.value.name)
+    formData.append('tags', JSON.stringify(tags.value))
 
+    const token = localStorage.getItem('token')
     const response = await fetch('/api/documents/upload', {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
       body: formData,
     })
 

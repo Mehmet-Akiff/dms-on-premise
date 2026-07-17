@@ -13,6 +13,29 @@
       </button>
     </div>
 
+    <!-- Etiket Yönetim Alanı -->
+    <div class="editor-tags-section" style="margin-bottom:0.75rem; display:flex; flex-direction:column; gap:0.4rem;">
+      <label style="font-size:0.76rem; font-weight:700; color:#e2e8f0;">Belge Etiketleri (Enter veya virgül ile ekleyin)</label>
+      <div style="display:flex; flex-wrap:wrap; gap:0.4rem; padding:0.4rem; background:var(--bg-primary); border:1px solid var(--border); border-radius:8px; align-items:center;">
+        <span 
+          v-for="(tag, idx) in tags" 
+          :key="tag" 
+          style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.72rem; font-weight:700; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a78bfa; padding:0.2rem 0.5rem; border-radius:4px;"
+        >
+          {{ tag }}
+          <button type="button" @click="removeTag(idx)" style="background:transparent; border:none; color:#f87171; font-weight:700; cursor:pointer; font-size:0.68rem; padding:0 0.1rem;">✕</button>
+        </span>
+        <input 
+          v-model="tagInput" 
+          type="text" 
+          placeholder="Etiket yazıp Enter'a basın..." 
+          @keydown.enter.prevent="addTag"
+          @keydown.comma.prevent="addTag"
+          style="flex:1; border:none; background:transparent; outline:none; color:#fff; font-size:0.78rem; min-width:150px; padding:0.2rem;"
+        />
+      </div>
+    </div>
+
     <!-- Editör Alanı -->
     <div class="editor-body">
       <QuillEditor 
@@ -74,6 +97,10 @@ const props = defineProps({
   initialText: {
     type: String,
     default: ''
+  },
+  initialTags: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -82,6 +109,21 @@ const emit = defineEmits(['save', 'cancel'])
 const content = ref('')
 const editorRef = ref(null)
 const isSaving = ref(false)
+
+const tags = ref([])
+const tagInput = ref('')
+
+function addTag() {
+  const val = tagInput.value.trim().replace(/,/g, '')
+  if (val && !tags.value.includes(val)) {
+    tags.value.push(val)
+  }
+  tagInput.value = ''
+}
+
+function removeTag(index) {
+  tags.value.splice(index, 1)
+}
 
 function resetFormatting() {
   if (!editorRef.value) return
@@ -105,6 +147,7 @@ const customToolbar = [
 
 // İlk veriyi yükle
 function loadInitialContent() {
+  tags.value = Array.isArray(props.initialTags) ? [...props.initialTags] : []
   // Eğer veritabanından ham düz metin geldiyse, Quill HTML olarak okusun diye
   // satır sonlarını <p> etiketlerine dönüştürebiliriz
   if (props.initialText && !props.initialText.trim().startsWith('<')) {
@@ -122,7 +165,7 @@ onMounted(() => {
   loadInitialContent()
 })
 
-watch(() => props.initialText, () => {
+watch([() => props.initialText, () => props.initialTags], () => {
   loadInitialContent()
 })
 
@@ -162,8 +205,8 @@ async function saveContent() {
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
-        // Düz metin olarak da kaydedebiliriz ancak zengin düzenlemeyi korumak için html olarak kaydediyoruz
-        extractedText: content.value
+        extractedText: content.value,
+        tags: tags.value
       })
     })
 

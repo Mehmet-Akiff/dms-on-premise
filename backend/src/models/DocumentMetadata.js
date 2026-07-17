@@ -47,6 +47,9 @@ const DocumentMetadata = sequelize.define('document_metadata', {
     defaultValue: [],
     comment: 'Satır bazlı kullanıcı yorumları',
   },
+}, {
+  underscored: true,
+  timestamps: true,
 });
 
 module.exports = DocumentMetadata;
