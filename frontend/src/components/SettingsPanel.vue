@@ -154,6 +154,36 @@
               </button>
             </form>
           </div>
+
+          <div style="margin: 0.5rem 0; border-top: 1px dashed rgba(255,255,255,0.05);"></div>
+
+          <!-- Form D: E-posta Adresi Değiştirme (OTP ile) -->
+          <div class="sub-profile-section">
+            <h5>E-posta Adresi Değiştirme</h5>
+            <p style="font-size:0.72rem; color:#9ca3af; margin:0 0 0.75rem;">Yeni e-postanıza bir doğrulama kodu gönderilecektir.</p>
+            <form @submit.prevent="sendEmailOtp" class="settings-form" v-if="!emailOtpSent">
+              <div class="form-group">
+                <input v-model="userEmail" type="email" placeholder="Yeni e-posta adresiniz..." required />
+              </div>
+              <button type="submit" class="btn-settings-save" :disabled="isSendingEmailOtp">
+                {{ isSendingEmailOtp ? 'Kod Gönderiliyor...' : 'Doğrulama Kodu Gönder' }}
+              </button>
+            </form>
+            <div v-if="emailOtpSent" style="background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.85rem; display:flex; flex-direction:column; gap:0.65rem;">
+              <p style="font-size:0.72rem; color:#9ca3af; margin:0;"><strong style="color:#34d399;">{{ userEmail }}</strong> adresine kod gönderildi. 5 dakika geçerlidir.</p>
+              <input 
+                v-model="emailOtp" 
+                type="text" 
+                maxlength="6"
+                placeholder="6 Haneli Kod"
+                style="width:140px; height:38px; background:rgba(15,23,42,0.7); border:1.5px solid rgba(255,255,255,0.12); border-radius:6px; text-align:center; color:#fff; font-size:1.1rem; font-weight:700; outline:none; margin:0 auto;"
+              />
+              <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+                <button type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:0.35rem 0.75rem; font-size:0.72rem; border-radius:6px; cursor:pointer;" @click="emailOtpSent=false; emailOtp=''; emailOtpTimer=0;">Vazgeç</button>
+                <button type="button" style="background:#10b981; border:none; color:#fff; padding:0.35rem 1rem; font-size:0.72rem; font-weight:700; border-radius:6px; cursor:pointer;" @click="verifyEmailOtp">E-postayı Doğrula & Kaydet</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <hr class="section-divider" />
@@ -304,7 +334,16 @@
             <div v-for="user in usersList" :key="user.id" class="user-row-card">
               <div class="user-info-brief">
                 <strong>{{ user.fullName }}</strong>
-                <span class="user-meta-sub">@{{ user.username }} ({{ user.email }})</span>
+                <span class="user-meta-sub">@{{ user.username }} ({{ user.email || 'E-posta yok' }})</span>
+                <!-- CISO için Detay Butonu -->
+                <button 
+                  v-if="currentUserRole === 'ciso'" 
+                  @click="openCisoDetail(user)" 
+                  type="button"
+                  style="margin-top:0.3rem; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a78bfa; padding:0.2rem 0.6rem; font-size:0.65rem; border-radius:4px; cursor:pointer; font-weight:600;"
+                >
+                  🔎 Detay Gör
+                </button>
               </div>
 
               <div class="user-role-actions">
@@ -494,10 +533,74 @@
       </div>
     </div>
   </div>
+
+  <!-- Global Onay Modalı (Tüm İşlemler İçin) -->
+  <div v-if="isGlobalConfirmOpen" class="global-confirm-overlay" @click.self="cancelGlobalConfirm">
+    <div class="global-confirm-card">
+      <h4>⚠️ İşlemi Onayla</h4>
+      <p>{{ globalConfirmMessage }}</p>
+      <div style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.2rem;">
+        <button class="btn-approval btn-approval--reject" @click="cancelGlobalConfirm">Vazgeç</button>
+        <button 
+          class="btn-approval btn-approval--approve" 
+          :disabled="globalConfirmTimer > 0"
+          @click="executeGlobalConfirm"
+        >
+          {{ globalConfirmTimer > 0 ? `Evet (${globalConfirmTimer}s)` : 'Evet, Devam Et' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CISO Kullanıcı Detay Modalı -->
+  <div v-if="cisoDetailModalOpen" class="global-confirm-overlay" style="z-index:13000;" @click.self="cisoDetailModalOpen = false">
+    <div style="background:#111827; border:1px solid rgba(99,102,241,0.3); border-radius:14px; width:100%; max-width:680px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 25px 50px rgba(0,0,0,0.7);">
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:1.25rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div>
+          <h4 style="margin:0; color:#a78bfa; font-size:1rem;">{{ cisoDetailUser?.fullName }} Kullanıcı Detayı</h4>
+          <p style="margin:0.2rem 0 0; font-size:0.75rem; color:#6b7280;">@{{ cisoDetailUser?.username }} &bull; {{ cisoDetailUser?.email || 'E-posta yok' }}</p>
+        </div>
+        <button @click="cisoDetailModalOpen = false" style="background:transparent; border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:0.3rem 0.75rem; border-radius:6px; cursor:pointer;">✕ Kapat</button>
+      </div>
+      <div style="padding:1.25rem 1.5rem; overflow-y:auto; display:flex; flex-direction:column; gap:0.75rem;">
+        <!-- Kullanıcı Bilgi Kartı -->
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:8px; padding:1rem; display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+          <div><span style="font-size:0.68rem; color:#6b7280;">Ad Soyad</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:#fff;">{{ cisoDetailUser?.fullName }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">Kullanıcı Adı</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:#fff;">@{{ cisoDetailUser?.username }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">E-posta</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#34d399;">{{ cisoDetailUser?.email || '—' }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">Rol</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#a78bfa; font-weight:700;">{{ getRoleLabel(cisoDetailUser?.role) }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">Durum</span><p style="margin:0.1rem 0 0; font-size:0.82rem;" :style="{ color: cisoDetailUser?.status === 'active' ? '#34d399' : '#f87171' }">{{ cisoDetailUser?.status === 'active' ? 'Aktif' : 'Pasif' }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">Kayıt Tarihi</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#9ca3af;">{{ cisoDetailUser?.createdAt ? new Date(cisoDetailUser.createdAt).toLocaleDateString('tr-TR') : '—' }}</p></div>
+        </div>
+        
+        <!-- İşlem Logları -->
+        <div>
+          <h5 style="margin:0 0 0.5rem; font-size:0.78rem; color:#9ca3af; font-weight:600;">SON 50 İŞLEM</h5>
+          <div v-if="isLoadingCisoDetail" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">Yükleniyor...</div>
+          <div v-else-if="cisoDetailLogs.length === 0" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">Bu kullanıcıya ait kayıtlı işlem bulunamadı.</div>
+          <div v-else style="display:flex; flex-direction:column; gap:0.35rem; max-height:280px; overflow-y:auto; padding-right:0.5rem;">
+            <div 
+              v-for="log in cisoDetailLogs" 
+              :key="log.id"
+              style="background:rgba(15,23,42,0.7); border:1px solid rgba(255,255,255,0.05); border-radius:6px; padding:0.6rem 0.75rem; display:grid; grid-template-columns:auto 1fr auto; gap:0.5rem; align-items:start;"
+            >
+              <span style="font-size:0.85rem;">{{ getActionIcon(log.action) }}</span>
+              <div>
+                <p style="margin:0; font-size:0.73rem; color:#fff; font-weight:600;">{{ getActionLabel(log.action) }}</p>
+                <p style="margin:0.1rem 0 0; font-size:0.65rem; color:#6b7280;">{{ log.details || '—' }}</p>
+              </div>
+              <span style="font-size:0.62rem; color:#6b7280; white-space:nowrap;">{{ formatDetailDate(log.createdAt || log.created_at) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { ref, watch, computed, onMounted } from 'vue'
+import { useToast } from 'vue-toastification'
 
 const props = defineProps({
   isOpen: {
@@ -507,6 +610,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close'])
+
+const toast = useToast()
 
 const kasaUsername = ref('')
 const kasaNewPassword = ref('')
@@ -528,6 +633,56 @@ const isProfileNewPasswordConfirmVisible = ref(false)
 const systemMode = ref('single_pc')
 const usersList = ref([])
 const approvalsList = ref([])
+
+// E-posta Değiştirme
+const userEmail = ref('')
+const emailOtp = ref('')
+const emailOtpSent = ref(false)
+const emailOtpTimer = ref(0)
+const isSendingEmailOtp = ref(false)
+let emailOtpInterval = null
+
+// CISO Kullanıcı Detay Modal
+const cisoDetailModalOpen = ref(false)
+const cisoDetailUser = ref(null)
+const cisoDetailLogs = ref([])
+const isLoadingCisoDetail = ref(false)
+
+async function openCisoDetail(user) {
+  cisoDetailUser.value = user;
+  cisoDetailLogs.value = [];
+  cisoDetailModalOpen.value = true;
+  isLoadingCisoDetail.value = true;
+  try {
+    const response = await fetch(`/api/auth/users/${user.id}/detail`, {
+      headers: { 'Authorization': `Bearer ${getKasaToken()}` }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      cisoDetailLogs.value = data.logs || [];
+    }
+  } catch (e) {
+    toast.error('Kullanıcı detayları yüklenemedi.');
+  } finally {
+    isLoadingCisoDetail.value = false;
+  }
+}
+
+function formatDetailDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function getActionIcon(action) {
+  const icons = { UPLOAD: '📤', UPDATE: '✏️', DELETE: '🗑️', FORCE_DELETE: '💀', RESTORE: '♻️', BULK_DELETE: '📦', LOGIN: '🔑', LOGOUT: '🔒', PASSWORD_UPDATE: '🔐', EMAIL_UPDATE: '📧', USERNAME_UPDATE: '👤', NAME_CHANGE: '📝' };
+  return icons[action] || '📋';
+}
+
+function getActionLabel(action) {
+  const labels = { UPLOAD: 'Yükleme', UPDATE: 'Güncelleme', DELETE: 'Silme', FORCE_DELETE: 'Kalıcı Silme', RESTORE: 'Geri Yükleme', BULK_DELETE: 'Toplu Silme', LOGIN: 'Giriş', LOGOUT: 'Çıkış', PASSWORD_UPDATE: 'Şifre Değişikliği', EMAIL_UPDATE: 'E-posta Değişikliği', USERNAME_UPDATE: 'Kullanıcı Adı Değişikliği', NAME_CHANGE: 'İsim Değişikliği' };
+  return labels[action] || action;
+}
 
 const alertEmail = ref('')
 const verifiedEmail = ref('')
@@ -757,14 +912,14 @@ async function handleApprovalAction(id, action) {
         updateProfileInfo();
         window.dispatchEvent(new Event('kasa-unlocked'));
       }
-      alert(data.message || 'İşlem tamamlandı.');
+      toast.success(data.message || 'İşlem tamamlandı.')
       await fetchApprovals()
       await fetchUsers()
     } else {
-      alert(data.error || 'İşlem başarısız oldu.');
+      toast.error(data.error || 'İşlem başarısız oldu.')
     }
   } catch (err) {
-    alert('Onay işlemi gerçekleştirilemedi.')
+    toast.error('Onay işlemi gerçekleştirilemedi.')
   }
 }
 
@@ -815,13 +970,13 @@ async function updateUserFullName() {
 
     const data = await response.json()
     if (response.ok) {
-      alert(data.message || 'Profil değişiklik talebi iletildi.');
+      toast.success(data.message || 'Profil değişiklik talebi iletildi.')
       await fetchApprovals()
     } else {
-      alert(data.error || 'Talep iletilemedi.');
+      toast.error(data.error || 'Talep iletilemedi.')
     }
   } catch (e) {
-    alert('İşlem sırasında hata oluştu.')
+    toast.error('İşlem sırasında hata oluştu.')
   }
 }
 
@@ -843,14 +998,14 @@ async function updateUserUsername() {
         localStorage.setItem('token', data.token);
         localStorage.setItem('kasa_token', data.token);
       }
-      alert(data.message || 'Kullanıcı adı başarıyla güncellendi.');
+      toast.success(data.message || 'Kullanıcı adı başarıyla güncellendi.')
       updateProfileInfo();
       window.dispatchEvent(new Event('kasa-unlocked'));
     } else {
-      alert(data.error || 'Kullanıcı adı güncellenemedi.');
+      toast.error(data.error || 'Kullanıcı adı güncellenemedi.')
     }
   } catch (e) {
-    alert('İşlem sırasında hata oluştu.')
+    toast.error('İşlem sırasında hata oluştu.')
   }
 }
 
@@ -871,15 +1026,15 @@ async function updateUserPassword() {
 
     const data = await response.json()
     if (response.ok) {
-      alert('Şifreniz başarıyla değiştirildi.');
+      toast.success('Şifreniz başarıyla değiştirildi.')
       profileOldPassword.value = '';
       profileNewPassword.value = '';
       profileNewPasswordConfirm.value = '';
     } else {
-      alert(data.error || 'Şifre güncellenemedi.');
+      toast.error(data.error || 'Şifre güncellenemedi.')
     }
   } catch (e) {
-    alert('İşlem sırasında hata oluştu.')
+    toast.error('İşlem sırasında hata oluştu.')
   }
 }
 
@@ -900,8 +1055,10 @@ async function togglePermission(user, type) {
     })
     if (!response.ok) {
       const data = await response.json()
-      alert(data.error || 'Yetkiler güncellenemedi.')
+      toast.error(data.error || 'Yetkiler güncellenemedi.')
       user.permissions[type] = !user.permissions[type]
+    } else {
+      toast.success('Yetkiler güncellendi.')
     }
   } catch (e) {
     user.permissions[type] = !user.permissions[type]
@@ -920,15 +1077,15 @@ async function changeRole(user) {
       body: JSON.stringify({ role: user.role })
     })
     if (response.ok) {
-      alert('Kullanıcı rolü başarıyla güncellendi.')
+      toast.success('Kullanıcı rolü başarıyla güncellendi.')
       await fetchUsers()
     } else {
       const data = await response.json()
-      alert(data.error || 'Kullanıcı rolü güncellenemedi.')
-      await fetchUsers() // Rolü eski haline getirmek için listeyi yenile
+      toast.error(data.error || 'Kullanıcı rolü güncellenemedi.')
+      await fetchUsers()
     }
   } catch (e) {
-    console.error(e)
+    // network error
   }
 }
 
@@ -944,10 +1101,14 @@ async function updateSystemMode() {
       body: JSON.stringify({ mode: systemMode.value })
     })
     const data = await response.json()
-    alert(data.message || 'Mod değişikliği talebi oluşturuldu.')
-    await fetchApprovals()
+    if (response.ok) {
+      toast.success(data.message || 'Mod değişikliği talebi oluşturuldu.')
+      await fetchApprovals()
+    } else {
+      toast.error(data.error || 'Mod güncellenemedi.')
+    }
   } catch (e) {
-    alert('Mod güncellenirken hata oluştu.')
+    toast.error('Mod güncellenirken hata oluştu.')
   }
 }
 
@@ -970,11 +1131,11 @@ async function updateThreshold() {
 // Kimlik Bilgilerini Güncelle (Kasa Şifresi)
 async function updateKasaCredentials() {
   if (kasaNewPassword.value && !isKasaPasswordValid.value) {
-    alert('Şifreniz kurallara uygun değil.');
+    toast.warning('Şifreniz kurallara uygun değil.');
     return;
   }
   if (kasaNewPassword.value !== kasaNewPasswordConfirm.value) {
-    alert('Yeni şifreler birbiriyle eşleşmiyor!');
+    toast.warning('Yeni şifreler birbiriyle eşleşmiyor!');
     return;
   }
   isSavingCreds.value = true
@@ -994,10 +1155,10 @@ async function updateKasaCredentials() {
     if (response.ok) {
       kasaNewPassword.value = ''
       kasaNewPasswordConfirm.value = ''
-      alert('Kasa yönetici kimlik bilgileri başarıyla güncellendi!')
+      toast.success('Kasa yönetici kimlik bilgileri başarıyla güncellendi!')
     }
   } catch (error) {
-    console.error('[Settings] Kimlik güncelleme hatası:', error)
+    // ignored
   } finally {
     isSavingCreds.value = false
   }
@@ -1029,7 +1190,7 @@ async function updateSmtpConfig() {
 
     const data = await response.json()
     if (response.ok) {
-      alert('SMTP gönderici ayarları başarıyla doğrulandı ve kaydedildi!')
+      toast.success('SMTP gönderici ayarları başarıyla doğrulandı ve kaydedildi!')
       fetchSettings()
     } else {
       smtpErrorText.value = data.message || 'SMTP doğrulaması başarısız. Bilgilerinizi kontrol edin.';
@@ -1061,7 +1222,7 @@ async function sendVerificationCode() {
 
     if (response.ok) {
       isVerifying.value = true
-      alert('Doğrulama kodu alıcı e-postasına gönderildi. Doğrulama kodunu girmek için açılan alanı kullanın.');
+      toast.info('Doğrulama kodu e-posta adresinize gönderildi.')
     } else {
       mailErrorDetail.value = `${data.error || 'Gönderim Hatası'}: ${data.message || ''}`
     }
@@ -1069,6 +1230,73 @@ async function sendVerificationCode() {
     mailErrorDetail.value = 'Sunucuyla bağlantı kurulamadı.'
   } finally {
     isSendingCode.value = false
+  }
+}
+
+// E-posta Doğrulama Kodu Gönder (Profil e-posta değişikliği)
+async function sendEmailOtp() {
+  if (!userEmail.value) return;
+  isSendingEmailOtp.value = true;
+  emailOtpSent.value = false;
+  emailOtp.value = '';
+  try {
+    const response = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({ email: userEmail.value })
+    });
+    const data = await response.json();
+    if (response.status === 202 && data.needsOtp) {
+      emailOtpSent.value = true;
+      toast.info('Doğrulama kodu yeni e-posta adresinize gönderildi.');
+    } else if (response.ok) {
+      // Beklenmedik başarı — zaten güncellendi
+      toast.success(data.message || 'E-posta güncellendi.');
+    } else {
+      toast.error(data.error || 'Kod gönderilemedi.');
+    }
+  } catch (e) {
+    toast.error('Sunucu bağlantısı kurulamadı.');
+  } finally {
+    isSendingEmailOtp.value = false;
+  }
+}
+
+// E-posta OTP Doğrula & Kaydet
+async function verifyEmailOtp() {
+  if (!emailOtp.value || emailOtp.value.length !== 6) {
+    toast.warning('Lütfen 6 haneli kodu girin.');
+    return;
+  }
+  try {
+    const response = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({ email: userEmail.value, emailOtp: emailOtp.value })
+    });
+    const data = await response.json();
+    if (response.ok) {
+      toast.success('E-posta adresiniz başarıyla güncellendi!');
+      emailOtpSent.value = false;
+      emailOtp.value = '';
+      userEmail.value = '';
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('kasa_token', data.token);
+        updateProfileInfo();
+        window.dispatchEvent(new Event('kasa-unlocked'));
+      }
+    } else {
+      toast.error(data.error || 'Doğrulama başarısız.');
+    }
+  } catch (e) {
+    toast.error('Sunucu bağlantısı kurulamadı.');
   }
 }
 
@@ -1087,7 +1315,7 @@ async function verifyAlarmCode() {
     })
     const data = await response.json()
     if (response.ok) {
-      alert('E-posta başarıyla doğrulandı ve kaydedildi.');
+      toast.success('E-posta başarıyla doğrulandı ve kaydedildi.')
       isVerifying.value = false;
       verificationCode.value = '';
       fetchSettings();
@@ -1113,13 +1341,13 @@ async function saveWorkingHours() {
       })
     })
     if (response.ok) {
-      alert('Mesai saatleri başarıyla kaydedildi.');
+      toast.success('Mesai saatleri başarıyla kaydedildi.')
       fetchSettings();
     } else {
-      alert('Mesai saatleri kaydedilemedi.');
+      toast.error('Mesai saatleri kaydedilemedi.')
     }
   } catch (e) {
-    alert('Bağlantı hatası.');
+    toast.error('Bağlantı hatası.')
   }
 }
 
@@ -1135,7 +1363,7 @@ async function checkLogFileStatus() {
       logFilePath.value = data.path;
     }
   } catch (e) {
-    console.error('Log durumu alınamadı', e);
+    // silent
   }
 }
 
@@ -1146,19 +1374,19 @@ async function createLogFile() {
       headers: { 'Authorization': `Bearer ${getKasaToken()}` }
     })
     if (response.ok) {
-      alert('Yeni log kayıt dosyası oluşturuldu.');
+      toast.success('Yeni log kayıt dosyası oluşturuldu.')
       await checkLogFileStatus();
     } else {
-      alert('Dosya oluşturulamadı.');
+      toast.error('Dosya oluşturulamadı.')
     }
   } catch (e) {
-    alert('Hata oluştu.');
+    toast.error('Hata oluştu.')
   }
 }
 
 async function importLogFile() {
   if (!importFilePath.value) {
-    alert('Lütfen bir dosya yolu girin.');
+    toast.warning('Lütfen bir dosya yolu girin.');
     return;
   }
   try {
@@ -1172,14 +1400,14 @@ async function importLogFile() {
     })
     const data = await response.json()
     if (response.ok) {
-      alert(data.message || 'Log dosyası başarıyla yüklendi.');
+      toast.success(data.message || 'Log dosyası başarıyla yüklendi.')
       importFilePath.value = '';
       await checkLogFileStatus();
     } else {
-      alert(data.error || 'Log dosyası içe aktarılamadı.');
+      toast.error(data.error || 'Log dosyası içe aktarılamadı.')
     }
   } catch (e) {
-    alert('Hata oluştu.');
+    toast.error('Hata oluştu.')
   }
 }
 

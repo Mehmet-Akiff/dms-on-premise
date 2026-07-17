@@ -641,7 +641,10 @@ router.get('/approve', async (req, res) => {
 // ============================================================
 // GET /api/auth/users — Kullanıcıları Listele (Admin/CISO)
 // ============================================================
-router.get('/users', verifyToken, requireAdmin, async (req, res) => {
+router.get('/users', verifyToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'ciso') {
+    return res.status(403).json({ error: 'Yetkisiz erişim.' });
+  }
   try {
     const users = await User.findAll({
       attributes: ['id', 'fullName', 'username', 'email', 'role', 'permissions', 'status', 'createdAt']
@@ -651,6 +654,35 @@ router.get('/users', verifyToken, requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Kullanıcı listesi getirilemedi.' });
   }
 });
+
+// ============================================================
+// GET /api/auth/users/:id/detail — CISO Kullanıcı Detay & Log Paneli
+// ============================================================
+router.get('/users/:id/detail', verifyToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'ciso') {
+    return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+  }
+  try {
+    const { AuditLog } = require('../models');
+    const { Op } = require('sequelize');
+
+    const user = await User.findByPk(req.params.id, {
+      attributes: ['id', 'fullName', 'username', 'email', 'role', 'permissions', 'status', 'createdAt']
+    });
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+
+    const logs = await AuditLog.findAll({
+      where: { userId: user.id },
+      order: [['created_at', 'DESC']],
+      limit: 50
+    });
+
+    res.status(200).json({ user, logs });
+  } catch (error) {
+    res.status(500).json({ error: 'Kullanıcı detayı getirilemedi.' });
+  }
+});
+
 
 // ============================================================
 // PUT /api/auth/users/:id/permissions — Dinamik Yetkilendirme
@@ -742,7 +774,7 @@ router.put('/users/:id/role', verifyToken, requireAdmin, async (req, res) => {
 // PUT /api/auth/profile — Kendi Profilini Güncelle (Ad Soyad / K.Adı CISO Onaylı, Şifre Doğrudan)
 // ============================================================
 router.put('/profile', verifyToken, async (req, res) => {
-  const { fullName, username, oldPassword, newPassword } = req.body;
+  const { fullName, username, oldPassword, newPassword, email, emailOtp } = req.body;
   const ip = req.ip || req.connection.remoteAddress;
 
   try {
@@ -756,6 +788,68 @@ router.put('/profile', verifyToken, async (req, res) => {
 
     const cisoUser = await User.findOne({ where: { role: 'ciso' } });
     const cisoEmail = cisoUser ? cisoUser.email : 'ciso@dms.com';
+
+    // 0. E-posta Değiştirme (OTP doğrulı)
+    if (email && email !== user.email) {
+      if (!emailOtp) {
+        // OTP yoksa — OTP gönder
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = Date.now() + 5 * 60 * 1000;
+        const val = settings || {};
+        val.emailChangeCode = code;
+        val.emailChangeTarget = email;
+        val.emailChangeUserId = user.id;
+        val.emailChangeExpires = expiresAt;
+        settingsRecord.value = val;
+        settingsRecord.changed('value', true);
+        await settingsRecord.save();
+
+        try {
+          const transporter = getMailTransporter(settings.smtpConfig);
+          const fromUser = settings.smtpConfig?.auth?.user || 'security@dms.com';
+          await transporter.sendMail({
+            from: `"DMS Security" <${fromUser}>`,
+            to: email,
+            subject: 'DMS - E-posta Değişikliği Doğrulama Kodu',
+            text: `E-posta değişikliği doğrulama kodunuz: ${code}\n\nBu kod 5 dakika geçerlidir.`
+          });
+        } catch (mailErr) {
+          // Logla ama kullanıcıya sadece genel mesaj ver
+          console.warn('[EMAIL_CHANGE] Mail gönderilemedi:', mailErr.code || 'SMTP_ERR');
+        }
+        return res.status(202).json({ message: 'Doğrulama kodu yeni e-posta adresinize gönderildi.', needsOtp: true });
+      }
+
+      // OTP var — doğrula
+      const now = Date.now();
+      if (
+        settings.emailChangeCode !== emailOtp ||
+        settings.emailChangeUserId !== user.id ||
+        settings.emailChangeTarget !== email ||
+        (settings.emailChangeExpires && now > settings.emailChangeExpires)
+      ) {
+        return res.status(400).json({ error: 'Doğrulama kodu geçersiz veya süresi dolmuş.' });
+      }
+
+      const emailExists = await User.findOne({ where: { email } });
+      if (emailExists && emailExists.id !== user.id) {
+        return res.status(409).json({ error: 'Bu e-posta adresi zaten başka bir hesap tarafından kullanılıyor.' });
+      }
+
+      const oldEmail = user.email;
+      user.email = email;
+      logAction('EMAIL_UPDATE', user.id, user.fullName, null, null, `E-posta güncellendi. Eski: ${oldEmail}, Yeni: ${email}`, ip);
+
+      // Kodu sil
+      const val = settings || {};
+      delete val.emailChangeCode;
+      delete val.emailChangeTarget;
+      delete val.emailChangeUserId;
+      delete val.emailChangeExpires;
+      settingsRecord.value = val;
+      settingsRecord.changed('value', true);
+      await settingsRecord.save();
+    }
 
     // 1. Şifre Değişikliği (Doğrudan Yapılır - CISO Onayı Gerektirmez)
     if (newPassword) {
@@ -989,6 +1083,10 @@ router.get('/settings', verifyToken, async (req, res) => {
             user: settings.smtpConfig?.auth?.user || '',
             pass: settings.smtpConfig?.auth?.pass ? '••••••••' : ''
           }
+        },
+        workingHours: {
+          start: settings.workingHours?.start || '09:00',
+          end: settings.workingHours?.end || '18:00'
         }
       }
     });
