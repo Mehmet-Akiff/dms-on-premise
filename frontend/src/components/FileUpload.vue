@@ -90,6 +90,16 @@
       </div>
     </div>
 
+    <!-- Belge Hassasiyet Seviyesi -->
+    <div v-if="selectedFile && !isUploading" class="upload-sensitivity-section" style="margin: 0.5rem 0; text-align: left; display: flex; flex-direction: column; gap: 0.35rem;">
+      <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Belge Hassasiyeti</label>
+      <select v-model="sensitivity" style="width: 100%; padding: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 0.78rem; outline: none; cursor: pointer;">
+        <option value="public">🟢 Herkese Açık (Standart, Admin, CISO görebilir)</option>
+        <option value="medium">🟡 Orta Hassas (Sadece Admin ve CISO görebilir)</option>
+        <option value="high">🔴 En Hassas (Sadece Admin görebilir)</option>
+      </select>
+    </div>
+
     <!-- Yükle Butonu -->
     <button
       v-if="selectedFile && !isUploading"
@@ -125,6 +135,7 @@ const selectedFile = ref(null)
 const fileInput = ref(null)
 const toast = ref({ show: false, message: '', type: 'success' })
 
+const sensitivity = ref('public')
 const tags = ref([])
 const tagInput = ref('')
 
@@ -208,6 +219,7 @@ function clearFile() {
   selectedFile.value = null
   tags.value = []
   tagInput.value = ''
+  sensitivity.value = 'public'
   if (fileInput.value) {
     fileInput.value.value = ''
   }
@@ -224,6 +236,7 @@ async function uploadFile() {
     formData.append('file', selectedFile.value)
     formData.append('title', selectedFile.value.name)
     formData.append('tags', JSON.stringify(tags.value))
+    formData.append('sensitivity', sensitivity.value)
 
     const token = localStorage.getItem('token')
     const response = await fetch('/api/documents/upload', {

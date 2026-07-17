@@ -74,7 +74,7 @@
           <div v-if="canApprove(req)" style="display:flex; flex-direction:column; gap:0.5rem; border-top:1px dashed rgba(255,255,255,0.06); padding-top:0.5rem;">
             
             <!-- ÇİFT ONAY AÇIKSA veya CISO Profil Talebi ise -->
-            <template v-if="doubleApprovalEnabled || req.type === 'NAME_CHANGE' || req.type === 'USERNAME_CHANGE'">
+            <template v-if="doubleApprovalEnabled || req.type === 'NAME_CHANGE' || req.type === 'USERNAME_CHANGE' || req.type === 'USER_DELETION'">
               
               <!-- Arayüz İmzası Eksikse -->
               <div v-if="!(req.approvalsReceived || []).some(s => s.includes('Arayüz'))" style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.02); padding:0.4rem; border-radius:6px;">
@@ -269,8 +269,8 @@ function isOwnRequest(req) {
 }
 
 function canApprove(req) {
-  // Yeni kullanıcı onayını sadece admin yapabilir, CISO yapamaz
-  if (req.type === 'STANDARD_USER_CREATION' || req.type === 'ADMIN_CREATION') {
+  // Yeni kullanıcı onayını ve silme onayını sadece admin yapabilir, CISO yapamaz
+  if (req.type === 'STANDARD_USER_CREATION' || req.type === 'ADMIN_CREATION' || req.type === 'USER_DELETION') {
     return props.userRole === 'admin'
   }
   // İsim ve Kullanıcı adı değişikliklerini sadece CISO onaylayabilir
@@ -287,7 +287,8 @@ function getRequestTypeLabel(type) {
     ADMIN_CREATION: '🔑 Yeni Yönetici Talebi',
     NAME_CHANGE: '📝 İsim Değişikliği',
     USERNAME_CHANGE: '🛡️ Kullanıcı Adı Değişikliği',
-    MODE_CHANGE: '⚙️ Sistem Modu Değişikliği'
+    MODE_CHANGE: '⚙️ Sistem Modu Değişikliği',
+    USER_DELETION: '🗑 Kullanıcı Silme Talebi'
   }
   return labels[type] || type
 }
@@ -318,6 +319,9 @@ function getRequestDescription(req) {
   }
   if (req.type === 'MODE_CHANGE') {
     return `Sistem Modu Değişikliği: "${d.mode}" moduna geçiş talep ediliyor.`
+  }
+  if (req.type === 'USER_DELETION') {
+    return `Kullanıcı Silme: "${d.fullName} (@${d.username})" kullanıcısının silinmesi talep ediliyor. (Talebi Başlatan: ${d.requesterName || 'Bilinmiyor'})`
   }
   return 'Detay belirtilmemiş talep.'
 }

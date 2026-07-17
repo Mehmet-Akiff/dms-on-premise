@@ -3,6 +3,46 @@ import App from './App.vue'
 import Toast from 'vue-toastification'
 import 'vue-toastification/dist/index.css'
 
+// LocalStorage Ezici (Güvenlik Modları İçin)
+const originalGetItem = localStorage.getItem.bind(localStorage);
+const originalSetItem = localStorage.setItem.bind(localStorage);
+const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+
+localStorage.getItem = function(key) {
+  if (key === 'token' || key === 'kasa_token') {
+    const mode = originalGetItem('rememberDevice') || 'always';
+    if (mode === 'always') return originalGetItem(key);
+    if (mode === 'session') return sessionStorage.getItem(key);
+    if (mode === 'never') return window.dmsToken || null;
+  }
+  return originalGetItem(key);
+};
+
+localStorage.setItem = function(key, value) {
+  if (key === 'token' || key === 'kasa_token') {
+    const mode = originalGetItem('rememberDevice') || 'always';
+    if (mode === 'always') {
+      originalSetItem(key, value);
+    } else if (mode === 'session') {
+      sessionStorage.setItem(key, value);
+    } else {
+      window.dmsToken = value;
+    }
+    return;
+  }
+  originalSetItem(key, value);
+};
+
+localStorage.removeItem = function(key) {
+  if (key === 'token' || key === 'kasa_token') {
+    originalRemoveItem(key);
+    sessionStorage.removeItem(key);
+    delete window.dmsToken;
+    return;
+  }
+  originalRemoveItem(key);
+};
+
 const app = createApp(App)
 
 app.use(Toast, {

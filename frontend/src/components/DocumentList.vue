@@ -104,6 +104,7 @@
             </th>
             <th>Dosya Adı</th>
             <th>Kategori</th>
+            <th>Hassasiyet</th>
             <th>Tür</th>
             <th>Durum</th>
             <th>Tarih</th>
@@ -139,6 +140,11 @@
               <td>
                 <span class="category-badge" :class="'cat--' + getCleanCategoryClass(doc.category || doc.metadata?.category)">
                   {{ getCleanCategoryLabel(doc.category || doc.metadata?.category) }}
+                </span>
+              </td>
+              <td>
+                <span class="sensitivity-badge" :class="'sens--' + (doc.sensitivity || 'public')">
+                  {{ doc.sensitivity === 'high' ? '🔴 En Hassas' : doc.sensitivity === 'medium' ? '🟡 Orta' : '🟢 Açık' }}
                 </span>
               </td>
               <td>
@@ -259,6 +265,11 @@
                 </span>
               </td>
               <td>
+                <span class="sensitivity-badge" :class="'sens--' + (doc.sensitivity || 'public')">
+                  {{ doc.sensitivity === 'high' ? '🔴 En Hassas' : doc.sensitivity === 'medium' ? '🟡 Orta' : '🟢 Açık' }}
+                </span>
+              </td>
+              <td>
                 <span class="type-badge">{{ getTypeLabel(doc.mimeType || doc.mime_type) }}</span>
               </td>
               <td>
@@ -360,25 +371,23 @@
             </div>
             <div class="modal-header-actions" style="display:flex; align-items:center; gap:0.6rem">
               <!-- Orijinal Belgeyi İndir Butonu -->
-              <a 
-                :href="'/api/documents/' + selectedDoc.id + '/download'" 
+              <button 
                 class="action-link-btn shadow-btn" 
                 title="Orijinal Belgeyi Bilgisayara İndir"
-                @click="trackAction('DOWNLOAD', selectedDoc.id, selectedDoc.originalName || selectedDoc.original_name, 'Belge indirildi.')"
+                @click="downloadFile(selectedDoc)"
               >
                 📥 İndir
-              </a>
+              </button>
 
               <!-- OCR Metnini Word Olarak İndir Butonu -->
-              <a 
+              <button 
                 v-if="detailData?.metadata?.extracted_text || detailData?.metadata?.extractedText"
-                :href="'/api/documents/' + selectedDoc.id + '/export?token=' + (getToken ? getToken() : '')" 
                 class="action-link-btn shadow-btn accent-btn" 
                 title="OCR Raporunu Word (.doc) Olarak İndir"
-                @click="trackAction('EXPORT', selectedDoc.id, selectedDoc.originalName || selectedDoc.original_name, 'Belge Word (.doc) raporu indirildi.')"
+                @click="downloadExport(selectedDoc)"
               >
                 📝 Raporu İndir (.doc)
-              </a>
+              </button>
               
               <button class="modal-close" @click="closeDetail">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -393,6 +402,12 @@
             <div class="meta-item" v-if="detailData.metadata?.category">
               <span class="meta-label">Kategori:</span>
               <span class="meta-value">{{ getCleanCategoryLabel(detailData.metadata.category) }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Hassasiyet:</span>
+              <span class="sensitivity-badge" :class="'sens--' + (selectedDoc.sensitivity || 'public')">
+                {{ selectedDoc.sensitivity === 'high' ? '🔴 En Hassas' : selectedDoc.sensitivity === 'medium' ? '🟡 Orta' : '🟢 Açık' }}
+              </span>
             </div>
             <div class="meta-item file-path-brief" style="display: flex; align-items: center; gap: 0.5rem;">
               <span class="meta-label">Dosya Konumu:</span>
@@ -421,6 +436,7 @@
                 :documentName="selectedDoc.originalName || selectedDoc.original_name || ''"
                 :initialText="detailData?.metadata?.extractedText || detailData?.metadata?.extracted_text || ''"
                 :initialTags="selectedDoc.tags || []"
+                :initialSensitivity="selectedDoc.sensitivity || 'public'"
                 @save="handleEditorSave"
                 @cancel="handleEditorCancel"
               />
@@ -678,6 +694,60 @@ async function trackAction(action, documentId, documentName, details) {
     })
   } catch (e) {
     console.error('[Track] Log gönderme hatası:', e.message);
+  }
+}
+
+async function downloadFile(doc) {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`/api/documents/${doc.id}/download`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      alert(err.error || err.message || 'İndirme başarısız.');
+      return;
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.originalName || doc.original_name || 'belge';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    trackAction('DOWNLOAD', doc.id, doc.originalName || doc.original_name, 'Belge indirildi.');
+  } catch (e) {
+    console.error('[Download] Hata:', e.message);
+    alert('Dosya indirilirken bir hata oluştu.');
+  }
+}
+
+async function downloadExport(doc) {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`/api/documents/${doc.id}/export`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      alert(err.error || err.message || 'Rapor indirme başarısız.');
+      return;
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (doc.originalName || doc.original_name || 'rapor').replace(/\.[^.]+$/, '') + '_rapor.doc';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    trackAction('EXPORT', doc.id, doc.originalName || doc.original_name, 'Belge Word (.doc) raporu indirildi.');
+  } catch (e) {
+    console.error('[Export] Hata:', e.message);
+    alert('Rapor indirilirken bir hata oluştu.');
   }
 }
 
@@ -1738,6 +1808,34 @@ async function filterFromDashboard(type) {
   background: var(--bg-primary);
   color: var(--text-secondary);
   border-color: var(--border);
+}
+
+/* Hassasiyet Badgeleri */
+.sensitivity-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.18rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.sens--public {
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+.sens--medium {
+  background: rgba(234, 179, 8, 0.1);
+  color: #facc15;
+  border-color: rgba(234, 179, 8, 0.25);
+}
+
+.sens--high {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.25);
 }
 
 /* Durum Badge */

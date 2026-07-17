@@ -23,7 +23,7 @@
             <th>Durum</th>
             <th>Çevrimiçi Durumu</th>
             <th>Son Çevrimiçi</th>
-            <th v-if="userRole === 'ciso'" style="text-align: center;">İşlem</th>
+            <th v-if="userRole === 'admin' || userRole === 'ciso'" style="text-align: center;">İşlem</th>
           </tr>
         </thead>
         <tbody>
@@ -57,14 +57,29 @@
             <td class="last-seen-cell">
               {{ formatLastSeen(user.lastActive || user.lastLogin) }}
             </td>
-            <td v-if="userRole === 'ciso'" style="text-align: center;">
-              <button 
-                class="btn-detail" 
-                @click="openUserDetail(user)"
-                title="Detaylı Audit Log geçmişini gör"
-              >
-                🔎 Detay Gör
-              </button>
+            <td v-if="userRole === 'admin' || userRole === 'ciso'" style="text-align: center;">
+              <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
+                <button 
+                  v-if="userRole === 'ciso'"
+                  class="btn-detail" 
+                  @click="openUserDetail(user)"
+                  title="Detaylı Audit Log geçmişini gör"
+                  style="padding: 0.25rem 0.6rem; font-size: 0.68rem;"
+                >
+                  🔎 Detay Gör
+                </button>
+                <button 
+                  v-if="userRole === 'admin' && user.role !== 'ciso' && user.id !== currentUserId"
+                  class="btn-delete-user" 
+                  @click="deleteUser(user)"
+                  title="Kullanıcıyı Sil (Ortak Onaya Gider)"
+                  style="padding: 0.25rem 0.6rem; font-size: 0.68rem; background: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); color: #fff; border-radius: 6px; cursor: pointer; font-weight: 700; transition: all 0.2s;"
+                  onmouseover="this.style.background='#dc2626'"
+                  onmouseout="this.style.background='#ef4444'"
+                >
+                  🗑 Sil
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -136,6 +151,44 @@ import { ref, computed, onMounted } from 'vue'
 import { useToast } from 'vue-toastification'
 
 const toast = useToast()
+const currentUserId = computed(() => {
+  const token = localStorage.getItem('token')
+  if (!token) return ''
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(window.atob(base64))
+    return payload.id || ''
+  } catch {
+    return ''
+  }
+})
+
+async function deleteUser(user) {
+  const confirmMsg = `"${user.fullName} (${user.username})" isimli kullanıcıyı sistemden silmek istediğinize emin misiniz?\n\nBu işlem sistemdeki TÜM adminlerin ortak onayına gönderilecektir.`
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`/api/auth/users/${user.id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    
+    const data = await response.json()
+    if (response.status === 202) {
+      toast.info(data.message || 'Silme onay talebi oluşturuldu.')
+    } else if (response.ok) {
+      toast.success('Kullanıcı başarıyla silindi.')
+      fetchUsers()
+    } else {
+      toast.error(data.error || 'Silme işlemi başlatılamadı.')
+    }
+  } catch (error) {
+    console.error('[UsersPanel] Silme hatası:', error)
+    toast.error('Bağlantı hatası.')
+  }
+}
 const usersList = ref([])
 const isLoading = ref(true)
 
