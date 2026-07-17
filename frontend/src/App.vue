@@ -768,8 +768,8 @@ body {
   animation: dms-fade-in 0.4s ease both;
 }
 @keyframes dms-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* =============================

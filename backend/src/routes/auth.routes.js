@@ -34,50 +34,59 @@ function addWorkingDays(startDate, days) {
   return result;
 }
 
+// Gelişmiş Rate Limit Takip Durumu
+const emailRateLimits = {};
+
 function checkAndRecordEmailLimit(email, ip, role) {
+  if (role === 'ciso') {
+    return 0; // CISO için limit yok
+  }
+
   const now = Date.now();
   const keys = [email, ip].filter(Boolean);
 
   for (const key of keys) {
-    if (!emailRequestLogs[key]) {
-      emailRequestLogs[key] = [];
-    }
-    // Son 1 saatteki istekleri filtrele
-    emailRequestLogs[key] = emailRequestLogs[key].filter(t => now - t < 60 * 60 * 1000);
-
-    const history = emailRequestLogs[key];
-    const count = history.length;
-
-    if (role === 'ciso') {
-      // CISO için limit yok!
-      continue;
+    let state = emailRateLimits[key];
+    
+    // 24 saat boyunca işlem yapılmadıysa hakkı sıfırla ve başa sar
+    if (state && now - state.lastTime > 24 * 60 * 60 * 1000) {
+      delete emailRateLimits[key];
+      state = null;
     }
 
-    if (role === 'admin') {
-      // Admin: ilk 3 limitsiz, sonrası 1 dk bekleme
-      if (count >= 3) {
-        const lastTime = history[count - 1];
-        const diff = now - lastTime;
-        if (diff < 60 * 1000) {
-          return Math.ceil((60 * 1000 - diff) / 1000);
-        }
-      }
-    } else {
-      // Standart kullanıcı: ilk 2 limitsiz, sonrası 5 dk bekleme
-      if (count >= 2) {
-        const lastTime = history[count - 1];
-        const diff = now - lastTime;
-        if (diff < 5 * 60 * 1000) {
-          return Math.ceil((5 * 60 * 1000 - diff) / 1000);
-        }
+    if (!state) {
+      state = { count: 0, lastTime: 0 };
+      emailRateLimits[key] = state;
+    }
+
+    // Deneme sayısına göre bekleme süresini (milisaniye) belirle
+    let waitMs = 0;
+    if (state.count >= 3) {
+      const penaltyIndex = state.count - 3; // 0: 5dk, 1: 15dk, 2: 1saat, 3+: 24saat
+      if (penaltyIndex === 0) waitMs = 5 * 60 * 1000;
+      else if (penaltyIndex === 1) waitMs = 15 * 60 * 1000;
+      else if (penaltyIndex === 2) waitMs = 60 * 60 * 1000;
+      else waitMs = 24 * 60 * 60 * 1000;
+    }
+
+    if (waitMs > 0) {
+      const elapsed = now - state.lastTime;
+      if (elapsed < waitMs) {
+        // Bekleme süresi dolmadıysa kalan saniyeyi dön
+        return Math.ceil((waitMs - elapsed) / 1000);
       }
     }
   }
 
-  // Limit aşılmadıysa kaydet
+  // Hak aşılmadıysa, sayaçları güncelle ve kaydet
   for (const key of keys) {
-    emailRequestLogs[key].push(now);
+    if (!emailRateLimits[key]) {
+      emailRateLimits[key] = { count: 0, lastTime: 0 };
+    }
+    emailRateLimits[key].count += 1;
+    emailRateLimits[key].lastTime = now;
   }
+  
   return 0;
 }
 
@@ -413,7 +422,7 @@ router.post('/register', async (req, res) => {
     otpApproved.status = 'consumed';
     await otpApproved.save({ transaction: t });
 
-    const token = uuidv4();
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 saat onay süresi
 
     if (role === 'admin') {
@@ -442,7 +451,7 @@ router.post('/register', async (req, res) => {
             from: `"DMS Security" <${fromUser}>`,
             to: adm.email,
             subject: 'DMS - Yeni Yönetici Onay Talebi',
-            text: `Sisteme yeni bir yönetici (Admin) kayıt talebi geldi.\n\nKullanıcı: ${newUser.fullName} (${newUser.username})\nE-posta: ${newUser.email}\n\nOnaylamak için lütfen bu linke tıklayın:\nhttp://localhost:3000/api/auth/approve?token=${token}`
+            text: `Sisteme yeni bir yönetici (Admin) kayıt talebi geldi.\n\nKullanıcı: ${newUser.fullName} (${newUser.username})\nE-posta: ${newUser.email}\n\nLütfen aşağıdaki 6 haneli güvenlik kodunu DMS Bildirim panelindeki ilgili alana girerek onaylayın:\n\nGüvenlik Kodu: ${token}`
           });
         } catch (mailErr) {
           console.warn(`Admin e-posta gönderimi başarısız (${adm.email}):`, mailErr.message);
@@ -471,7 +480,7 @@ router.post('/register', async (req, res) => {
             from: `"DMS Security" <${fromUser}>`,
             to: alertEmail,
             subject: 'DMS - Yeni Kullanıcı Onay Talebi',
-            text: `Sisteme yeni bir kullanıcı kayıt talebi geldi.\n\nKullanıcı: ${newUser.fullName} (${newUser.username})\nE-posta: ${newUser.email}\n\nOnaylamak için lütfen bu linke tıklayın:\nhttp://localhost:3000/api/auth/approve?token=${token}`
+            text: `Sisteme yeni bir kullanıcı kayıt talebi geldi.\n\nKullanıcı: ${newUser.fullName} (${newUser.username})\nE-posta: ${newUser.email}\n\nLütfen aşağıdaki 6 haneli güvenlik kodunu DMS Bildirim panelindeki ilgili alana girerek onaylayın:\n\nGüvenlik Kodu: ${token}`
           });
         } catch (mailErr) {
           console.warn('Kullanıcı onay e-postası gönderilemedi:', mailErr.message);
@@ -479,9 +488,9 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    console.log(`\n=================== [YENİ KAYIT ONAY TALEP TOKENDI] ===================`);
+    console.log(`\n=================== [YENİ KAYIT ONAY GÜVENLİK KODU] ===================`);
     console.log(`Kullanıcı: ${newUser.username} (${role})`);
-    console.log(`Onay Linki: http://localhost:3000/api/auth/approve?token=${token}`);
+    console.log(`Güvenlik Kodu: ${token}`);
     console.log(`========================================================================\n`);
 
     res.status(201).json({ message: 'Kayıt talebiniz alındı. Yönetici onayı bekleniyor.' });
@@ -498,200 +507,16 @@ router.post('/register', async (req, res) => {
 // GET /api/auth/approve — Link ile E-posta Onaylama
 // ============================================================
 router.get('/approve', async (req, res) => {
-  const ip = req.ip || req.connection.remoteAddress;
-  const { token } = req.query;
-
-  if (!token) {
-    return res.status(400).send('<h1>Hata: Geçersiz onay kodu</h1>');
-  }
-  try {
-    const request = await ApprovalRequest.findOne({ where: { token, status: 'pending' } });
-    if (!request) {
-      return res.status(404).send('<h1>Hata: Onay talebi bulunamadı veya zaten işlendi.</h1>');
-    }
-
-    // Süre kontrolü
-    if (request.requestData?.expiresAt && request.requestData.expiresAt < Date.now()) {
-      request.status = 'rejected';
-      await request.save();
-      return res.status(400).send('<h1>Hata: Onay talebinin süresi dolmuş.</h1>');
-    }
-
-    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
-    const doubleApprovalEnabled = settingsRecord?.value?.doubleApprovalEnabled || false;
-
-    if (request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') {
-      const user = await User.findByPk(request.targetId);
-      if (!user) {
-        return res.status(404).send('<h1>Hata: Onaylanacak kullanıcı bulunamadı.</h1>');
-      }
-
-      const received = request.approvalsReceived || [];
-      const sig = 'Yönetici (E-posta)';
-      if (!received.includes(sig)) {
-        received.push(sig);
-      }
-      request.approvalsReceived = received;
-      request.changed('approvalsReceived', true);
-
-      const isApproved = doubleApprovalEnabled 
-        ? (received.includes('Yönetici (E-posta)') && received.includes('Yönetici (Arayüz)'))
-        : true;
-
-      if (isApproved) {
-        request.status = 'approved';
-        await request.save();
-
-        user.status = 'active';
-        await user.save();
-
-        archiveEmailVerification(user.email, user.username, ip);
-        logAction('APPROVE_USER', null, 'System', user.id, user.fullName, `Kullanıcı e-posta/admin onayıyla aktif edildi. IP: ${ip}`, ip);
-
-        return res.status(200).send(`
-          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #4ade80;">✓ Kullanıcı Başarıyla Onaylandı!</h1>
-            <p><strong>${user.fullName} (${user.username})</strong> artık sisteme giriş yapabilir.</p>
-          </div>
-        `);
-      } else {
-        await request.save();
-        return res.status(200).send(`
-          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #fbbf24;">Onay Alındı (E-posta)</h1>
-            <p>E-posta onayınız başarıyla kaydedildi. Çift onay devrede olduğundan arayüzdeki bildirimler panelinden de onaylamanız gerekmektedir.</p>
-          </div>
-        `);
-      }
-    }
-
-    if (request.type === 'NAME_CHANGE') {
-      const user = await User.findByPk(request.targetId);
-      if (!user) {
-        return res.status(404).send('<h1>Hata: Kullanıcı bulunamadı.</h1>');
-      }
-
-      const received = request.approvalsReceived || [];
-      const sig = 'CISO (E-posta)';
-      if (!received.includes(sig)) {
-        received.push(sig);
-      }
-      request.approvalsReceived = received;
-      request.changed('approvalsReceived', true);
-
-      if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
-        request.status = 'approved';
-        await request.save();
-
-        const oldName = user.fullName;
-        user.fullName = request.requestData.fullName || request.requestData.newFullName;
-        await user.save();
-
-        logCisoAction('NAME_CHANGE_APPROVED', `İsim değişikliği onaylandı (Çift Onay). Eski: ${oldName}, Yeni: ${user.fullName}`, ip);
-
-        return res.status(200).send(`
-          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #4ade80;">✓ İsim Değişikliği Onaylandı</h1>
-            <p>Yönetici ismi ${user.fullName} olarak güncellendi.</p>
-          </div>
-        `);
-      } else {
-        await request.save();
-        return res.status(200).send(`
-          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #fbbf24;">Onay Alındı (E-posta)</h1>
-            <p>E-posta onayınız kaydedildi. Şimdi bildirimler panelinden de onaylamanız gerekmektedir (CISO Çift Onayı).</p>
-          </div>
-        `);
-      }
-    }
-
-    if (request.type === 'USERNAME_CHANGE') {
-      const user = await User.findByPk(request.targetId);
-      if (!user) {
-        return res.status(404).send('<h1>Hata: Kullanıcı bulunamadı.</h1>');
-      }
-
-      const received = request.approvalsReceived || [];
-      const sig = 'CISO (E-posta)';
-      if (!received.includes(sig)) {
-        received.push(sig);
-      }
-      request.approvalsReceived = received;
-      request.changed('approvalsReceived', true);
-
-      if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
-        request.status = 'approved';
-        await request.save();
-
-        const oldUsername = user.username;
-        user.username = request.requestData.newUsername;
-        await user.save();
-
-        logCisoAction('USERNAME_CHANGE_APPROVED', `Kullanıcı adı değişikliği onaylandı (Çift Onay). Eski: ${oldUsername}, Yeni: ${user.username}`, ip);
-
-        return res.status(200).send(`
-          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #4ade80;">✓ Kullanıcı Adı Onaylandı</h1>
-            <p>Kullanıcı adı ${user.username} olarak güncellendi.</p>
-          </div>
-        `);
-      } else {
-        await request.save();
-        return res.status(200).send(`
-          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #fbbf24;">Onay Alındı (E-posta)</h1>
-            <p>E-posta onayınız kaydedildi. Şimdi bildirimler panelinden de onaylamanız gerekmektedir (CISO Çift Onayı).</p>
-          </div>
-        `);
-      }
-    }
-
-    if (request.type === 'MODE_CHANGE') {
-      const received = request.approvalsReceived || [];
-      const sig = 'Yönetici (E-posta)';
-      if (!received.includes(sig)) {
-        received.push(sig);
-      }
-      request.approvalsReceived = received;
-      request.changed('approvalsReceived', true);
-
-      const isApproved = doubleApprovalEnabled
-        ? (received.includes('Yönetici (E-posta)') && received.includes('Yönetici (Arayüz)'))
-        : true;
-
-      if (isApproved) {
-        request.status = 'approved';
-        await request.save();
-
-        const record = await SystemSettings.findByPk('deployment_mode') || await SystemSettings.create({ key: 'deployment_mode', value: { mode: 'single_pc' } });
-        record.value = { mode: request.requestData.mode };
-        record.changed('value', true);
-        await record.save();
-
-        logAction('MODE_CHANGE', null, 'System', null, null, `Sistem modu ${request.requestData.mode} olarak değiştirildi.`, ip);
-
-        return res.status(200).send(`
-          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #4ade80;">✓ Sistem Modu Değiştirildi</h1>
-            <p>Sistem dağıtım modu başarıyla <strong>${request.requestData.mode}</strong> yapıldı.</p>
-          </div>
-        `);
-      } else {
-        await request.save();
-        return res.status(200).send(`
-          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-            <h1 style="color: #fbbf24;">Onay Kaydedildi (E-posta)</h1>
-            <p>Mod değişikliği için e-posta onayınız kaydedildi. Çift onay devrede olduğundan bildirimler panelinden de onaylamanız gerekmektedir.</p>
-          </div>
-        `);
-      }
-    }
-  } catch (error) {
-    console.error('[ONAY_HATA]', error.message);
-    res.status(500).send('<h1>Onay işlemi sırasında sunucu hatası oluştu.</h1>');
-  }
+  return res.status(403).send(`
+    <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+      <h1 style="color: #ef4444;">⚠ Erişim Engellendi</h1>
+      <p>Güvenlik politikaları gereği e-posta üzerinden doğrudan link ile onaylama kaldırılmıştır.</p>
+      <p>Lütfen e-postanıza gönderilen 6 haneli onay kodunu DMS arayüzündeki <strong>Bildirimler</strong> panelinden girerek onaylayın.</p>
+    </div>
+  `);
 });
+
+// Eski onay linki işleme kodları temizlendi. Onaylar sadece e-posta onay kodu (OTP) ve arayüz üzerinden yapılmaktadır.
 
 // ============================================================
 // GET /api/auth/users — Kullanıcıları Listele (Admin/CISO)
@@ -822,6 +647,83 @@ router.put('/users/:id/role', verifyToken, requireAdmin, async (req, res) => {
     res.status(200).json({ message: 'Rol başarıyla güncellendi.', user: targetUser });
   } catch (error) {
     res.status(500).json({ error: 'Rol güncellenirken hata oluştu.' });
+  }
+});
+
+// ============================================================
+// DELETE /api/auth/users/:id — Kullanıcı Silme (Tüm Adminlerin Ortak Onayı ile)
+// ============================================================
+router.delete('/users/:id', verifyToken, requireAdmin, async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  try {
+    const targetUser = await User.findByPk(req.params.id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Silinecek kullanıcı bulunamadı.' });
+    }
+
+    if (targetUser.role === 'ciso') {
+      return res.status(403).json({ error: 'CISO profili sistemden hiçbir zaman silinemez.' });
+    }
+
+    const { Op } = require('sequelize');
+    const activeAdmins = await User.findAll({ where: { role: 'admin', status: 'active' } });
+
+    if (targetUser.role === 'admin') {
+      // 1 aktif admin silinemez kuralı
+      if (activeAdmins.length <= 1) {
+        return res.status(403).json({ error: 'Sistemdeki son yönetici (Admin) hesabı silinemez.' });
+      }
+    }
+
+    // Ortak onay kaydı oluştur
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+
+    const request = await ApprovalRequest.create({
+      type: 'USER_DELETION',
+      targetId: targetUser.id,
+      requestData: { 
+        username: targetUser.username, 
+        fullName: targetUser.fullName, 
+        role: targetUser.role,
+        requesterId: req.user.id,
+        requesterName: req.user.fullName || req.user.username,
+        expiresAt 
+      },
+      approvalsRequired: activeAdmins.length,
+      approvalsReceived: [],
+      status: 'pending',
+      token
+    });
+
+    // Adminlere e-posta bildirimi gönder (isteğe bağlı)
+    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
+    const settings = settingsRecord ? settingsRecord.value : {};
+    
+    for (const adm of activeAdmins) {
+      try {
+        const transporter = getMailTransporter(settings.smtpConfig);
+        const fromUser = settings.smtpConfig?.auth?.user || 'security@dms.com';
+        await transporter.sendMail({
+          from: `"DMS Security" <${fromUser}>`,
+          to: adm.email,
+          subject: 'DMS - Kullanıcı Silme Ortak Onay Talebi',
+          text: `Yönetici ${req.user.fullName || req.user.username}, "${targetUser.fullName} (${targetUser.username})" isimli kullanıcıyı sistemden silmek istiyor.\n\nBu silme işleminin gerçekleşmesi için tüm yöneticilerin onay vermesi gerekmektedir.\n\nGüvenlik Onay Kodu: ${token}\n\nLütfen DMS arayüzündeki Bildirimler panelinden onay verin.`
+        });
+      } catch (mailErr) {
+        console.warn(`Silme onay maili gönderilemedi (${adm.email}):`, mailErr.message);
+      }
+    }
+
+    logAction('DELETE_USER_REQUESTED', req.user.id, req.user.fullName, targetUser.id, targetUser.fullName, `Kullanıcı silme talebi oluşturuldu. Ortak karar bekleniyor.`, ip);
+
+    res.status(202).json({ 
+      message: 'Kullanıcı silme ortak onay talebi oluşturuldu. Tüm yöneticilerin (Admin) ortak kararı (onayı) bekleniyor.',
+      pendingApproval: true
+    });
+  } catch (error) {
+    console.error('[DELETE_USER_ERROR]', error.message);
+    res.status(500).json({ error: 'Kullanıcı silme talebi oluşturulurken hata oluştu.' });
   }
 });
 
@@ -965,7 +867,7 @@ router.put('/profile', verifyToken, async (req, res) => {
           });
         }
 
-        const token = uuidv4();
+        const token = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
         await ApprovalRequest.create({
           type: 'NAME_CHANGE',
@@ -984,15 +886,15 @@ router.put('/profile', verifyToken, async (req, res) => {
             from: `"DMS Security" <${fromUser}>`,
             to: targetEmail,
             subject: 'DMS - Ad Soyad Değişikliği Onay Talebi',
-            text: `${user.role === 'ciso' ? 'CISO' : 'Yönetici'} ${user.username} gerçek ismini "${fullName}" yapmak istiyor.\n\nOnaylamak için lütfen tıklayın:\nhttp://localhost:3000/api/auth/approve?token=${token}`
+            text: `${user.role === 'ciso' ? 'CISO' : 'Yönetici'} ${user.username} gerçek ismini "${fullName}" yapmak istiyor.\n\nLütfen aşağıdaki 6 haneli güvenlik kodunu DMS Bildirim panelindeki ilgili alana girerek onaylayın:\n\nGüvenlik Kodu: ${token}`
           });
         } catch (mailErr) {
           console.warn('Onay maili gönderilemedi:', mailErr.message);
         }
 
-        console.log(`\n[NAME_CHANGE ONAY TOKENI] Onay Linki: http://localhost:3000/api/auth/approve?token=${token}\n`);
+        console.log(`\n[NAME_CHANGE ONAY GÜVENLİK KODU] Güvenlik Kodu: ${token}\n`);
         return res.status(202).json({ 
-          message: 'İsim değişikliği talebi alındı. E-posta onay linki veya onay paneli bekleniyor.',
+          message: 'İsim değişikliği talebi alındı. E-posta onay kodu veya onay paneli bekleniyor.',
           pendingApproval: true,
           token
         });
@@ -1047,7 +949,7 @@ router.put('/settings', verifyToken, requireAdmin, async (req, res) => {
         where: { role: { [Op.in]: ['admin', 'ciso'] }, status: 'active' } 
       });
       const requiredCount = activeSignatories.length;
-      const token = uuidv4();
+      const token = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
 
       await ApprovalRequest.create({
@@ -1060,8 +962,8 @@ router.put('/settings', verifyToken, requireAdmin, async (req, res) => {
         token
       });
 
-      console.log(`\n[MODE_CHANGE ONAY TOKENI] Onay Linki: http://localhost:3000/api/auth/approve?token=${token}\n`);
-      return res.status(202).json({ message: 'Mod değişikliği talebi oluşturuldu. Tüm yöneticilerin (Admin ve CISO) onay linkine tıklaması veya ayarlar panelinden onaylaması gerekiyor.' });
+      console.log(`\n[MODE_CHANGE ONAY GÜVENLİK KODU] Güvenlik Kodu: ${token}\n`);
+      return res.status(202).json({ message: 'Mod değişikliği talebi oluşturuldu. Tüm yöneticilerin (Admin ve CISO) ayarlar panelinden bu güvenlik kodunu girerek onaylaması gerekiyor.' });
     }
 
     const record = await SystemSettings.findByPk('kasa_settings') || await SystemSettings.create({ key: 'kasa_settings', value: {} });
@@ -1505,6 +1407,36 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
         await request.save({ transaction: t });
         await t.commit();
       }
+    } else if (request.type === 'USER_DELETION') {
+      const user = await User.findByPk(request.targetId, { transaction: t });
+      if (!user) {
+        request.status = 'approved';
+        await request.save({ transaction: t });
+        await t.commit();
+        return res.status(200).json({ message: 'Silinecek kullanıcı zaten bulunmuyor.', status: 'approved' });
+      }
+
+      const adminSignature = `Admin (${req.user.fullName || req.user.username})`;
+      const received = request.approvalsReceived || [];
+      if (!received.includes(adminSignature)) {
+        received.push(adminSignature);
+      }
+      request.approvalsReceived = received;
+      request.changed('approvalsReceived', true);
+
+      const uniqueApprovers = [...new Set(received)];
+      if (uniqueApprovers.length >= request.approvalsRequired) {
+        request.status = 'approved';
+        await request.save({ transaction: t });
+
+        await user.destroy({ transaction: t });
+
+        await t.commit();
+        logAction('DELETE_USER_APPROVED', req.user.id, req.user.fullName, user.id, user.fullName, `Kullanıcı tüm yöneticilerin ortak kararıyla silindi.`, ip);
+      } else {
+        await request.save({ transaction: t });
+        await t.commit();
+      }
     }
 
     // Onaylanan talep güncel kullanıcının kendi talebiyse, güncel JWT tokenını oluşturup dön
@@ -1556,6 +1488,8 @@ router.post('/approvals/:id/reject', verifyToken, async (req, res) => {
       logCisoAction('USERNAME_CHANGE_REJECTED', `CISO, admin ${request.targetId} kullanıcı adı değişikliği talebini reddetti.`, ip);
     } else if (request.type === 'MODE_CHANGE') {
       logAction('MODE_CHANGE_REJECTED', req.user.id, req.user.fullName, null, 'System', `Mod değişikliği talebi reddedildi.`, ip);
+    } else if (request.type === 'USER_DELETION') {
+      logAction('DELETE_USER_REJECTED', req.user.id, req.user.fullName, request.targetId, request.requestData?.fullName || 'Bilinmeyen Kullanıcı', `Kullanıcı silme talebi yöneticilerden biri tarafından reddedildi.`, ip);
     }
 
     res.status(200).json({ message: 'Talep reddedildi.', status: request.status });

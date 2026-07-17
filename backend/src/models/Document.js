@@ -49,6 +49,11 @@ const Document = sequelize.define('documents', {
     allowNull: false,
     defaultValue: [],
   },
+  sensitivity: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    defaultValue: 'public',
+  },
 
 }, {
   timestamps: true,

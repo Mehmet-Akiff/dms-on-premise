@@ -36,6 +36,16 @@
       </div>
     </div>
 
+    <!-- Belge Hassasiyet Seviyesi -->
+    <div class="editor-sensitivity-section" style="margin-bottom:0.75rem; display:flex; flex-direction:column; gap:0.4rem;">
+      <label style="font-size:0.76rem; font-weight:700; color:#e2e8f0;">Belge Hassasiyeti</label>
+      <select v-model="sensitivity" style="width:100%; padding:0.5rem; background:var(--bg-primary); border:1px solid var(--border); border-radius:8px; color:#fff; font-size:0.78rem; outline:none; cursor:pointer;">
+        <option value="public">🟢 Herkese Açık (Standart, Admin, CISO görebilir)</option>
+        <option value="medium">🟡 Orta Hassas (Sadece Admin ve CISO görebilir)</option>
+        <option value="high">🔴 En Hassas (Sadece Admin görebilir)</option>
+      </select>
+    </div>
+
     <!-- Editör Alanı -->
     <div class="editor-body">
       <QuillEditor 
@@ -101,6 +111,10 @@ const props = defineProps({
   initialTags: {
     type: Array,
     default: () => []
+  },
+  initialSensitivity: {
+    type: String,
+    default: 'public'
   }
 })
 
@@ -109,6 +123,7 @@ const emit = defineEmits(['save', 'cancel'])
 const content = ref('')
 const editorRef = ref(null)
 const isSaving = ref(false)
+const sensitivity = ref('public')
 
 const tags = ref([])
 const tagInput = ref('')
@@ -148,6 +163,7 @@ const customToolbar = [
 // İlk veriyi yükle
 function loadInitialContent() {
   tags.value = Array.isArray(props.initialTags) ? [...props.initialTags] : []
+  sensitivity.value = props.initialSensitivity || 'public'
   // Eğer veritabanından ham düz metin geldiyse, Quill HTML olarak okusun diye
   // satır sonlarını <p> etiketlerine dönüştürebiliriz
   if (props.initialText && !props.initialText.trim().startsWith('<')) {
@@ -165,7 +181,7 @@ onMounted(() => {
   loadInitialContent()
 })
 
-watch([() => props.initialText, () => props.initialTags], () => {
+watch([() => props.initialText, () => props.initialTags, () => props.initialSensitivity], () => {
   loadInitialContent()
 })
 
@@ -206,7 +222,8 @@ async function saveContent() {
       },
       body: JSON.stringify({
         extractedText: content.value,
-        tags: tags.value
+        tags: tags.value,
+        sensitivity: sensitivity.value
       })
     })
 

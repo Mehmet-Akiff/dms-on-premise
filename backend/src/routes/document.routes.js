@@ -12,6 +12,43 @@ const { verifyToken, requireAdmin, requireCiso, requireReadPermission, requireWr
 const { logAction } = require('../utils/auditLogger');
 
 const router = express.Router();
+const { Op } = require('sequelize');
+
+function getSensitivityWhere(user) {
+  if (!user) return { sensitivity: 'public' };
+  if (user.role === 'admin') return {};
+  
+  const allowedSensitivities = user.role === 'ciso' ? ['public', 'medium'] : ['public'];
+  
+  return {
+    [Op.or]: [
+      { uploadedBy: user.id },
+      { sensitivity: { [Op.in]: allowedSensitivities } }
+    ]
+  };
+}
+
+function getSensitivitySql(user) {
+  if (!user) return " AND d.sensitivity = 'public'";
+  if (user.role === 'admin') return "";
+  
+  const allowedSens = user.role === 'ciso' ? "'public', 'medium'" : "'public'";
+  return ` AND (d.uploaded_by = '${user.id}' OR d.sensitivity IN (${allowedSens}))`;
+}
+
+function hasSensitivityAccess(document, user) {
+  if (!document) return false;
+  if (!user) return document.sensitivity === 'public';
+  if (user.role === 'admin') return true;
+  
+  // Kendi yüklediği belgeye her zaman erişebilir
+  if (document.uploadedBy === user.id || document.uploaded_by === user.id) return true;
+  
+  if (user.role === 'ciso') {
+    return document.sensitivity === 'public' || document.sensitivity === 'medium';
+  }
+  return document.sensitivity === 'public';
+}
 
 // Doküman yönetim rotalarının tamamı için JWT doğrulaması şimdilik devre dışı (kullanıcı isteğiyle)
 // router.use(verifyToken);
@@ -360,17 +397,18 @@ router.post('/audit-logs/click', verifyToken, requireReadPermission, async (req,
 // GET /api/documents/stats — Dashboard İstatistikleri
 // ============================================================
 
-router.get('/stats', async (req, res) => {
+router.get('/stats', verifyToken, async (req, res) => {
   try {
     const { Op } = require('sequelize');
+    const sensWhere = getSensitivityWhere(req.user);
 
     // Toplam doküman sayısı (soft-delete olmayanlar)
-    const totalDocuments = await Document.count({ where: { deletedAt: null } });
+    const totalDocuments = await Document.count({ where: { deletedAt: null, ...sensWhere } });
 
     // Durum dağılımı
     const statusCounts = await Document.findAll({
       attributes: ['status', [sequelize.fn('COUNT', sequelize.col('documents.id')), 'count']],
-      where: { deletedAt: null },
+      where: { deletedAt: null, ...sensWhere },
       group: ['status'],
       raw: true,
     });
@@ -382,7 +420,7 @@ router.get('/stats', async (req, res) => {
         model: Document,
         as: 'document',
         attributes: [],
-        where: { deletedAt: null },
+        where: { deletedAt: null, ...sensWhere },
         required: true,
       }],
       group: ['category'],
@@ -394,6 +432,7 @@ router.get('/stats', async (req, res) => {
       where: {
         deletedAt: null,
         createdAt: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        ...sensWhere
       },
     });
 
@@ -402,11 +441,12 @@ router.get('/stats', async (req, res) => {
       where: {
         deletedAt: null,
         createdAt: { [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        ...sensWhere
       },
     });
 
     // Çöp kutusundaki doküman sayısı
-    const trashCount = await Document.count({ where: { deletedAt: { [Op.ne]: null } }, paranoid: false });
+    const trashCount = await Document.count({ where: { deletedAt: { [Op.ne]: null }, ...sensWhere }, paranoid: false });
 
     // Kategorileri konsolide et (uncategorized ve boş olanları 'Diger' yap)
     const consolidatedCats = {};
@@ -446,6 +486,10 @@ router.get('/:id/download', verifyToken, requireReadPermission, async (req, res)
       return res.status(404).json({ error: 'Belge bulunamadı.' });
     }
 
+    if (!hasSensitivityAccess(document, req.user)) {
+      return res.status(403).json({ error: 'Erişim reddedildi.', message: 'Bu hassasiyet seviyesindeki belgeye erişim yetkiniz bulunmamaktadır.' });
+    }
+
     const fs = require('fs');
     const path = require('path');
     const absolutePath = path.resolve(document.filePath);
@@ -472,6 +516,10 @@ router.get('/:id/export', verifyToken, requireReadPermission, async (req, res) =
 
     if (!document) {
       return res.status(404).json({ error: 'Belge bulunamadı.' });
+    }
+
+    if (!hasSensitivityAccess(document, req.user)) {
+      return res.status(403).json({ error: 'Erişim reddedildi.', message: 'Bu hassasiyet seviyesindeki belgeye erişim yetkiniz bulunmamaktadır.' });
     }
 
     const text = document.metadata?.extractedText || document.metadata?.extracted_text || 'OCR metni bulunamadı.';
@@ -611,6 +659,11 @@ router.post('/upload', verifyToken, requireWritePermission, upload.single('file'
       }
     }
 
+    let sensitivityVal = req.body.sensitivity || 'public';
+    if (!['public', 'medium', 'high'].includes(sensitivityVal)) {
+      sensitivityVal = 'public';
+    }
+
     // Doküman ve ProcessingJob oluşturma işlemlerini transaction içine al
     const t = await sequelize.transaction();
     let document, job;
@@ -623,6 +676,7 @@ router.post('/upload', verifyToken, requireWritePermission, upload.single('file'
         status: 'PENDING',
         userId: req.user ? req.user.id : null,
         tags: Array.isArray(tagsArr) ? tagsArr : [],
+        sensitivity: sensitivityVal,
       }, { transaction: t });
 
       job = await ProcessingJob.create({
@@ -819,7 +873,7 @@ function applyHighlight(snippet, query, isCaseSensitive = false) {
 // GET /api/documents/search — Arama (mode, fileType, status, sort, category)
 // ============================================================
 
-router.get('/search', async (req, res) => {
+router.get('/search', verifyToken, async (req, res) => {
   try {
     const { q, mode = 'fuzzy', fileType = 'all', status = 'all', sort = 'relevance', category = 'all' } = req.query;
 
@@ -829,7 +883,7 @@ router.get('/search', async (req, res) => {
     let queryStr = '';
     const isFuzzy = mode === 'fuzzy';
     const replacements = {};
-    let extraFilters = '';
+    let extraFilters = getSensitivitySql(req.user) + ' AND d.deleted_at IS NULL';
 
     // 1. Negatif (hariç tutma) ve Pozitif kelimeleri ayrıştır
     const excludeWords = [];
@@ -1068,7 +1122,7 @@ router.get('/search', async (req, res) => {
 // GET /api/documents/ai-search — Yapay Zeka Destekli Doğal Dil Arama
 // ============================================================
 
-router.get('/ai-search', async (req, res) => {
+router.get('/ai-search', verifyToken, async (req, res) => {
   try {
     const { q, status = 'all', sort = 'relevance' } = req.query;
 
@@ -1113,7 +1167,7 @@ router.get('/ai-search', async (req, res) => {
 
     // 2. Çözümlenen parametrelerle iç arama sorgumuzu çalıştıralım
     // Filtreler
-    let extraFilters = '';
+    let extraFilters = getSensitivitySql(req.user) + ' AND d.deleted_at IS NULL';
 
     if (detectedFileType === 'pdf') {
       extraFilters += ` AND d.mime_type = 'application/pdf'`;
@@ -1303,12 +1357,14 @@ router.get('/ai-search', async (req, res) => {
 // ============================================================
 // GET /api/documents/trash — Silinmiş Dokümanları Listele
 // ============================================================
-router.get('/trash', async (req, res) => {
+router.get('/trash', verifyToken, async (req, res) => {
   try {
     const { Op } = require('sequelize');
+    const sensWhere = getSensitivityWhere(req.user);
     const documents = await Document.findAll({
       where: {
-        deletedAt: { [Op.ne]: null }
+        deletedAt: { [Op.ne]: null },
+        ...sensWhere
       },
       paranoid: false,
       order: [['deleted_at', 'DESC']],
@@ -1418,7 +1474,10 @@ router.get('/', verifyToken, requireReadPermission, async (req, res) => {
     const { tag } = req.query;
     const { Op } = require('sequelize');
     
-    const whereClause = {};
+    const sensWhere = getSensitivityWhere(req.user);
+    const whereClause = {
+      ...sensWhere
+    };
     if (tag) {
       whereClause.tags = {
         [Op.contains]: [tag]
@@ -1461,6 +1520,10 @@ router.get('/:id', verifyToken, requireReadPermission, async (req, res) => {
       return res.status(404).json({ error: 'Doküman bulunamadı.' });
     }
 
+    if (!hasSensitivityAccess(document, req.user)) {
+      return res.status(403).json({ error: 'Erişim reddedildi.', message: 'Bu hassasiyet seviyesindeki belgeye erişim yetkiniz bulunmamaktadır.' });
+    }
+
     res.status(200).json({ document });
   } catch (error) {
     console.error('[HATA] Doküman detay:', error.message);
@@ -1496,7 +1559,7 @@ router.get('/jobs/:jobId', async (req, res) => {
 // ============================================================
 router.put('/:id', verifyToken, requireWritePermission, async (req, res) => {
   try {
-    const { title, extractedText, category, comments, tags } = req.body;
+    const { title, extractedText, category, comments, tags, sensitivity } = req.body;
     const document = await Document.findByPk(req.params.id, {
       include: [{ association: 'metadata' }]
     });
@@ -1505,14 +1568,21 @@ router.put('/:id', verifyToken, requireWritePermission, async (req, res) => {
       return res.status(404).json({ error: 'Güncellenecek doküman bulunamadı.' });
     }
 
-    // 1. Doküman Başlığı ve Etiketleri güncelle
+    if (!hasSensitivityAccess(document, req.user)) {
+      return res.status(403).json({ error: 'Erişim reddedildi.', message: 'Bu hassasiyet seviyesindeki belgeye erişim yetkiniz bulunmamaktadır.' });
+    }
+
+    // 1. Doküman Başlığı, Etiketleri ve Hassasiyeti güncelle
     if (title !== undefined) {
       document.title = title;
     }
     if (tags !== undefined) {
       document.tags = Array.isArray(tags) ? tags : [];
     }
-    if (title !== undefined || tags !== undefined) {
+    if (sensitivity !== undefined && ['public', 'medium', 'high'].includes(sensitivity)) {
+      document.sensitivity = sensitivity;
+    }
+    if (title !== undefined || tags !== undefined || sensitivity !== undefined) {
       await document.save();
     }
 

@@ -1,17 +1,18 @@
 <template>
-  <div class="settings-modal-overlay" v-if="isOpen" @click.self="closeDrawer">
-    <div class="settings-modal-card" :class="'theme--' + currentUserRole">
+  <div class="settings-drawer-wrapper" :class="{ 'drawer-open': isOpen }">
+    <div class="drawer-overlay" @click="closeDrawer"></div>
+    <div class="settings-drawer" :class="'theme--' + currentUserRole">
       <!-- Header -->
-      <div class="modal-header">
+      <div class="drawer-header">
         <div class="header-title">
           <span>⚙️</span>
           <h3>Kasa & Sistem Ayarları</h3>
         </div>
-        <button class="btn-close-modal" @click="closeDrawer">✕</button>
+        <button class="btn-close-drawer" @click="closeDrawer">✕</button>
       </div>
 
       <!-- Scrollable Content -->
-      <div class="modal-body">
+      <div class="drawer-body">
         
         <!-- 0. PROFIL KARTI -->
         <div class="profile-card-container">
@@ -27,6 +28,22 @@
             <h5>{{ currentUserFullName }}</h5>
             <p>@{{ currentUsername }}</p>
             <p style="font-size:0.75rem; color:#9ca3af; margin-top:0.15rem; font-weight:500;">📧 {{ currentUserEmail }}</p>
+          </div>
+        </div>
+
+        <hr class="section-divider" />
+
+        <!-- 0B. GÜVENLİK & OTURUM TERCİHLERİ -->
+        <div class="settings-section">
+          <h4>🔒 Güvenlik & Oturum Tercihleri</h4>
+          <p class="section-desc">Cihaz hatırlama ve sayfayı yenilediğinizde kilitlenme tercihinizi belirleyin.</p>
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Oturum Güvenlik Modu</label>
+            <select v-model="rememberDevice" @change="saveRememberDevice" style="width: 100%; padding: 0.55rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 0.78rem; outline: none; cursor: pointer; margin-top: 0.25rem;">
+              <option value="always">🔓 Cihazı Hatırla (Oturum kalıcıdır, F5 atınca kilitlenmez)</option>
+              <option value="session">⏱ Sekme Kapanınca Kilitle (Tarayıcı sekmesi kapanınca kilitlenir)</option>
+              <option value="never">🔒 Sayfa Yenilendiğinde Kilitle (Sayfa yenilendiğinde/F5 atıldığında kilitlenir)</option>
+            </select>
           </div>
         </div>
 
@@ -336,17 +353,19 @@
         <!-- 6B. ÇİFT ONAY YETKİLENDİRMESİ -->
         <div class="settings-section" v-if="isAdminOrCiso" style="margin-top: 1rem;">
           <h4>🔐 Çift Onay Yetkilendirmesi</h4>
-          <p class="section-desc">Onay taleplerinin işleme alınması için hem sistem arayüzünden hem de e-postadaki butona tıklanarak onaylanmasını zorunlu kılın. (CISO için zorunlu ve kapatılamazdır).</p>
+          <p class="section-desc">Onay taleplerinin işleme alınması için hem sistem arayüzünden onay verilmesini hem de e-postadaki güvenlik kodunun (OTP) girilmesini zorunlu kılın. (CISO için zorunlu ve kapatılamazdır).</p>
           
-          <div class="form-group" style="margin-top: 0.5rem;">
-            <label class="perm-check-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input 
-                type="checkbox" 
-                v-model="doubleApprovalEnabled" 
-                @change="updateDoubleApproval"
-                :disabled="currentUserRole === 'ciso'"
-              />
-              <span style="font-size: 0.8rem; font-weight: 700; color: #fff;">E-posta + Arayüz Çift Onayı Zorunlu</span>
+          <div class="double-approval-toggle-box" style="display: flex; align-items: center; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); padding: 0.75rem 1rem; border-radius: 8px; margin-top: 0.75rem; gap: 0.75rem; max-width: 100%;">
+            <input 
+              type="checkbox" 
+              id="double-approval-checkbox"
+              v-model="doubleApprovalEnabled" 
+              @change="updateDoubleApproval"
+              :disabled="currentUserRole === 'ciso'"
+              style="width: 18px; height: 18px; accent-color: #8b5cf6; cursor: pointer; flex-shrink: 0;"
+            />
+            <label for="double-approval-checkbox" style="font-size: 0.82rem; font-weight: 700; color: #fff; cursor: pointer; display: inline; margin: 0; user-select: none;">
+              E-posta + Arayüz Çift Onayı Zorunlu
             </label>
           </div>
         </div>
@@ -533,6 +552,13 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const toast = useToast()
+
+const rememberDevice = ref(localStorage.getItem('rememberDevice') || 'always')
+
+function saveRememberDevice() {
+  localStorage.setItem('rememberDevice', rememberDevice.value)
+  toast.success('Oturum güvenlik tercihiniz kaydedildi.')
+}
 
 const kasaUsername = ref('')
 const kasaNewPassword = ref('')
@@ -1399,46 +1425,61 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.settings-modal-overlay {
+.settings-drawer-wrapper {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(3, 7, 18, 0.75);
-  backdrop-filter: blur(8px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
   z-index: 12000;
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.settings-modal-card {
+.settings-drawer-wrapper.drawer-open {
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.drawer-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(3, 7, 18, 0.6);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.drawer-open .drawer-overlay {
+  opacity: 1;
+}
+
+.settings-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 90%;
+  max-width: 500px;
+  height: 100%;
   background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  width: 92%;
-  max-width: 650px;
-  max-height: 85vh;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8);
-  animation: modalZoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes modalZoomIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+.drawer-open .settings-drawer {
+  transform: translateX(0);
 }
 
-.modal-header {
+.drawer-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1446,7 +1487,7 @@ onMounted(() => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.btn-close-modal {
+.btn-close-drawer {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #9ca3af;
@@ -1456,12 +1497,12 @@ onMounted(() => {
   transition: all 0.2s;
 }
 
-.btn-close-modal:hover {
+.btn-close-drawer:hover {
   background: rgba(255, 255, 255, 0.05);
   color: #fff;
 }
 
-.modal-body {
+.drawer-body {
   flex: 1;
   padding: 1.5rem;
   overflow-y: auto;
@@ -1474,8 +1515,8 @@ onMounted(() => {
    ROL BAZLI TEMA STİLLERİ
    ============================================================ */
 .settings-drawer.theme--user {
-  border-left: 2px solid rgba(59, 130, 246, 0.3);
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5), -5px 0 15px rgba(59, 130, 246, 0.05);
+  border-left: 4px solid rgba(59, 130, 246, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(59, 130, 246, 0.1);
 }
 .settings-drawer.theme--user h4 {
   color: #60a5fa;
@@ -1485,8 +1526,8 @@ onMounted(() => {
 }
 
 .settings-drawer.theme--admin {
-  border-left: 2px solid rgba(245, 158, 11, 0.3);
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5), -5px 0 15px rgba(245, 158, 11, 0.05);
+  border-left: 4px solid rgba(245, 158, 11, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(245, 158, 11, 0.1);
 }
 .settings-drawer.theme--admin h4 {
   color: #fbbf24;
@@ -1496,8 +1537,8 @@ onMounted(() => {
 }
 
 .settings-drawer.theme--ciso {
-  border-left: 2px solid rgba(16, 185, 129, 0.3);
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5), -5px 0 15px rgba(16, 185, 129, 0.05);
+  border-left: 4px solid rgba(16, 185, 129, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(16, 185, 129, 0.1);
 }
 .settings-drawer.theme--ciso h4 {
   color: #34d399;
