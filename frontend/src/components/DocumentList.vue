@@ -372,7 +372,7 @@
               <!-- OCR Metnini Word Olarak İndir Butonu -->
               <a 
                 v-if="detailData?.metadata?.extracted_text || detailData?.metadata?.extractedText"
-                :href="'/api/documents/' + selectedDoc.id + '/export'" 
+                :href="'/api/documents/' + selectedDoc.id + '/export?token=' + (getToken ? getToken() : '')" 
                 class="action-link-btn shadow-btn accent-btn" 
                 title="OCR Raporunu Word (.doc) Olarak İndir"
                 @click="trackAction('EXPORT', selectedDoc.id, selectedDoc.originalName || selectedDoc.original_name, 'Belge Word (.doc) raporu indirildi.')"
@@ -583,6 +583,10 @@ import { useToast } from 'vue-toastification'
 import DocumentEditor from './DocumentEditor.vue'
 
 const toast = useToast()
+
+function getToken() {
+  return localStorage.getItem('token') || ''
+}
 
 const documents = ref([])
 const isLoading = ref(true)

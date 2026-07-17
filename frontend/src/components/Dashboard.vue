@@ -2,7 +2,7 @@
   <div class="dashboard-container">
     <!-- Ana İstatistik Kartları -->
     <div class="stats-grid">
-      <div class="stat-card stat-card--total" @click="handleCardClick('all')" style="cursor: pointer;">
+      <div class="stat-card stat-card--total" :class="{ 'active': activeFilter === 'all' }" @click="handleCardClick('all')" style="cursor: pointer;">
         <div class="stat-icon">📊</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.totalDocuments }}</span>
@@ -11,7 +11,7 @@
         <div class="stat-glow stat-glow--blue"></div>
       </div>
 
-      <div class="stat-card stat-card--recent" @click="handleCardClick('last24h')" style="cursor: pointer;">
+      <div class="stat-card stat-card--recent" :class="{ 'active': activeFilter === 'last24h' }" @click="handleCardClick('last24h')" style="cursor: pointer;">
         <div class="stat-icon">⏱️</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.last24h }}</span>
@@ -20,7 +20,7 @@
         <div class="stat-glow stat-glow--green"></div>
       </div>
 
-      <div class="stat-card stat-card--weekly" @click="handleCardClick('last7d')" style="cursor: pointer;">
+      <div class="stat-card stat-card--weekly" :class="{ 'active': activeFilter === 'last7d' }" @click="handleCardClick('last7d')" style="cursor: pointer;">
         <div class="stat-icon">📅</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.last7d }}</span>
@@ -29,7 +29,7 @@
         <div class="stat-glow stat-glow--purple"></div>
       </div>
 
-      <div class="stat-card stat-card--trash" @click="handleCardClick('trash')" style="cursor: pointer;">
+      <div class="stat-card stat-card--trash" :class="{ 'active': activeFilter === 'trash' }" @click="handleCardClick('trash')" style="cursor: pointer;">
         <div class="stat-icon">🗑️</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.trashCount }}</span>
@@ -80,8 +80,10 @@
 import { ref, onMounted } from 'vue'
 
 const emit = defineEmits(['stat-click'])
+const activeFilter = ref('all')
 
 function handleCardClick(type) {
+  activeFilter.value = type
   emit('stat-click', type)
 }
 
@@ -188,14 +190,31 @@ onMounted(() => {
   border-radius: 14px;
   overflow: hidden;
   backdrop-filter: blur(12px);
-  transition: all 0.3s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  transform: translateY(-3px);
+  border-color: rgba(139, 92, 246, 0.4);
+  box-shadow: 0 10px 25px rgba(139, 92, 246, 0.1);
 }
+
+.stat-card:active {
+  transform: translateY(-1px) scale(0.97);
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2);
+}
+
+.stat-card.active {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.12);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+}
+
+.stat-card--total.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.08); box-shadow: 0 0 20px rgba(56, 189, 248, 0.15); }
+.stat-card--recent.active { border-color: #22c55e; background: rgba(34, 197, 150, 0.08); box-shadow: 0 0 20px rgba(34, 197, 150, 0.15); }
+.stat-card--weekly.active { border-color: #a78bfa; background: rgba(167, 139, 250, 0.08); box-shadow: 0 0 20px rgba(167, 139, 250, 0.15); }
+.stat-card--trash.active { border-color: #ef4444; background: rgba(239, 68, 68, 0.08); box-shadow: 0 0 20px rgba(239, 68, 68, 0.15); }
 
 .stat-icon {
   font-size: 1.6rem;

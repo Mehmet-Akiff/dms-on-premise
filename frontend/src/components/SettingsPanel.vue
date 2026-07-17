@@ -1,18 +1,17 @@
 <template>
-  <div class="settings-drawer-wrapper" :class="{ 'drawer-open': isOpen }">
-    <div class="drawer-overlay" @click="closeDrawer"></div>
-    <div class="settings-drawer" :class="'theme--' + currentUserRole">
+  <div class="settings-modal-overlay" v-if="isOpen" @click.self="closeDrawer">
+    <div class="settings-modal-card" :class="'theme--' + currentUserRole">
       <!-- Header -->
-      <div class="drawer-header">
+      <div class="modal-header">
         <div class="header-title">
           <span>⚙️</span>
           <h3>Kasa & Sistem Ayarları</h3>
         </div>
-        <button class="btn-close-drawer" @click="closeDrawer">✕</button>
+        <button class="btn-close-modal" @click="closeDrawer">✕</button>
       </div>
 
       <!-- Scrollable Content -->
-      <div class="drawer-body">
+      <div class="modal-body">
         
         <!-- 0. PROFIL KARTI -->
         <div class="profile-card-container">
@@ -84,13 +83,9 @@
                   <button 
                     type="button" 
                     class="btn-eye" 
-                    @mousedown="isProfileOldPasswordVisible = true" 
-                    @mouseup="isProfileOldPasswordVisible = false"
-                    @mouseleave="isProfileOldPasswordVisible = false"
-                    @touchstart="isProfileOldPasswordVisible = true" 
-                    @touchend="isProfileOldPasswordVisible = false"
+                    @click="isProfileOldPasswordVisible = !isProfileOldPasswordVisible"
                   >
-                    👁️
+                    {{ isProfileOldPasswordVisible ? '🙈' : '👁️' }}
                   </button>
                 </div>
               </div>
@@ -108,13 +103,9 @@
                   <button 
                     type="button" 
                     class="btn-eye" 
-                    @mousedown="isProfileNewPasswordVisible = true" 
-                    @mouseup="isProfileNewPasswordVisible = false"
-                    @mouseleave="isProfileNewPasswordVisible = false"
-                    @touchstart="isProfileNewPasswordVisible = true" 
-                    @touchend="isProfileNewPasswordVisible = false"
+                    @click="isProfileNewPasswordVisible = !isProfileNewPasswordVisible"
                   >
-                    👁️
+                    {{ isProfileNewPasswordVisible ? '🙈' : '👁️' }}
                   </button>
                 </div>
                 <!-- Dinamik Şifre Gereksinimleri -->
@@ -135,13 +126,9 @@
                   <button 
                     type="button" 
                     class="btn-eye" 
-                    @mousedown="isProfileNewPasswordConfirmVisible = true" 
-                    @mouseup="isProfileNewPasswordConfirmVisible = false"
-                    @mouseleave="isProfileNewPasswordConfirmVisible = false"
-                    @touchstart="isProfileNewPasswordConfirmVisible = true" 
-                    @touchend="isProfileNewPasswordConfirmVisible = false"
+                    @click="isProfileNewPasswordConfirmVisible = !isProfileNewPasswordConfirmVisible"
                   >
-                    👁️
+                    {{ isProfileNewPasswordConfirmVisible ? '🙈' : '👁️' }}
                   </button>
                 </div>
               </div>
@@ -210,13 +197,9 @@
                 <button 
                   type="button" 
                   class="btn-eye" 
-                  @mousedown="isNewPasswordVisible = true" 
-                  @mouseup="isNewPasswordVisible = false"
-                  @mouseleave="isNewPasswordVisible = false"
-                  @touchstart="isNewPasswordVisible = true" 
-                  @touchend="isNewPasswordVisible = false"
+                  @click="isNewPasswordVisible = !isNewPasswordVisible"
                 >
-                  👁️
+                  {{ isNewPasswordVisible ? '🙈' : '👁️' }}
                 </button>
               </div>
               <!-- Dinamik Şifre Gereksinimleri -->
@@ -236,13 +219,9 @@
                 <button 
                   type="button" 
                   class="btn-eye" 
-                  @mousedown="isNewPasswordConfirmVisible = true" 
-                  @mouseup="isNewPasswordConfirmVisible = false"
-                  @mouseleave="isNewPasswordConfirmVisible = false"
-                  @touchstart="isNewPasswordConfirmVisible = true" 
-                  @touchend="isNewPasswordConfirmVisible = false"
+                  @click="isNewPasswordConfirmVisible = !isNewPasswordConfirmVisible"
                 >
-                  👁️
+                  {{ isNewPasswordConfirmVisible ? '🙈' : '👁️' }}
                 </button>
               </div>
             </div>
@@ -396,14 +375,10 @@
                 <button 
                   type="button" 
                   class="btn-eye" 
-                  @mousedown="isSmtpPassVisible = true" 
-                  @mouseup="isSmtpPassVisible = false"
-                  @mouseleave="isSmtpPassVisible = false"
-                  @touchstart="isSmtpPassVisible = true" 
-                  @touchend="isSmtpPassVisible = false"
-                  title="Şifreyi görmek için basılı tutun"
+                  @click="isSmtpPassVisible = !isSmtpPassVisible"
+                  title="Şifreyi Göster/Gizle"
                 >
-                  👁️
+                  {{ isSmtpPassVisible ? '🙈' : '👁️' }}
                 </button>
               </div>
             </div>
@@ -1424,55 +1399,75 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.settings-drawer-wrapper {
+.settings-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  pointer-events: none;
-  z-index: 9999;
-  overflow: hidden;
+  background: rgba(3, 7, 18, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 12000;
 }
 
-.settings-drawer-wrapper.drawer-open {
-  pointer-events: auto;
-}
-
-.drawer-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(3, 7, 18, 0.4);
-  backdrop-filter: blur(4px);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-.drawer-open .drawer-overlay {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.settings-drawer {
-  position: absolute;
-  top: 0;
-  right: -620px;
-  width: 100%;
-  max-width: 600px;
-  height: 100%;
-  background: rgba(17, 24, 39, 0.94);
+.settings-modal-card {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  width: 92%;
+  max-width: 650px;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
-  transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  backdrop-filter: blur(16px);
+  overflow: hidden;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8);
+  animation: modalZoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.drawer-open .settings-drawer {
-  right: 0;
+@keyframes modalZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn-close-modal {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-close-modal:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.modal-body {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 /* ============================================================

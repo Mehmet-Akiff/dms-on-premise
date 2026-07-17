@@ -184,10 +184,10 @@ def ocr_pdf(file_path: Path) -> tuple[str, int]:
     with tempfile.TemporaryDirectory(prefix="dms_pdf_") as tmp_dir:
         pages = convert_from_path(
             str(file_path),
-            dpi=300,
+            dpi=150,
             output_folder=tmp_dir,
             fmt="png",
-            thread_count=2,
+            thread_count=4,
         )
 
         page_count = len(pages)

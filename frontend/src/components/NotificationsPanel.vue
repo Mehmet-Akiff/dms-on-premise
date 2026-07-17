@@ -28,10 +28,13 @@
         class="notification-card"
         :class="{ 'card--pending': req.status === 'pending', 'card--approved': req.status === 'approved', 'card--rejected': req.status === 'rejected' || req.status === 'expired' }"
       >
-        <div class="card-header">
-          <span class="type-badge" :class="'type--' + req.type.toLowerCase()">
-            {{ getRequestTypeLabel(req.type) }}
-          </span>
+        <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; width:100%;">
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <span class="type-badge" :class="'type--' + req.type.toLowerCase()">
+              {{ getRequestTypeLabel(req.type) }}
+            </span>
+            <span v-if="unreadIds.includes(req.id)" class="new-alert-dot" style="background:#10b981; color:#fff; font-size:0.6rem; font-weight:800; padding:0.15rem 0.4rem; border-radius:4px; box-shadow:0 0 8px #10b981; animation: blink 1s infinite; text-transform:uppercase; letter-spacing:0.5px;">YENİ</span>
+          </div>
           <span class="status-badge" :class="'status--' + req.status">
             {{ getStatusLabel(req.status) }}
           </span>
@@ -53,25 +56,89 @@
         </div>
 
         <!-- Aksiyon Butonları (Sadece Admin veya CISO için ve talep beklemedeyse) -->
-        <div v-if="isAdminOrCiso && req.status === 'pending' && !isOwnRequest(req)" class="card-actions">
-          <button 
-            class="btn-action btn-action--reject" 
-            :disabled="isProcessing[req.id]"
-            @click="handleApprovalAction(req.id, 'reject')"
-          >
-            ❌ Reddet
-          </button>
-          <!-- CISO ve Admin için Onaylama Yetki Kontrolü -->
-          <button 
-            v-if="canApprove(req)"
-            class="btn-action btn-action--approve" 
-            :disabled="isProcessing[req.id]"
-            @click="handleApprovalAction(req.id, 'approve')"
-          >
-            {{ isProcessing[req.id] ? 'İşleniyor...' : '✅ Onayla' }}
-          </button>
+        <div v-if="isAdminOrCiso && req.status === 'pending' && !isOwnRequest(req)" class="card-actions-wrapper" style="display:flex; flex-direction:column; gap:0.6rem; padding:0.5rem 0.75rem; background:rgba(15,23,42,0.4); border-radius:8px; margin-top:0.75rem; border:1px solid rgba(255,255,255,0.03);">
+          
+          <!-- Reddetme Butonu (Ortak) -->
+          <div style="display:flex; justify-content:flex-end;">
+            <button 
+              class="btn-action btn-action--reject" 
+              :disabled="isProcessing[req.id]"
+              @click="handleApprovalAction(req.id, 'reject')"
+              style="padding:0.35rem 0.85rem; font-size:0.72rem; border-radius:6px; cursor:pointer;"
+            >
+              ❌ Talebi Reddet
+            </button>
+          </div>
+
+          <!-- Onay Seçenekleri -->
+          <div v-if="canApprove(req)" style="display:flex; flex-direction:column; gap:0.5rem; border-top:1px dashed rgba(255,255,255,0.06); padding-top:0.5rem;">
+            
+            <!-- ÇİFT ONAY AÇIKSA veya CISO Profil Talebi ise -->
+            <template v-if="doubleApprovalEnabled || req.type === 'NAME_CHANGE' || req.type === 'USERNAME_CHANGE'">
+              
+              <!-- Arayüz İmzası Eksikse -->
+              <div v-if="!(req.approvalsReceived || []).some(s => s.includes('Arayüz'))" style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.02); padding:0.4rem; border-radius:6px;">
+                <span style="font-size:0.72rem; color:#9ca3af;">🖥️ 1. Aşama: Sistem Arayüzü Onayı</span>
+                <button 
+                  class="btn-action btn-action--approve" 
+                  :disabled="isProcessing[req.id]"
+                  @click="handleApprovalAction(req.id, 'approve')"
+                  style="padding:0.3rem 0.75rem; font-size:0.7rem; border-radius:4px; font-weight:700;"
+                >
+                  Arayüzden Onayla
+                </button>
+              </div>
+              <div v-else style="font-size:0.7rem; color:#10b981; display:flex; align-items:center; gap:0.25rem; background:rgba(16,185,129,0.05); padding:0.4rem; border-radius:6px;">
+                <span>✅ Arayüz Onayı Tamamlandı</span>
+              </div>
+
+              <!-- E-posta İmzası Eksikse (OTP Kodu Giriş Alanı) -->
+              <div v-if="!(req.approvalsReceived || []).some(s => s.includes('E-posta'))" style="display:flex; flex-direction:column; gap:0.4rem; background:rgba(255,255,255,0.02); padding:0.5rem; border-radius:6px; border:1px solid rgba(139,92,246,0.15);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-size:0.72rem; color:#9ca3af;">📧 2. Aşama: E-posta Onay Kodu</span>
+                  <span style="font-size:0.65rem; color:#8b5cf6;">(Kod e-postanıza gönderilmiştir)</span>
+                </div>
+                <div style="display:flex; gap:0.4rem; align-items:center;">
+                  <input 
+                    v-model="approvalCodes[req.id]" 
+                    type="text" 
+                    placeholder="6 Haneli Güvenlik Kodu"
+                    maxlength="6"
+                    style="flex:1; height:32px; font-size:0.75rem; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:#fff; text-align:center; font-weight:700; outline:none;"
+                  />
+                  <button 
+                    class="btn-action btn-action--approve" 
+                    :disabled="isProcessing[req.id] || !approvalCodes[req.id]"
+                    @click="handleApprovalAction(req.id, 'approve', approvalCodes[req.id])"
+                    style="padding:0.35rem 0.75rem; font-size:0.7rem; border-radius:4px; font-weight:700;"
+                  >
+                    Kodu Doğrula
+                  </button>
+                </div>
+              </div>
+              <div v-else style="font-size:0.7rem; color:#10b981; display:flex; align-items:center; gap:0.25rem; background:rgba(16,185,129,0.05); padding:0.4rem; border-radius:6px;">
+                <span>✅ E-posta Güvenlik Kodu Doğrulandı</span>
+              </div>
+
+            </template>
+
+            <!-- TEK ONAY YETİYORSA (Normal Akış) -->
+            <template v-else>
+              <div style="display:flex; justify-content:flex-end;">
+                <button 
+                  class="btn-action btn-action--approve" 
+                  :disabled="isProcessing[req.id]"
+                  @click="handleApprovalAction(req.id, 'approve')"
+                  style="padding:0.4rem 1.2rem; font-size:0.75rem; border-radius:6px; font-weight:700;"
+                >
+                  {{ isProcessing[req.id] ? 'İşleniyor...' : '✅ Doğrudan Onayla' }}
+                </button>
+              </div>
+            </template>
+
+          </div>
         </div>
-        <div v-else-if="isOwnRequest(req) && req.status === 'pending'" class="own-req-badge">
+        <div v-else-if="isOwnRequest(req) && req.status === 'pending'" class="own-req-badge" style="margin-top:0.75rem;">
           ⏳ Kendi talebiniz (Onay bekleniyor)
         </div>
       </div>
@@ -87,6 +154,9 @@ const toast = useToast()
 const approvals = ref([])
 const isLoading = ref(true)
 const isProcessing = ref({})
+const doubleApprovalEnabled = ref(false)
+const approvalCodes = ref({})
+const unreadIds = ref([])
 
 const props = defineProps({
   userRole: {
@@ -135,8 +205,19 @@ async function fetchApprovals() {
     })
     if (response.ok) {
       const data = await response.json()
-      approvals.value = data.approvals || []
-      markAllAsSeen(data.approvals || [])
+      const list = data.approvals || []
+      
+      const seen = JSON.parse(localStorage.getItem('seen_approvals') || '[]')
+      unreadIds.value = list.filter(req => req.status === 'pending' && !seen.includes(req.id)).map(r => r.id)
+
+      approvals.value = list
+      doubleApprovalEnabled.value = data.doubleApprovalEnabled || false
+      
+      // 1.5 saniye sonra okundu yap ve yeni ikonunu kaldır
+      setTimeout(() => {
+        markAllAsSeen(list)
+        unreadIds.value = []
+      }, 1500)
     } else {
       toast.error('Talepler yüklenemedi.')
     }
@@ -147,18 +228,25 @@ async function fetchApprovals() {
   }
 }
 
-async function handleApprovalAction(id, action) {
+async function handleApprovalAction(id, action, code = null) {
   isProcessing.value[id] = true
   try {
     const token = localStorage.getItem('token')
     const response = await fetch(`/api/auth/approvals/${id}/${action}`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}` 
+      },
+      body: JSON.stringify({ code })
     })
     const data = await response.json()
 
     if (response.ok) {
       toast.success(action === 'approve' ? 'Talep onaylandı.' : 'Talep reddedildi.')
+      if (approvalCodes.value[id]) {
+        approvalCodes.value[id] = ''
+      }
       await fetchApprovals()
       // Kasa token'ı güncelleme durumu varsa tetikleyelim
       if (data.token) {
@@ -469,5 +557,10 @@ onMounted(() => {
   color: #f59e0b;
   text-align: right;
   margin-top: 0.25rem;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 </style>

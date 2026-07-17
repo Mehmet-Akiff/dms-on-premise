@@ -385,6 +385,10 @@ onMounted(() => {
   font-weight: 700;
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
 }
 
 .role--ciso { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
