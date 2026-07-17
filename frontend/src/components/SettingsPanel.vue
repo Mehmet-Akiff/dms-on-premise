@@ -386,7 +386,7 @@
         <!-- 6. E-POSTA BİLDİRİM VE ALARM AYARLARI -->
         <div class="settings-section" v-if="isAdminOrCiso">
           <h4>📧 Yetkisiz Erişim Alarmı</h4>
-          <p class="section-desc">Hatalı şifre denemelerinde uyarı gönderilecek doğrulanmış e-postayı ayarlayın.</p>
+          <p class="section-desc">Hatalı şifre denemelerinde gönderilecek alarm limitini ayarlayın. Alarmlar, profilinizde tanımlı doğrulanmış e-postanıza gönderilecektir.</p>
 
           <div class="form-group" style="margin-bottom:1rem">
             <label>Hatalı Deneme Limiti (Alarm Eşiği)</label>
@@ -400,51 +400,11 @@
             </div>
           </div>
 
-          <div class="verification-status-box" :class="isEmailVerified ? 'status--verified' : 'status--unverified'">
+          <div class="verification-status-box status--verified">
             <span class="status-dot"></span>
-            <strong>{{ isEmailVerified ? 'E-posta Doğrulandı' : 'E-posta Doğrulanmadı' }}</strong>
-            <p v-if="verifiedEmail && isEmailVerified" class="status-detail">Doğrulanmış Alıcı: {{ verifiedEmail }}</p>
+            <strong>Alarm E-posta Adresi:</strong>
+            <p class="status-detail" style="margin-top:0.25rem; font-weight:700;">{{ verifiedEmail || 'Sistem Alarm Alıcısı' }}</p>
           </div>
-
-          <form @submit.prevent="askConfirm('E-posta bildirim adresini doğrulayıp kod göndermek istediğinize emin misiniz?', sendVerificationCode)" class="settings-form" style="margin-top:1rem">
-            <div class="form-group">
-              <label>Bildirim E-posta Adresi</label>
-              <div class="email-input-group">
-                <input 
-                  v-model="alertEmail" 
-                  type="email" 
-                  placeholder="orn: guvenlik@sirketiniz.com" 
-                  required 
-                  :disabled="isVerifying"
-                />
-                <button type="submit" class="btn-send-code" :disabled="isSendingCode || isVerifying">
-                  {{ isSendingCode ? '...' : 'Kod Gönder' }}
-                </button>
-              </div>
-            </div>
-            
-            <!-- Alarm Maili Doğrulama Kodu Giriş Alanı -->
-            <div v-if="isVerifying" class="otp-verification-section" style="background: rgba(16, 185, 129, 0.03); border: 1px dashed rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 0.85rem; margin-top:0.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
-              <p style="font-size: 0.7rem; color: #9ca3af; line-height: 1.4; margin: 0;">E-posta adresinize gönderilen 6 haneli doğrulama kodunu girin.</p>
-              <div class="otp-input-container" style="display: flex; gap: 0.4rem; justify-content: center;">
-                <input 
-                  v-model="verificationCode"
-                  type="text"
-                  maxLength="6"
-                  placeholder="6 Haneli Kod"
-                  style="width: 150px; height: 36px; background: rgba(15, 23, 42, 0.7); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 6px; text-align: center; color: #fff; font-size: 1.1rem; font-weight: 700; outline: none;"
-                />
-              </div>
-              <div style="display:flex; justify-content:flex-end; gap:0.5rem">
-                <button type="button" style="background: transparent; border: 1px solid rgba(255, 255, 255, 0.1); color: #9ca3af; padding: 0.35rem 0.75rem; font-size: 0.72rem; border-radius: 6px; cursor: pointer;" @click="isVerifying = false">Vazgeç</button>
-                <button type="button" style="background: #10b981; border: none; color: #fff; padding: 0.35rem 1rem; font-size: 0.72rem; font-weight: 700; border-radius: 6px; cursor: pointer;" @click="verifyAlarmCode">Doğrula</button>
-              </div>
-            </div>
-
-            <div v-if="mailErrorDetail" class="mail-error-detail-banner">
-              ⚠️ <strong>Hata:</strong> {{ mailErrorDetail }}
-            </div>
-          </form>
         </div>
 
         <hr class="section-divider" v-if="isAdminOrCiso" />
@@ -1479,9 +1439,9 @@ onMounted(() => {
 .settings-drawer {
   position: absolute;
   top: 0;
-  right: -460px;
+  right: -620px;
   width: 100%;
-  max-width: 440px;
+  max-width: 600px;
   height: 100%;
   background: rgba(17, 24, 39, 0.94);
   display: flex;

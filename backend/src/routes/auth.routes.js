@@ -840,6 +840,16 @@ router.put('/profile', verifyToken, async (req, res) => {
       user.email = email;
       logAction('EMAIL_UPDATE', user.id, user.fullName, null, null, `E-posta güncellendi. Eski: ${oldEmail}, Yeni: ${email}`, ip);
 
+      // Yöneticinin/CISO'nun e-postası güncellendiyse yetkisiz erişim alarm mailini de otomatik güncelle
+      if (user.role === 'admin' || user.role === 'ciso') {
+        const val = settingsRecord.value || {};
+        val.alertEmail = email;
+        val.verifiedAlertEmail = email;
+        settingsRecord.value = val;
+        settingsRecord.changed('value', true);
+        await settingsRecord.save();
+      }
+
       // Kodu sil
       const val = settings || {};
       delete val.emailChangeCode;

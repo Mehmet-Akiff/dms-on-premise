@@ -38,6 +38,48 @@
       </div>
     </div>
 
+    <!-- Aktif Etiket Filtresi -->
+    <div v-if="activeTagFilter" class="tag-filter-bar" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1rem; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; margin: 0.75rem 0; font-size: 0.82rem;">
+      <span style="color: var(--text-secondary);">Aktif Etiket Filtresi:</span>
+      <span style="font-weight: 700; background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #a78bfa; padding: 0.15rem 0.5rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.3rem;">
+        🏷️ {{ activeTagFilter }}
+        <button type="button" @click="clearTagFilter" style="background: transparent; border: none; color: #f87171; font-weight: 700; cursor: pointer; font-size: 0.78rem; padding: 0 0.1rem;">✕</button>
+      </span>
+      <button @click="clearTagFilter" style="margin-left: auto; background: transparent; border: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.72rem; cursor: pointer;">
+        Filtreyi Temizle
+      </button>
+    </div>
+
+    <!-- Hızlı Etiket Filtresi Şeridi -->
+    <div v-if="allAvailableTags.length > 0" class="available-tags-wrapper" style="margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; background: rgba(30, 41, 59, 0.4); padding: 0.6rem 0.85rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+      <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">🏷️ Etiketler:</span>
+      <span 
+        v-for="tag in allAvailableTags" 
+        :key="tag"
+        @click="filterByTag(tag)"
+        :style="{
+          fontSize: '0.68rem',
+          fontWeight: '700',
+          background: activeTagFilter === tag ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.03)',
+          border: activeTagFilter === tag ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,0.08)',
+          color: activeTagFilter === tag ? '#a78bfa' : 'var(--text-secondary)',
+          padding: '0.15rem 0.45rem',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          transition: 'all 0.2s'
+        }"
+      >
+        {{ tag }}
+      </span>
+      <button 
+        v-if="activeTagFilter" 
+        @click="clearTagFilter" 
+        style="margin-left: auto; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: #f87171; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.68rem; cursor: pointer; font-weight: 700;"
+      >
+        ✕ Filtreyi Kaldır
+      </button>
+    </div>
+
     <!-- Yükleniyor -->
     <div v-if="isLoading && documents.length === 0" class="doc-loading">
       <div class="spinner-sm"></div>
@@ -81,6 +123,18 @@
                 <span v-if="isSearchMode && doc.matchLocation" class="match-badge" :class="'match--' + doc.matchLocation">
                   {{ doc.matchLocation === 'filename' ? '📌 Adında' : '📄 İçerikte' }}
                 </span>
+                <!-- Belge Etiketleri (Rozetler) -->
+                <div v-if="doc.tags && doc.tags.length > 0" class="doc-tags-list" style="margin-top: 0.35rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                  <span 
+                    v-for="tag in doc.tags" 
+                    :key="tag" 
+                    @click.stop="filterByTag(tag)"
+                    style="font-size: 0.65rem; font-weight: 700; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.22); color: #a78bfa; padding: 0.1rem 0.35rem; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
+                    title="Bu etikete göre filtrele"
+                  >
+                    🏷️ {{ tag }}
+                  </span>
+                </div>
               </td>
               <td>
                 <span class="category-badge" :class="'cat--' + getCleanCategoryClass(doc.category || doc.metadata?.category)">
@@ -186,6 +240,18 @@
                 <span v-if="doc.matchLocation" class="match-badge" :class="'match--' + doc.matchLocation">
                   {{ doc.matchLocation === 'filename' ? '📌 Adında' : '📄 İçerikte' }}
                 </span>
+                <!-- Belge Etiketleri (Rozetler) -->
+                <div v-if="doc.tags && doc.tags.length > 0" class="doc-tags-list" style="margin-top: 0.35rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                  <span 
+                    v-for="tag in doc.tags" 
+                    :key="tag" 
+                    @click.stop="filterByTag(tag)"
+                    style="font-size: 0.65rem; font-weight: 700; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.22); color: #a78bfa; padding: 0.1rem 0.35rem; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
+                    title="Bu etikete göre filtrele"
+                  >
+                    🏷️ {{ tag }}
+                  </span>
+                </div>
               </td>
               <td>
                 <span class="category-badge" :class="'cat--' + getCleanCategoryClass(doc.category || doc.metadata?.category)">
@@ -354,6 +420,7 @@
                 :documentId="selectedDoc.id"
                 :documentName="selectedDoc.originalName || selectedDoc.original_name || ''"
                 :initialText="detailData?.metadata?.extractedText || detailData?.metadata?.extracted_text || ''"
+                :initialTags="selectedDoc.tags || []"
                 @save="handleEditorSave"
                 @cancel="handleEditorCancel"
               />
@@ -527,11 +594,36 @@ const detailData = ref(null)
 const isLoadingDetail = ref(false)
 const isEditing = ref(false)
 
+// Etiket Filtreleme
+const activeTagFilter = ref('')
+
+async function filterByTag(tag) {
+  activeTagFilter.value = tag
+  await fetchDocuments()
+}
+
+function clearTagFilter() {
+  activeTagFilter.value = ''
+  fetchDocuments()
+}
+
+
 // AI Özeti bulucu
 const aiSummary = computed(() => {
   const jobs = detailData.value?.jobs || [];
   const completedJob = jobs.find(j => j.jobStatus === 'COMPLETED' && j.resultSummary);
   return completedJob ? completedJob.resultSummary : 'Bu doküman için AI özeti bulunmamaktadır.';
+})
+
+// Sistemdeki mevcut tüm benzersiz etiketler
+const allAvailableTags = computed(() => {
+  const tagSet = new Set()
+  documents.value.forEach(doc => {
+    if (Array.isArray(doc.tags)) {
+      doc.tags.forEach(t => tagSet.add(t))
+    }
+  })
+  return Array.from(tagSet)
 })
 
 function getFileName(filePath) {
@@ -627,7 +719,16 @@ async function fetchDocuments() {
       await fetchTrashDocuments()
       return
     }
-    const response = await fetch('/api/documents')
+    const token = localStorage.getItem('token')
+    let url = '/api/documents'
+    if (activeTagFilter.value) {
+      url += `?tag=${encodeURIComponent(activeTagFilter.value)}`
+    }
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
     if (response.ok) {
       const data = await response.json()
       documents.value = data.documents || []
@@ -642,7 +743,12 @@ async function fetchDocuments() {
 // Çöp kutusundaki silinmiş dökümanları çek
 async function fetchTrashDocuments() {
   try {
-    const response = await fetch('/api/documents/trash')
+    const token = localStorage.getItem('token')
+    const response = await fetch('/api/documents/trash', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
     if (response.ok) {
       const data = await response.json()
       documents.value = data.documents || []
@@ -974,10 +1080,12 @@ async function addComment(lineIdx) {
   allComments.push(newComment);
   
   try {
+    const token = localStorage.getItem('token');
     const response = await fetch(`/api/documents/${selectedDoc.value.id}`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
         comments: allComments
@@ -1006,10 +1114,12 @@ async function deleteComment(commentId) {
   const allComments = (detailData.value?.metadata?.comments || []).filter(c => c.id !== commentId);
   
   try {
+    const token = localStorage.getItem('token');
     const response = await fetch(`/api/documents/${selectedDoc.value.id}`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
         comments: allComments
@@ -1041,7 +1151,12 @@ async function openDetail(doc) {
   trackAction('PREVIEW', doc.id, doc.originalName || doc.original_name, 'Belge detayları, AI özeti ve OCR metni görüntülendi.');
 
   try {
-    const response = await fetch(`/api/documents/${doc.id}`)
+    const token = localStorage.getItem('token')
+    const response = await fetch(`/api/documents/${doc.id}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
     if (response.ok) {
       const data = await response.json()
       detailData.value = data.document || data

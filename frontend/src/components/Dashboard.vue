@@ -92,7 +92,12 @@ const isLoading = ref(true)
 
 async function fetchStats() {
   try {
-    const response = await fetch('/api/documents/stats')
+    const token = localStorage.getItem('token')
+    const response = await fetch('/api/documents/stats', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
     if (response.ok) {
       const data = await response.json()
       stats.value = data

@@ -355,7 +355,7 @@ body {
    ============================================================ */
 .dms-main {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 360px 1fr;
   gap: 1.5rem;
   flex: 1;
   align-items: start;
