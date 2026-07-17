@@ -1,12 +1,16 @@
 /**
- * DMS On-Premise - Kasa Yetkilendirme ve Ayar Rotaları
+ * DMS On-Premise - Kasa & Kullanıcı Yetkilendirme Rotaları
  */
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
-const { SystemSettings } = require('../models');
+const { v4: uuidv4 } = require('uuid');
+const { User, SystemSettings, ApprovalRequest } = require('../models');
+const { verifyToken, requireAdmin, requireCiso } = require('../middleware/auth.middleware');
+const { logCisoAction, archiveEmailVerification } = require('../utils/cisoLogger');
+const { logAction } = require('../utils/auditLogger');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dms_jwt_secret_key_2026';
@@ -14,45 +18,102 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dms_jwt_secret_key_2026';
 // Bellek içi hatalı giriş takibi
 const loginAttempts = {};
 
-// Lockout Süreleri Eşleme (Hata Sayısı -> Kilit Süresi Milisaniye)
+// Bellek içi e-posta gönderim limit takibi (2 ardışık mail sonrası 1 dk bekleme)
+const emailRequestLogs = {};
+
+function checkAndRecordEmailLimit(email, ip, role) {
+  const now = Date.now();
+  const keys = [email, ip].filter(Boolean);
+
+  for (const key of keys) {
+    if (!emailRequestLogs[key]) {
+      emailRequestLogs[key] = [];
+    }
+    // Son 1 saatteki istekleri filtrele
+    emailRequestLogs[key] = emailRequestLogs[key].filter(t => now - t < 60 * 60 * 1000);
+
+    const history = emailRequestLogs[key];
+    const count = history.length;
+
+    if (role === 'ciso') {
+      // CISO için limit yok!
+      continue;
+    }
+
+    if (role === 'admin') {
+      // Admin: ilk 3 limitsiz, sonrası 1 dk bekleme
+      if (count >= 3) {
+        const lastTime = history[count - 1];
+        const diff = now - lastTime;
+        if (diff < 60 * 1000) {
+          return Math.ceil((60 * 1000 - diff) / 1000);
+        }
+      }
+    } else {
+      // Standart kullanıcı: ilk 2 limitsiz, sonrası 5 dk bekleme
+      if (count >= 2) {
+        const lastTime = history[count - 1];
+        const diff = now - lastTime;
+        if (diff < 5 * 60 * 1000) {
+          return Math.ceil((5 * 60 * 1000 - diff) / 1000);
+        }
+      }
+    }
+  }
+
+  // Limit aşılmadıysa kaydet
+  for (const key of keys) {
+    emailRequestLogs[key].push(now);
+  }
+  return 0;
+}
+
+// SMTP Detaylı Hata Çeviricisi
+function getSmtpFriendlyError(errorMsg) {
+  const msg = errorMsg.toLowerCase();
+  if (msg.includes('connection timeout') || msg.includes('etimedout')) {
+    return 'Sunucu bağlantı zaman aşımına uğradı. Port veya host bilgisini kontrol edin.';
+  }
+  if (msg.includes('connection refused') || msg.includes('econnrefused')) {
+    return 'Sunucu bağlantısı reddedildi. Port veya host adresinin doğru olduğundan emin olun.';
+  }
+  if (msg.includes('username and password not accepted') || msg.includes('invalid credentials') || msg.includes('authentication failed') || msg.includes('invalid login')) {
+    return 'Kullanıcı adı veya şifre SMTP sunucusu tarafından kabul edilmedi.';
+  }
+  if (msg.includes('application-specific password required')) {
+    return 'Google hesabı için Uygulama Şifresi (App Password) kullanılması zorunludur.';
+  }
+  if (msg.includes('enotfound')) {
+    return 'SMTP sunucu adresi bulunamadı (DNS Hatası). Host adresini kontrol edin.';
+  }
+  return 'SMTP sunucusuna bağlanırken bilinmeyen bir hata oluştu.';
+}
+
+// Lockout Süreleri Eşleme
 const getLockoutDuration = (attempts) => {
   if (attempts < 3) return 0;
   switch (attempts) {
-    case 3: return 1 * 60 * 1000;      // 1 dakika
-    case 4: return 3 * 60 * 1000;      // 3 dakika
-    case 5: return 5 * 60 * 1000;      // 5 dakika
-    case 6: return 10 * 60 * 1000;     // 10 dakika
-    case 7: return 15 * 60 * 1000;     // 15 dakika
-    case 8: return 20 * 60 * 1000;     // 20 dakika
-    case 9: return 30 * 60 * 1000;     // 30 dakika
-    case 10: return 60 * 60 * 1000;    // 1 saat
-    default: return 24 * 60 * 60 * 1000; // 24 saat (1 gün)
+    case 3: return 1 * 60 * 1000;
+    case 4: return 3 * 60 * 1000;
+    case 5: return 5 * 60 * 1000;
+    default: return 15 * 60 * 1000;
   }
 };
 
-// Dinamik Transporter Üretici
+// SMTP Transporter
 const getMailTransporter = (smtp) => {
   if (smtp && smtp.auth && smtp.auth.user && smtp.auth.pass) {
-    // Gmail veya Özel SMTP
-    const host = smtp.host || 'smtp.gmail.com';
-    const port = parseInt(smtp.port) || 465;
-    const secure = smtp.secure !== undefined ? smtp.secure : (port === 465);
-
-    console.log(`[SMTP] Gerçek SMTP bağlantısı kuruluyor: ${host}:${port} (SSL: ${secure}), User: ${smtp.auth.user}`);
-    
     return nodemailer.createTransport({
-      host,
-      port,
-      secure,
+      host: smtp.host || 'smtp.gmail.com',
+      port: parseInt(smtp.port) || 465,
+      secure: smtp.secure !== undefined ? smtp.secure : true,
       auth: {
         user: smtp.auth.user,
-        pass: smtp.auth.pass // Google App Password
-      }
+        pass: smtp.auth.pass
+      },
+      tls: { rejectUnauthorized: false }
     });
   }
-  
-  // SMTP bilgileri eksikse console mock'a ve local dev'e fallback
-  console.log(`[SMTP] SMTP bilgileri eksik (şifre boş). Fallback loglama transporter'ı kuruluyor.`);
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'localhost',
     port: parseInt(process.env.SMTP_PORT) || 1025,
@@ -60,165 +121,831 @@ const getMailTransporter = (smtp) => {
   });
 };
 
-// Mailer Yardımcı Fonksiyonu
-const sendAlertEmail = async (toEmail, attemptsCount, clientIp, smtpConfig) => {
-  if (!toEmail) return;
-  try {
-    const fromUser = (smtpConfig && smtpConfig.auth && smtpConfig.auth.user) || 'security@dms-onpremise.com';
-    
-    console.log(`\n=================== [E-POSTA UYARISI] ===================`);
-    console.log(`Kime: ${toEmail}`);
-    console.log(`Gönderici: ${fromUser}`);
-    console.log(`Konu: DMS - YETKİSİZ ERİŞİM ALARMI!`);
-    console.log(`Mesaj: DMS On-Premise sisteminize ardışık hatalı giriş denemeleri yapılmıştır.`);
-    console.log(`Hatalı Deneme Sayısı: ${attemptsCount}`);
-    console.log(`IP Adresi: ${clientIp}`);
-    console.log(`Güvenlik nedeniyle sistem geçici olarak kilitlenmiştir.`);
-    console.log(`=========================================================\n`);
-
-    const transporter = getMailTransporter(smtpConfig);
-    await transporter.sendMail({
-      from: `"DMS Security" <${fromUser}>`,
-      to: toEmail,
-      subject: 'DMS - YETKİSİZ ERİŞİM ALARMI!',
-      text: `DMS On-Premise sisteminize ardışık hatalı giriş denemeleri yapılmıştır. Hatalı Deneme: ${attemptsCount}, IP: ${clientIp}. Güvenlik nedeniyle erişim geçici olarak kilitlenmiştir.`
-    });
-    console.log(`[MAIL] Uyarı maili başarıyla gönderildi: ${toEmail}`);
-  } catch (err) {
-    console.warn(`[MAIL_UYARI] SMTP gönderimi başarısız oldu (Mock loglama yapıldı):`, err.message);
-  }
-};
-
 // ============================================================
-// GET /api/auth/kasa-status — Giriş Hakları ve Lockout Durumu
+// POST /api/auth/login — Kullanıcı / Admin / CISO Giriş
 // ============================================================
-router.get('/kasa-status', async (req, res) => {
+router.post('/login', async (req, res) => {
   const ip = req.ip || req.connection.remoteAddress;
-  const attemptsInfo = loginAttempts[ip] || { attempts: 0, lockUntil: null };
+  const { username, password, isCiso } = req.body;
 
-  let lockoutSecondsLeft = 0;
-  if (attemptsInfo.lockUntil && attemptsInfo.lockUntil > Date.now()) {
-    lockoutSecondsLeft = Math.ceil((attemptsInfo.lockUntil - Date.now()) / 1000);
-  }
-
-  // Kalan hak (3 hatalı hak var)
-  const remainingAttempts = Math.max(0, 3 - (attemptsInfo.attempts % 3));
-
-  res.status(200).json({
-    attempts: attemptsInfo.attempts,
-    remainingAttempts: remainingAttempts === 0 && lockoutSecondsLeft > 0 ? 0 : (attemptsInfo.attempts >= 3 ? 1 : 3 - attemptsInfo.attempts),
-    lockoutSecondsLeft
-  });
-});
-
-// ============================================================
-// POST /api/auth/kasa-login — Kasa Kilidi Açma
-// ============================================================
-router.post('/kasa-login', async (req, res) => {
-  const ip = req.ip || req.connection.remoteAddress;
-  
-  if (!loginAttempts[ip]) {
-    loginAttempts[ip] = { attempts: 0, lockUntil: null };
-  }
-  
-  const attemptsInfo = loginAttempts[ip];
-
-  // 1. Kilit kontrolü
-  if (attemptsInfo.lockUntil && attemptsInfo.lockUntil > Date.now()) {
-    const secondsLeft = Math.ceil((attemptsInfo.lockUntil - Date.now()) / 1000);
-    return res.status(423).json({
-      error: 'Kasa geçici olarak kilitlendi.',
-      message: `Çok fazla hatalı deneme! Lütfen ${secondsLeft} saniye sonra tekrar deneyin.`,
-      lockoutSecondsLeft: secondsLeft
-    });
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Kullanıcı adı ve şifre zorunludur.' });
   }
 
   try {
-    const { username, password } = req.body;
-    
-    // Ayarları çek
-    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
-    const settings = settingsRecord.value;
+    const user = await User.findOne({ where: { username } });
 
-    const isUsernameValid = username === settings.masterUsername;
-    const isPasswordValid = isUsernameValid && await bcrypt.compare(password, settings.masterPasswordHash);
+    if (!loginAttempts[username]) {
+      loginAttempts[username] = { attempts: 0, lockUntil: null };
+    }
+    const attemptsInfo = loginAttempts[username];
 
-    if (!isUsernameValid || !isPasswordValid) {
+    if (attemptsInfo.lockUntil && attemptsInfo.lockUntil > Date.now()) {
+      const left = Math.ceil((attemptsInfo.lockUntil - Date.now()) / 1000);
+      return res.status(423).json({ error: `Çok fazla hatalı giriş. Lütfen ${left} saniye bekleyin.` });
+    }
+
+    const record = await SystemSettings.findByPk('kasa_settings');
+    const settings = record ? record.value : {};
+    const threshold = settings.alertThreshold || 3;
+
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       attemptsInfo.attempts += 1;
+      
+      // ALARM EMAİL TETİKLEME (Kullanıcıya bildirmeden)
+      if (attemptsInfo.attempts >= threshold) {
+        if (settings.verifiedAlertEmail && settings.smtpConfig?.auth?.user) {
+          try {
+            const transporter = getMailTransporter(settings.smtpConfig);
+            const fromUser = settings.smtpConfig.auth.user;
+            transporter.sendMail({
+              from: `"DMS Security Alert" <${fromUser}>`,
+              to: settings.verifiedAlertEmail,
+              subject: 'DMS - Yetkisiz Erişim Alarmı',
+              text: `DMS On-Premise sisteminde ardışık olarak hatalı giriş denemeleri yapılmıştır.\n\nHedef Kullanıcı: ${username}\nHatalı Deneme Sayısı: ${attemptsInfo.attempts}\nIP Adresi: ${ip}\nTarih: ${new Date().toLocaleString('tr-TR')}`
+            }).catch(err => console.warn('[ALARM_MAIL_ERR]', err.message));
+          } catch (e) {
+            console.warn('[ALARM_MAIL_SMTP_ERR]', e.message);
+          }
+        }
+      }
 
-      // Lockout sınırları kontrol et
       const duration = getLockoutDuration(attemptsInfo.attempts);
       if (duration > 0) {
         attemptsInfo.lockUntil = Date.now() + duration;
-        
-        // E-posta uyarısı tetikleme limitini aşmış mı kontrol et
-        const threshold = settings.alertThreshold || 3;
-        if (attemptsInfo.attempts >= threshold && settings.verifiedAlertEmail) {
-          await sendAlertEmail(settings.verifiedAlertEmail, attemptsInfo.attempts, ip, settings.smtpConfig);
-        }
-
-        const secondsLeft = Math.ceil(duration / 1000);
-        return res.status(423).json({
-          error: 'Kasa kilitlendi.',
-          message: `Hatalı giriş! Kasa ${secondsLeft} saniye kilitlendi.`,
-          attempts: attemptsInfo.attempts,
-          lockoutSecondsLeft: secondsLeft
-        });
       }
-
-      const remaining = 3 - attemptsInfo.attempts;
-      return res.status(401).json({
-        error: 'Hatalı kullanıcı adı veya şifre.',
-        message: `Hatalı giriş! Kalan deneme hakkı: ${remaining}`,
-        attempts: attemptsInfo.attempts,
-        remainingAttempts: remaining
-      });
+      return res.status(401).json({ error: 'Hatalı kullanıcı adı veya şifre.' });
     }
 
-    // Giriş Başarılı: IP limitlerini sıfırla
+    if (user.status !== 'active') {
+      return res.status(403).json({ error: 'Hesabınız henüz onaylanmamış.' });
+    }
+
+    if (isCiso && user.role !== 'ciso') {
+      return res.status(403).json({ error: 'Bu panelden sadece CISO giriş yapabilir.' });
+    }
+
     attemptsInfo.attempts = 0;
     attemptsInfo.lockUntil = null;
 
-    // JWT Token oluştur
     const token = jwt.sign(
-      { role: 'admin', systemAccess: true },
+      { id: user.id, username: user.username, role: user.role, fullName: user.fullName },
       JWT_SECRET,
       { expiresIn: '12h' }
     );
 
-    res.status(200).json({
-      message: 'Kasa kilidi başarıyla açıldı.',
-      token
-    });
+    if (user.role === 'ciso') {
+      logCisoAction('LOGIN', `CISO sisteme giriş yaptı. IP: ${ip}`, ip);
+    } else {
+      logAction('LOGIN', user.id, user.fullName, null, null, `Kullanıcı sisteme girdi. Rol: ${user.role}`, ip);
+    }
 
+    res.status(200).json({
+      message: 'Giriş başarılı.',
+      token,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        role: user.role,
+        permissions: user.permissions
+      }
+    });
   } catch (error) {
-    console.error('[HATA] Kasa giriş hatası:', error.message);
-    res.status(500).json({ error: 'Giriş yapılırken bir hata oluştu.' });
+    console.error('[LOGIN_HATA]', error.message);
+    res.status(500).json({ error: 'Giriş yapılırken hata oluştu.' });
   }
 });
 
 // ============================================================
-// GET /api/auth/settings — Kasa Ayarlarını Getir
+// POST /api/auth/logout — Kullanıcı Çıkış Yapma (Inaktiflik)
 // ============================================================
-router.get('/settings', async (req, res) => {
+router.post('/logout', verifyToken, async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  try {
+    if (req.user.role === 'ciso') {
+      logCisoAction('LOGOUT', `CISO sistemden çıkış yaptı / inaktif oldu. IP: ${ip}`, ip);
+    } else {
+      logAction('LOGOUT', req.user.id, req.user.fullName, null, null, `Kullanıcı çıkış yaptı / inaktif oldu. IP: ${ip}`, ip);
+    }
+    res.status(200).json({ message: 'Çıkış yapıldı.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Çıkış sırasında hata.' });
+  }
+});
+
+// ============================================================
+// POST /api/auth/register-send-code — Kayıt OTP E-posta Gönder (1 dk Limitli)
+// ============================================================
+router.post('/register-send-code', async (req, res) => {
+  const { email, role } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+
+  if (!email) {
+    return res.status(400).json({ error: 'E-posta adresi gereklidir.' });
+  }
+
+  // Gönderim Limiti Kontrolü (Role göre dinamik limit kontrolü)
+  const waitSeconds = checkAndRecordEmailLimit(email, ip, role || 'user');
+  if (waitSeconds > 0) {
+    const minStr = waitSeconds >= 60 ? `${Math.ceil(waitSeconds / 60)} dakika` : `${waitSeconds} saniye`;
+    return res.status(429).json({ 
+      error: 'E-posta limitine takıldınız.', 
+      message: `Çok sık e-posta talebi gönderdiniz. Lütfen tekrar kod talep etmek için ${minStr} bekleyin.` 
+    });
+  }
+
+  try {
+    const emailExists = await User.findOne({ where: { email } });
+    if (emailExists) {
+      return res.status(400).json({ error: 'Bu e-posta adresi zaten kayıtlı.' });
+    }
+
+    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
+    const settings = settingsRecord ? settingsRecord.value : {};
+    
+    if (!settings.smtpConfig?.auth?.user || !settings.smtpConfig?.auth?.pass) {
+      return res.status(400).json({ 
+        error: 'SMTP ayarları eksik.', 
+        message: 'Sistemin onay veya bildirim maili atabilmesi için öncelikle yöneticinin SMTP Gönderici Ayarlarını kaydetmesi gerekmektedir.' 
+      });
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000;
+
+    await ApprovalRequest.destroy({ where: { type: 'REGISTRATION_OTP', targetId: email } });
+    await ApprovalRequest.create({
+      type: 'REGISTRATION_OTP',
+      targetId: email,
+      token: code,
+      requestData: { expiresAt },
+      status: 'pending'
+    });
+
+    const transporter = getMailTransporter(settings.smtpConfig);
+    const fromUser = settings.smtpConfig.auth.user;
+    await transporter.sendMail({
+      from: `"DMS Security" <${fromUser}>`,
+      to: email,
+      subject: 'DMS - Kayıt E-posta Doğrulama Kodu',
+      text: `DMS On-Premise sistemine kayıt başvurusu yapabilmek için doğrulama kodunuz:\n\n${code}\n\nBu kod 5 dakika geçerlidir.`
+    });
+
+    console.log(`\n[REGISTRATION OTP KODU] Email: ${email} -> Kod: ${code}\n`);
+    res.status(200).json({ message: 'Doğrulama kodu gönderildi.' });
+  } catch (error) {
+    console.error('[REG_SEND_CODE_ERR]', error.message);
+    res.status(500).json({ error: 'Kod gönderilirken hata oluştu.', message: error.message });
+  }
+});
+
+// ============================================================
+// POST /api/auth/register-verify-code — Kayıt OTP Doğrula
+// ============================================================
+router.post('/register-verify-code', async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ error: 'E-posta ve doğrulama kodu gereklidir.' });
+  }
+
+  try {
+    const request = await ApprovalRequest.findOne({
+      where: { type: 'REGISTRATION_OTP', targetId: email, token: code, status: 'pending' }
+    });
+
+    if (!request) {
+      return res.status(400).json({ error: 'Geçersiz veya süresi dolmuş doğrulama kodu.' });
+    }
+
+    if (request.requestData?.expiresAt < Date.now()) {
+      request.status = 'rejected';
+      await request.save();
+      return res.status(400).json({ error: 'Doğrulama kodunun süresi dolmuş.' });
+    }
+
+    request.status = 'approved';
+    await request.save();
+
+    res.status(200).json({ message: 'E-posta adresi başarıyla doğrulandı.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Doğrulama sırasında hata oluştu.' });
+  }
+});
+
+// ============================================================
+// POST /api/auth/register — Yeni Kullanıcı / Admin Kaydı (Zorunlu Mail Onaylı)
+// ============================================================
+router.post('/register', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const { fullName, username, email, password, role } = req.body;
+
+  if (!fullName || !username || !email || !password || !role) {
+    return res.status(400).json({ error: 'Tüm alanlar zorunludur.' });
+  }
+
+  try {
+    const otpApproved = await ApprovalRequest.findOne({
+      where: { type: 'REGISTRATION_OTP', targetId: email, status: 'approved' }
+    });
+
+    if (!otpApproved) {
+      return res.status(400).json({ error: 'Lütfen kayıt işleminden önce e-posta adresinizi doğrulayın.' });
+    }
+
+    const userExists = await User.findOne({ where: { username } });
+    if (userExists) {
+      return res.status(400).json({ error: 'Bu kullanıcı adı zaten kullanımda.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
+    const settings = settingsRecord ? settingsRecord.value : {};
+    const alertEmail = settings.alertEmail || '';
+
+    const newUser = await User.create({
+      fullName,
+      username,
+      email,
+      passwordHash,
+      role: role === 'admin' ? 'admin' : 'user',
+      status: 'pending_approval',
+      permissions: {
+        canRead: true,
+        canWrite: role === 'admin'
+      }
+    });
+
+    otpApproved.status = 'consumed';
+    await otpApproved.save();
+
+    const token = uuidv4();
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 saat onay süresi
+
+    if (role === 'admin') {
+      const activeAdmins = await User.findAll({ where: { role: 'admin', status: 'active' } });
+      const requiredCount = Math.max(1, activeAdmins.length);
+
+      await ApprovalRequest.create({
+        type: 'ADMIN_CREATION',
+        targetId: newUser.id,
+        requestData: { username: newUser.username, email: newUser.email, expiresAt },
+        approvalsRequired: requiredCount,
+        approvalsReceived: [],
+        status: 'pending',
+        token
+      });
+
+      for (const adm of activeAdmins) {
+        try {
+          const transporter = getMailTransporter(settings.smtpConfig);
+          const fromUser = settings.smtpConfig?.auth?.user || 'security@dms.com';
+          await transporter.sendMail({
+            from: `"DMS Security" <${fromUser}>`,
+            to: adm.email,
+            subject: 'DMS - Yeni Yönetici Onay Talebi',
+            text: `Sisteme yeni bir yönetici (Admin) kayıt talebi geldi.\n\nKullanıcı: ${newUser.fullName} (${newUser.username})\nE-posta: ${newUser.email}\n\nOnaylamak için lütfen bu linke tıklayın:\nhttp://localhost:3000/api/auth/approve?token=${token}`
+          });
+        } catch (mailErr) {
+          console.warn(`Admin e-posta gönderimi başarısız (${adm.email}):`, mailErr.message);
+        }
+      }
+    } else {
+      await ApprovalRequest.create({
+        type: 'STANDARD_USER_CREATION',
+        targetId: newUser.id,
+        requestData: { username: newUser.username, email: newUser.email, expiresAt },
+        approvalsRequired: 1,
+        approvalsReceived: [],
+        status: 'pending',
+        token
+      });
+
+      if (alertEmail) {
+        try {
+          const transporter = getMailTransporter(settings.smtpConfig);
+          const fromUser = settings.smtpConfig?.auth?.user || 'security@dms.com';
+          await transporter.sendMail({
+            from: `"DMS Security" <${fromUser}>`,
+            to: alertEmail,
+            subject: 'DMS - Yeni Kullanıcı Onay Talebi',
+            text: `Sisteme yeni bir kullanıcı kayıt talebi geldi.\n\nKullanıcı: ${newUser.fullName} (${newUser.username})\nE-posta: ${newUser.email}\n\nOnaylamak için lütfen bu linke tıklayın:\nhttp://localhost:3000/api/auth/approve?token=${token}`
+          });
+        } catch (mailErr) {
+          console.warn('Kullanıcı onay e-postası gönderilemedi:', mailErr.message);
+        }
+      }
+    }
+
+    console.log(`\n=================== [YENİ KAYIT ONAY TALEP TOKENDI] ===================`);
+    console.log(`Kullanıcı: ${newUser.username} (${role})`);
+    console.log(`Onay Linki: http://localhost:3000/api/auth/approve?token=${token}`);
+    console.log(`========================================================================\n`);
+
+    res.status(201).json({ message: 'Kayıt talebiniz alındı. Yönetici onayı bekleniyor.' });
+  } catch (error) {
+    console.error('[REGISTER_HATA]', error.message);
+    res.status(500).json({ error: 'Kayıt sırasında bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// GET /api/auth/approve — Link ile E-posta Onaylama
+// ============================================================
+router.get('/approve', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const { token } = req.query;
+
+  if (!token) {
+    return res.status(400).send('<h1>Hata: Geçersiz onay kodu</h1>');
+  }
+
+  try {
+    const request = await ApprovalRequest.findOne({ where: { token, status: 'pending' } });
+    if (!request) {
+      return res.status(404).send('<h1>Hata: Onay talebi bulunamadı veya zaten işlendi.</h1>');
+    }
+
+    // Süre kontrolü
+    if (request.requestData?.expiresAt && request.requestData.expiresAt < Date.now()) {
+      request.status = 'rejected';
+      await request.save();
+      return res.status(400).send('<h1>Hata: Onay talebinin süresi dolmuş.</h1>');
+    }
+
+    if (request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') {
+      const user = await User.findByPk(request.targetId);
+      if (!user) {
+        return res.status(404).send('<h1>Hata: Onaylanacak kullanıcı bulunamadı.</h1>');
+      }
+
+      const received = request.approvalsReceived || [];
+      received.push(ip);
+      request.approvalsReceived = received;
+      request.changed('approvalsReceived', true);
+
+      if (received.length >= request.approvalsRequired) {
+        request.status = 'approved';
+        await request.save();
+
+        user.status = 'active';
+        await user.save();
+
+        archiveEmailVerification(user.email, user.username, ip);
+        logAction('APPROVE_USER', null, 'System', user.id, user.fullName, `Kullanıcı e-posta/admin onayıyla aktif edildi. IP: ${ip}`, ip);
+
+        return res.status(200).send(`
+          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+            <h1 style="color: #4ade80;">✓ Kullanıcı Başarıyla Onaylandı!</h1>
+            <p><strong>${user.fullName} (${user.username})</strong> artık sisteme giriş yapabilir.</p>
+          </div>
+        `);
+      } else {
+        await request.save();
+        return res.status(200).send(`
+          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+            <h1 style="color: #fbbf24;">Onay Alındı</h1>
+            <p>Onayınız kaydedildi. Toplam onay: ${received.length} / Gereken: ${request.approvalsRequired}</p>
+          </div>
+        `);
+      }
+    }
+
+    if (request.type === 'NAME_CHANGE') {
+      const user = await User.findByPk(request.targetId);
+      if (!user) {
+        return res.status(404).send('<h1>Hata: Kullanıcı bulunamadı.</h1>');
+      }
+
+      request.status = 'approved';
+      await request.save();
+
+      const oldName = user.fullName;
+      user.fullName = request.requestData.newFullName;
+      await user.save();
+
+      logCisoAction('NAME_CHANGE_APPROVED', `CISO, admin ${user.username} ismini değiştirdi. Eski: ${oldName}, Yeni: ${user.fullName}`, ip);
+
+      return res.status(200).send(`
+        <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+          <h1 style="color: #4ade80;">✓ İsim Değişikliği Onaylandı</h1>
+          <p>Yönetici ismi ${user.fullName} olarak güncellendi.</p>
+        </div>
+      `);
+    }
+
+    if (request.type === 'USERNAME_CHANGE') {
+      const user = await User.findByPk(request.targetId);
+      if (!user) {
+        return res.status(404).send('<h1>Hata: Kullanıcı bulunamadı.</h1>');
+      }
+
+      request.status = 'approved';
+      await request.save();
+
+      const oldUsername = user.username;
+      user.username = request.requestData.newUsername;
+      await user.save();
+
+      logCisoAction('USERNAME_CHANGE_APPROVED', `CISO, admin ${oldUsername} kullanıcı adını değiştirdi. Yeni: ${user.username}`, ip);
+
+      return res.status(200).send(`
+        <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+          <h1 style="color: #4ade80;">✓ Kullanıcı Adı Onaylandı</h1>
+          <p>Kullanıcı adı ${user.username} olarak güncellendi.</p>
+        </div>
+      `);
+    }
+
+    if (request.type === 'MODE_CHANGE') {
+      const received = request.approvalsReceived || [];
+      received.push(ip);
+      request.approvalsReceived = received;
+      request.changed('approvalsReceived', true);
+
+      if (received.length >= request.approvalsRequired) {
+        request.status = 'approved';
+        await request.save();
+
+        const record = await SystemSettings.findByPk('deployment_mode') || await SystemSettings.create({ key: 'deployment_mode', value: { mode: 'single_pc' } });
+        record.value = { mode: request.requestData.mode };
+        record.changed('value', true);
+        await record.save();
+
+        logAction('MODE_CHANGE', null, 'System', null, null, `Sistem modu ${request.requestData.mode} olarak değiştirildi.`, ip);
+
+        return res.status(200).send(`
+          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+            <h1 style="color: #4ade80;">✓ Sistem Modu Değiştirildi</h1>
+            <p>Sistem dağıtım modu başarıyla <strong>${request.requestData.mode}</strong> yapıldı.</p>
+          </div>
+        `);
+      } else {
+        await request.save();
+        return res.status(200).send(`
+          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+            <h1 style="color: #fbbf24;">Onay Kaydedildi</h1>
+            <p>Mod değişikliği için onayınız kaydedildi. (${received.length}/${request.approvalsRequired})</p>
+          </div>
+        `);
+      }
+    }
+  } catch (error) {
+    console.error('[ONAY_HATA]', error.message);
+    res.status(500).send('<h1>Onay işlemi sırasında sunucu hatası oluştu.</h1>');
+  }
+});
+
+// ============================================================
+// GET /api/auth/users — Kullanıcıları Listele (Admin/CISO)
+// ============================================================
+router.get('/users', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const users = await User.findAll({
+      attributes: ['id', 'fullName', 'username', 'email', 'role', 'permissions', 'status', 'createdAt']
+    });
+    res.status(200).json({ users });
+  } catch (error) {
+    res.status(500).json({ error: 'Kullanıcı listesi getirilemedi.' });
+  }
+});
+
+// ============================================================
+// PUT /api/auth/users/:id/permissions — Dinamik Yetkilendirme
+// ============================================================
+router.put('/users/:id/permissions', verifyToken, requireAdmin, async (req, res) => {
+  const { permissions } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+
+  try {
+    const targetUser = await User.findByPk(req.params.id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    }
+
+    if (targetUser.role === 'ciso') {
+      return res.status(403).json({ error: 'CISO okuma ve yazma yetkileri hiçbir şekilde kapatılamaz.' });
+    }
+
+    if (targetUser.role === 'admin') {
+      return res.status(403).json({ 
+        error: 'Yöneticilerin yetkileri doğrudan kısıtlanamaz.',
+        message: 'Yöneticinin yetkilerini kısmak için öncelikle rolünü Standart Kullanıcı yapmalısınız.'
+      });
+    }
+
+    targetUser.permissions = {
+      canRead: permissions.canRead !== undefined ? permissions.canRead : targetUser.permissions.canRead,
+      canWrite: permissions.canWrite !== undefined ? permissions.canWrite : targetUser.permissions.canWrite
+    };
+    targetUser.changed('permissions', true);
+    await targetUser.save();
+
+    logAction('PERM_UPDATE', req.user.id, req.user.fullName, targetUser.id, targetUser.fullName, `Kullanıcı yetkileri güncellendi: canRead=${targetUser.permissions.canRead}, canWrite=${targetUser.permissions.canWrite}`, ip);
+
+    res.status(200).json({ message: 'Yetkiler başarıyla güncellendi.', user: targetUser });
+  } catch (error) {
+    res.status(500).json({ error: 'Yetkiler güncellenirken hata oluştu.' });
+  }
+});
+
+// ============================================================
+// PUT /api/auth/users/:id/role — Rol Değiştirme (Kendini Standarta Düşüremez)
+// ============================================================
+router.put('/users/:id/role', verifyToken, requireAdmin, async (req, res) => {
+  const { role } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+
+  try {
+    const targetUser = await User.findByPk(req.params.id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    }
+
+    if (targetUser.role === 'ciso') {
+      return res.status(403).json({ error: 'CISO rolü değiştirilemez.' });
+    }
+
+    if (role === 'ciso') {
+      return res.status(403).json({ error: 'Sistemde sadece tek bir CISO bulunabilir.' });
+    }
+
+    // Kendini Standart yapma engeli
+    if (targetUser.id === req.user.id && targetUser.role === 'admin' && role === 'user') {
+      return res.status(403).json({ error: 'Kendi yöneticilik yetkinizi düşüremezsiniz.' });
+    }
+
+    const oldRole = targetUser.role;
+    targetUser.role = role;
+
+    if (role === 'user') {
+      targetUser.permissions = { canRead: true, canWrite: false };
+      targetUser.changed('permissions', true);
+    } else if (role === 'admin') {
+      targetUser.permissions = { canRead: true, canWrite: true };
+      targetUser.changed('permissions', true);
+    }
+
+    await targetUser.save();
+
+    logAction('ROLE_UPDATE', req.user.id, req.user.fullName, targetUser.id, targetUser.fullName, `Kullanıcı rolü değiştirildi. Eski: ${oldRole}, Yeni: ${role}`, ip);
+
+    res.status(200).json({ message: 'Rol başarıyla güncellendi.', user: targetUser });
+  } catch (error) {
+    res.status(500).json({ error: 'Rol güncellenirken hata oluştu.' });
+  }
+});
+
+// ============================================================
+// PUT /api/auth/profile — Kendi Profilini Güncelle (Ad Soyad / K.Adı CISO Onaylı, Şifre Doğrudan)
+// ============================================================
+router.put('/profile', verifyToken, async (req, res) => {
+  const { fullName, username, oldPassword, newPassword } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    }
+
+    const settingsRecord = await SystemSettings.findByPk('kasa_settings');
+    const settings = settingsRecord ? settingsRecord.value : {};
+
+    const cisoUser = await User.findOne({ where: { role: 'ciso' } });
+    const cisoEmail = cisoUser ? cisoUser.email : 'ciso@dms.com';
+
+    // 1. Şifre Değişikliği (Doğrudan Yapılır - CISO Onayı Gerektirmez)
+    if (newPassword) {
+      if (!oldPassword) {
+        return res.status(400).json({ error: 'Mevcut şifrenizi girmeniz gerekmektedir.' });
+      }
+      const isMatch = await bcrypt.compare(oldPassword, user.passwordHash);
+      if (!isMatch) {
+        return res.status(400).json({ error: 'Mevcut şifreniz hatalı.' });
+      }
+      if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+        return res.status(400).json({ error: 'Yeni şifre en az 8 karakter olmalı, harf ve rakam içermelidir.' });
+      }
+      user.passwordHash = await bcrypt.hash(newPassword, 10);
+      logAction('PASSWORD_UPDATE', user.id, user.fullName, null, null, `Kullanıcı şifresini başarıyla değiştirdi.`, ip);
+    }
+
+    // 2. Kullanıcı Adı Değişikliği (Doğrudan Yapılır - CISO Onayı Gerektirmez)
+    if (username && username !== user.username) {
+      const usernameExists = await User.findOne({ where: { username } });
+      if (usernameExists) {
+        return res.status(400).json({ error: 'Bu kullanıcı adı zaten kullanımda.' });
+      }
+      const oldUsername = user.username;
+      user.username = username;
+      logAction('USERNAME_UPDATE', user.id, user.fullName, null, null, `Kullanıcı adını güncelledi. Eski: ${oldUsername}, Yeni: ${username}`, ip);
+    }
+
+    // 3. İsim Değişikliği (Admin veya CISO ise Onaya Gider)
+    if (fullName && fullName !== user.fullName) {
+      if (user.role === 'admin' || user.role === 'ciso') {
+        const targetEmail = user.role === 'ciso' ? user.email : cisoEmail;
+        const waitSeconds = checkAndRecordEmailLimit(targetEmail, ip, user.role);
+        if (waitSeconds > 0) {
+          const minStr = waitSeconds >= 60 ? `${Math.ceil(waitSeconds / 60)} dakika` : `${waitSeconds} saniye`;
+          return res.status(429).json({ 
+            error: 'E-posta limitine takıldınız.', 
+            message: `Yeni bir onay maili göndermek için lütfen ${minStr} bekleyin.` 
+          });
+        }
+
+        const token = uuidv4();
+        const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+        await ApprovalRequest.create({
+          type: 'NAME_CHANGE',
+          targetId: user.id,
+          requestData: { newFullName: fullName, expiresAt },
+          approvalsRequired: 1,
+          status: 'pending',
+          token
+        });
+
+        // CISO veya kendisine mail gönder
+        try {
+          const transporter = getMailTransporter(settings.smtpConfig);
+          const fromUser = settings.smtpConfig?.auth?.user || 'security@dms.com';
+          await transporter.sendMail({
+            from: `"DMS Security" <${fromUser}>`,
+            to: targetEmail,
+            subject: 'DMS - Ad Soyad Değişikliği Onay Talebi',
+            text: `${user.role === 'ciso' ? 'CISO' : 'Yönetici'} ${user.username} gerçek ismini "${fullName}" yapmak istiyor.\n\nOnaylamak için lütfen tıklayın:\nhttp://localhost:3000/api/auth/approve?token=${token}`
+          });
+        } catch (mailErr) {
+          console.warn('Onay maili gönderilemedi:', mailErr.message);
+        }
+
+        console.log(`\n[NAME_CHANGE ONAY TOKENI] Onay Linki: http://localhost:3000/api/auth/approve?token=${token}\n`);
+        return res.status(202).json({ 
+          message: 'İsim değişikliği talebi alındı. E-posta onay linki veya onay paneli bekleniyor.',
+          pendingApproval: true,
+          token
+        });
+      } else {
+        const oldName = user.fullName;
+        user.fullName = fullName;
+        if (user.role === 'ciso') {
+          logCisoAction('NAME_CHANGE', `CISO ismini güncelledi. Eski: ${oldName}, Yeni: ${fullName}`, ip);
+        } else {
+          logAction('NAME_CHANGE', user.id, user.fullName, null, null, `İsim güncellendi. Eski: ${oldName}, Yeni: ${fullName}`, ip);
+        }
+      }
+    }
+
+    await user.save();
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role, fullName: user.fullName },
+      JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+
+    res.status(200).json({ 
+      message: 'Profil başarıyla güncellendi.', 
+      token,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        role: user.role,
+        permissions: user.permissions
+      } 
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Profil güncellenirken hata oluştu.' });
+  }
+});
+
+// ============================================================
+// PUT /api/auth/settings — Kasa / Sistem Ayarlarını Güncelle (SMTP Doğrulamalı)
+// ============================================================
+router.put('/settings', verifyToken, requireAdmin, async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  try {
+    const { masterUsername, newPassword, alertThreshold, smtpConfig, mode } = req.body;
+    
+    if (mode) {
+      const { Op } = require('sequelize');
+      const activeSignatories = await User.findAll({ 
+        where: { role: { [Op.in]: ['admin', 'ciso'] }, status: 'active' } 
+      });
+      const requiredCount = activeSignatories.length;
+      const token = uuidv4();
+      const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+
+      await ApprovalRequest.create({
+        type: 'MODE_CHANGE',
+        targetId: 'deployment_mode',
+        requestData: { mode, expiresAt },
+        approvalsRequired: requiredCount,
+        approvalsReceived: [],
+        status: 'pending',
+        token
+      });
+
+      console.log(`\n[MODE_CHANGE ONAY TOKENI] Onay Linki: http://localhost:3000/api/auth/approve?token=${token}\n`);
+      return res.status(202).json({ message: 'Mod değişikliği talebi oluşturuldu. Tüm yöneticilerin (Admin ve CISO) onay linkine tıklaması veya ayarlar panelinden onaylaması gerekiyor.' });
+    }
+
+    const record = await SystemSettings.findByPk('kasa_settings') || await SystemSettings.create({ key: 'kasa_settings', value: {} });
+    const settings = JSON.parse(JSON.stringify(record.value || {}));
+
+    if (masterUsername) settings.masterUsername = masterUsername;
+    if (newPassword) {
+      const salt = await bcrypt.genSalt(10);
+      settings.masterPasswordHash = await bcrypt.hash(newPassword, salt);
+    }
+    if (alertThreshold !== undefined) settings.alertThreshold = parseInt(alertThreshold);
+
+    if (smtpConfig) {
+      let finalPass = smtpConfig.auth?.pass || '';
+      if (finalPass === '••••••••') {
+        finalPass = settings.smtpConfig?.auth?.pass || '';
+      }
+
+      if (smtpConfig.auth?.user && finalPass) {
+        try {
+          const testTransporter = nodemailer.createTransport({
+            host: smtpConfig.host || 'smtp.gmail.com',
+            port: parseInt(smtpConfig.port) || 465,
+            secure: smtpConfig.secure !== undefined ? smtpConfig.secure : true,
+            auth: {
+              user: smtpConfig.auth.user,
+              pass: finalPass
+            },
+            tls: { rejectUnauthorized: false }
+          });
+
+          await testTransporter.sendMail({
+            from: `"DMS Security Test" <${smtpConfig.auth.user}>`,
+            to: smtpConfig.auth.user,
+            subject: 'DMS - SMTP Gönderici Doğrulama Testi',
+            text: 'Bu e-posta, DMS On-Premise SMTP gönderici ayarlarının doğrulanması amacıyla otomatik olarak gönderilmiştir. Bu maili alıyorsanız gönderici ayarlarınız başarıyla doğrulanmıştır.'
+          });
+
+          if (!settings.smtpConfig) settings.smtpConfig = {};
+          settings.smtpConfig.host = smtpConfig.host || 'smtp.gmail.com';
+          settings.smtpConfig.port = parseInt(smtpConfig.port) || 465;
+          settings.smtpConfig.secure = smtpConfig.secure !== undefined ? smtpConfig.secure : true;
+          if (!settings.smtpConfig.auth) settings.smtpConfig.auth = {};
+          settings.smtpConfig.auth.user = smtpConfig.auth.user;
+          settings.smtpConfig.auth.pass = finalPass;
+          settings.smtpConfig.isVerified = true;
+
+          archiveEmailVerification(smtpConfig.auth.user, 'SMTP_SENDER', ip);
+          logAction('SMTP_VERIFICATION', req.user?.id, req.user?.fullName, null, null, `SMTP gönderici hesabı doğrulandı: ${smtpConfig.auth.user}`, ip);
+
+        } catch (smtpErr) {
+          console.error('[SMTP_VERIFY_ERR]', smtpErr.message);
+          return res.status(400).json({ 
+            error: 'SMTP ayarları doğrulanamadı.', 
+            message: getSmtpFriendlyError(smtpErr.message)
+          });
+        }
+      }
+    }
+
+    record.value = settings;
+    record.changed('value', true);
+    await record.save();
+
+    res.status(200).json({ message: 'Ayarlar güncellendi.', settings });
+  } catch (error) {
+    console.error('[SETTINGS_PUT_ERR]', error.message);
+    res.status(500).json({ error: 'Ayarlar güncellenirken hata oluştu.' });
+  }
+});
+
+// ============================================================
+// GET /api/auth/settings — Sistem Modu & Kasa Ayarlarını Çek
+// ============================================================
+router.get('/settings', verifyToken, async (req, res) => {
   try {
     const record = await SystemSettings.findByPk('kasa_settings');
-    const settings = record.value;
+    const settings = record ? record.value : {};
+    const modeRecord = await SystemSettings.findByPk('deployment_mode');
+    const currentMode = modeRecord ? modeRecord.value.mode : 'single_pc';
 
     res.status(200).json({
+      mode: currentMode,
       settings: {
-        masterUsername: settings.masterUsername,
-        alertEmail: settings.alertEmail,
-        verifiedAlertEmail: settings.verifiedAlertEmail,
+        masterUsername: settings.masterUsername || 'admin',
+        alertEmail: settings.alertEmail || '',
+        verifiedAlertEmail: settings.verifiedAlertEmail || '',
         alertThreshold: settings.alertThreshold || 3,
-        isEmailVerified: !!settings.verifiedAlertEmail && settings.alertEmail === settings.verifiedAlertEmail,
+        isEmailVerified: !!settings.verifiedAlertEmail,
         smtpConfig: {
           host: settings.smtpConfig?.host || 'smtp.gmail.com',
           port: settings.smtpConfig?.port || 465,
           secure: settings.smtpConfig?.secure !== undefined ? settings.smtpConfig.secure : true,
           auth: {
-            user: settings.smtpConfig?.auth?.user || 'businessandvision@gmail.com',
-            pass: settings.smtpConfig?.auth?.pass ? '••••••••' : '' // Şifreyi maskeli dön
+            user: settings.smtpConfig?.auth?.user || '',
+            pass: settings.smtpConfig?.auth?.pass ? '••••••••' : ''
           }
         }
       }
@@ -229,131 +956,334 @@ router.get('/settings', async (req, res) => {
 });
 
 // ============================================================
-// PUT /api/auth/settings — Kasa Ayarlarını Güncelle (Şifre ve SMTP vb.)
+// POST /api/auth/send-verification — Ayarlar Alarm Maili Kodu Gönder (1 dk Limitli)
 // ============================================================
-router.put('/settings', async (req, res) => {
+router.post('/send-verification', verifyToken, async (req, res) => {
+  const { email } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+
+  if (!email) return res.status(400).json({ error: 'E-posta adresi gereklidir.' });
+
+  // Gönderim Limiti Kontrolü
+  const waitSeconds = checkAndRecordEmailLimit(email, ip, req.user.role);
+  if (waitSeconds > 0) {
+    const minStr = waitSeconds >= 60 ? `${Math.ceil(waitSeconds / 60)} dakika` : `${waitSeconds} saniye`;
+    return res.status(429).json({ 
+      error: 'E-posta limitine takıldınız.', 
+      message: `Lütfen yeni bir kod istemek için ${minStr} bekleyin.` 
+    });
+  }
+
   try {
-    const { masterUsername, newPassword, alertThreshold, smtpConfig } = req.body;
     const record = await SystemSettings.findByPk('kasa_settings');
-    const settings = { ...record.value };
+    const settings = record ? record.value : {};
 
-    if (masterUsername) {
-      settings.masterUsername = masterUsername;
+    if (!settings.smtpConfig?.auth?.user || !settings.smtpConfig?.auth?.pass) {
+      return res.status(400).json({ 
+        error: 'SMTP ayarları eksik.', 
+        message: 'Mail gönderilebilmesi için öncelikle SMTP Gönderici Ayarlarının yapılması gerekmektedir.' 
+      });
     }
 
-    if (newPassword) {
-      const salt = await bcrypt.genSalt(10);
-      settings.masterPasswordHash = await bcrypt.hash(newPassword, salt);
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000;
+
+    await ApprovalRequest.destroy({ where: { type: 'SETTINGS_OTP', targetId: email } });
+    await ApprovalRequest.create({
+      type: 'SETTINGS_OTP',
+      targetId: email,
+      token: code,
+      requestData: { expiresAt },
+      status: 'pending'
+    });
+
+    const transporter = getMailTransporter(settings.smtpConfig);
+    const fromUser = settings.smtpConfig.auth.user;
+    await transporter.sendMail({
+      from: `"DMS Security" <${fromUser}>`,
+      to: email,
+      subject: 'DMS - Alarm E-posta Doğrulama Kodu',
+      text: `DMS On-Premise sisteminde alarm alıcı e-postası tanımlayabilmek için doğrulama kodunuz:\n\n${code}\n\nBu kod 5 dakika geçerlidir.`
+    });
+
+    console.log(`\n[SETTINGS OTP KODU] Email: ${email} -> Kod: ${code}\n`);
+    res.status(200).json({ message: 'Doğrulama kodu gönderildi.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Kod gönderilerken hata oluştu.', message: error.message });
+  }
+});
+
+// ============================================================
+// POST /api/auth/verify-code — Ayarlar Alarm Maili Kodu Doğrula
+// ============================================================
+router.post('/verify-code', verifyToken, async (req, res) => {
+  const { code } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+
+  if (!code) return res.status(400).json({ error: 'Kod gereklidir.' });
+
+  try {
+    const request = await ApprovalRequest.findOne({
+      where: { type: 'SETTINGS_OTP', token: code, status: 'pending' }
+    });
+
+    if (!request) {
+      return res.status(400).json({ error: 'Geçersiz veya süresi dolmuş doğrulama kodu.' });
     }
 
-    if (alertThreshold !== undefined) {
-      settings.alertThreshold = parseInt(alertThreshold) || 3;
+    if (request.requestData?.expiresAt < Date.now()) {
+      request.status = 'rejected';
+      await request.save();
+      return res.status(400).json({ error: 'Kodun süresi dolmuş.' });
     }
 
-    // SMTP Config güncelle
-    if (smtpConfig) {
-      if (!settings.smtpConfig) settings.smtpConfig = {};
-      
-      settings.smtpConfig.host = smtpConfig.host || 'smtp.gmail.com';
-      settings.smtpConfig.port = parseInt(smtpConfig.port) || 465;
-      settings.smtpConfig.secure = smtpConfig.secure !== undefined ? smtpConfig.secure : true;
-      
-      if (!settings.smtpConfig.auth) settings.smtpConfig.auth = {};
-      settings.smtpConfig.auth.user = smtpConfig.auth?.user || 'businessandvision@gmail.com';
-      
-      // Maskeli değilse ve boş değilse yeni şifreyi kaydet
-      if (smtpConfig.auth?.pass && smtpConfig.auth.pass !== '••••••••') {
-        settings.smtpConfig.auth.pass = smtpConfig.auth.pass;
+    request.status = 'approved';
+    await request.save();
+
+    const record = await SystemSettings.findByPk('kasa_settings');
+    const settings = record ? record.value : {};
+    settings.alertEmail = request.targetId;
+    settings.verifiedAlertEmail = request.targetId;
+    
+    record.value = settings;
+    record.changed('value', true);
+    await record.save();
+
+    archiveEmailVerification(request.targetId, 'ALERT_RECEIVER', ip);
+    logAction('EMAIL_VERIFICATION', req.user?.id, req.user?.fullName, null, null, `Alarm alıcı e-postası doğrulandı: ${request.targetId}`, ip);
+
+    res.status(200).json({ verifiedAlertEmail: request.targetId });
+  } catch (error) {
+    res.status(500).json({ error: 'Doğrulama başarısız oldu.' });
+  }
+});
+
+// ============================================================
+// GET /api/auth/approvals — Onay Bekleyen Talepleri Listele (Admin/CISO)
+// ============================================================
+router.get('/approvals', verifyToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'ciso') {
+    return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+  }
+
+  try {
+    const approvals = await ApprovalRequest.findAll({
+      order: [['createdAt', 'DESC']]
+    });
+    
+    const now = Date.now();
+    const list = approvals.map(reqRecord => {
+      const isExpired = reqRecord.requestData?.expiresAt && reqRecord.requestData.expiresAt < now;
+      let displayStatus = reqRecord.status;
+      if (reqRecord.status === 'pending' && isExpired) {
+        displayStatus = 'expired';
+      }
+      return {
+        id: reqRecord.id,
+        type: reqRecord.type,
+        targetId: reqRecord.targetId,
+        requestData: reqRecord.requestData,
+        approvalsRequired: reqRecord.approvalsRequired,
+        approvalsReceived: reqRecord.approvalsReceived,
+        status: displayStatus,
+        createdAt: reqRecord.createdAt
+      };
+    });
+
+    res.status(200).json({ approvals: list });
+  } catch (error) {
+    res.status(500).json({ error: 'Onay talepleri listelenemedi.' });
+  }
+});
+
+// ============================================================
+// POST /api/auth/approvals/:id/approve — Talebi Doğrudan Onayla (Arayüzden)
+// ============================================================
+router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  if (req.user.role !== 'admin' && req.user.role !== 'ciso') {
+    return res.status(403).json({ error: 'Bu işlem için yetkiniz yok.' });
+  }
+
+  try {
+    const request = await ApprovalRequest.findByPk(req.params.id);
+    if (!request || request.status !== 'pending') {
+      return res.status(404).json({ error: 'Onay talebi bulunamadı veya süresi dolmuş/işlenmiş.' });
+    }
+
+    // Süre dolma kontrolü
+    if (request.requestData?.expiresAt && request.requestData.expiresAt < Date.now()) {
+      request.status = 'rejected';
+      await request.save();
+      return res.status(400).json({ error: 'Bu talebin onay süresi dolmuştur.' });
+    }
+
+    if ((request.type === 'NAME_CHANGE' || request.type === 'USERNAME_CHANGE') && req.user.role !== 'ciso') {
+      return res.status(403).json({ error: 'Yönetici profil değişikliklerini sadece CISO onaylayabilir.' });
+    }
+
+    if (request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') {
+      const user = await User.findByPk(request.targetId);
+      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+
+      const received = request.approvalsReceived || [];
+      const approverName = `${req.user.fullName} (${req.user.role === 'ciso' ? 'CISO' : 'Yönetici'})`;
+      if (!received.includes(approverName)) {
+        received.push(approverName);
+      }
+      request.approvalsReceived = received;
+      request.changed('approvalsReceived', true);
+
+      if (received.length >= request.approvalsRequired) {
+        request.status = 'approved';
+        await request.save();
+
+        user.status = 'active';
+        await user.save();
+
+        archiveEmailVerification(user.email, user.username, ip);
+        logAction('APPROVE_USER', req.user.id, req.user.fullName, user.id, user.fullName, `Kullanıcı kaydı arayüzden onaylandı.`, ip);
+      } else {
+        await request.save();
+      }
+    } else if (request.type === 'NAME_CHANGE') {
+      const user = await User.findByPk(request.targetId);
+      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+
+      request.status = 'approved';
+      await request.save();
+
+      const oldName = user.fullName;
+      user.fullName = request.requestData.newFullName;
+      await user.save();
+
+      logCisoAction('NAME_CHANGE_APPROVED', `İsim değişikliği onaylandı. Eski: ${oldName}, Yeni: ${user.fullName}`, ip);
+    } else if (request.type === 'USERNAME_CHANGE') {
+      const user = await User.findByPk(request.targetId);
+      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+
+      request.status = 'approved';
+      await request.save();
+
+      const oldUsername = user.username;
+      user.username = request.requestData.newUsername;
+      await user.save();
+
+      logCisoAction('USERNAME_CHANGE_APPROVED', `Kullanıcı adı değişikliği onaylandı. Eski: ${oldUsername}, Yeni: ${user.username}`, ip);
+    } else if (request.type === 'MODE_CHANGE') {
+      const received = request.approvalsReceived || [];
+      const approverName = `${req.user.fullName} (${req.user.role === 'ciso' ? 'CISO' : 'Yönetici'})`;
+      if (!received.includes(approverName)) {
+        received.push(approverName);
+      }
+      request.approvalsReceived = received;
+      request.changed('approvalsReceived', true);
+
+      if (received.length >= request.approvalsRequired) {
+        request.status = 'approved';
+        await request.save();
+
+        const record = await SystemSettings.findByPk('deployment_mode') || await SystemSettings.create({ key: 'deployment_mode', value: { mode: 'single_pc' } });
+        record.value = { mode: request.requestData.mode };
+        record.changed('value', true);
+        await record.save();
+
+        logAction('MODE_CHANGE', req.user.id, req.user.fullName, null, 'System', `Sistem modu ${request.requestData.mode} olarak değiştirildi.`, ip);
+      } else {
+        await request.save();
       }
     }
 
-    await record.update({ value: settings });
-    res.status(200).json({ message: 'Ayarlar başarıyla güncellendi.', settings });
+    // Onaylanan talep güncel kullanıcının kendi talebiyse, güncel JWT tokenını oluşturup dön
+    let responseToken = null;
+    if (request.targetId === req.user.id) {
+      const updatedUser = await User.findByPk(req.user.id);
+      responseToken = jwt.sign(
+        { id: updatedUser.id, username: updatedUser.username, role: updatedUser.role, fullName: updatedUser.fullName },
+        JWT_SECRET,
+        { expiresIn: '12h' }
+      );
+    }
+
+    res.status(200).json({ message: 'Talep onaylandı.', status: request.status, token: responseToken });
   } catch (error) {
-    res.status(500).json({ error: 'Ayarlar güncellenirken hata oluştu.' });
+    console.error('[APPROVAL_APPROVE_ERR]', error.message);
+    res.status(500).json({ error: 'Onaylama başarısız.' });
   }
 });
 
 // ============================================================
-// POST /api/auth/send-verification — Doğrulama E-postası Gönder
+// POST /api/auth/approvals/:id/reject — Talebi Doğrudan Reddet (Arayüzden)
 // ============================================================
-router.post('/send-verification', async (req, res) => {
+router.post('/approvals/:id/reject', verifyToken, async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  if (req.user.role !== 'admin' && req.user.role !== 'ciso') {
+    return res.status(403).json({ error: 'Bu işlem için yetkiniz yok.' });
+  }
+
   try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'E-posta adresi zorunludur.' });
+    const request = await ApprovalRequest.findByPk(req.params.id);
+    if (!request || request.status !== 'pending') {
+      return res.status(404).json({ error: 'Onay talebi bulunamadı.' });
     }
 
-    // 6 haneli kod üret
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = Date.now() + 5 * 60 * 1000; // 5 dakika geçerli
+    request.status = 'rejected';
+    await request.save();
 
-    const record = await SystemSettings.findByPk('kasa_settings');
-    const settings = { ...record.value };
-
-    settings.alertEmail = email;
-    settings.verificationCode = code;
-    settings.verificationExpires = expires;
-
-    await record.update({ value: settings });
-
-    // Kodu e-postayla gönder (log ve smtp)
-    console.log(`\n=================== [DOĞRULAMA KODU] ===================`);
-    console.log(`Kime: ${email}`);
-    console.log(`Doğrulama Kodu: ${code}`);
-    console.log(`Geçerlilik Süresi: 5 dakika`);
-    console.log(`========================================================\n`);
-
-    try {
-      const fromUser = (settings.smtpConfig && settings.smtpConfig.auth && settings.smtpConfig.auth.user) || 'security@dms-onpremise.com';
-      const transporter = getMailTransporter(settings.smtpConfig);
-      await transporter.sendMail({
-        from: `"DMS Security" <${fromUser}>`,
-        to: email,
-        subject: 'DMS - Kasa Bildirim E-posta Doğrulama',
-        text: `DMS bildirim e-postası doğrulama kodunuz: ${code}. Bu kod 5 dakika geçerlidir.`
-      });
-    } catch (mailErr) {
-      console.warn(`[MAIL_DOĞRULAMA] SMTP gönderimi başarısız oldu (Log yeterlidir):`, mailErr.message);
+    if (request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') {
+      const user = await User.findByPk(request.targetId);
+      if (user) {
+        user.status = 'rejected';
+        await user.save();
+        logAction('REJECT_USER', req.user.id, req.user.fullName, user.id, user.fullName, `Kullanıcı kayıt talebi reddedildi.`, ip);
+      }
+    } else if (request.type === 'NAME_CHANGE') {
+      logCisoAction('NAME_CHANGE_REJECTED', `CISO, admin ${request.targetId} isim değişikliği talebini reddetti.`, ip);
+    } else if (request.type === 'USERNAME_CHANGE') {
+      logCisoAction('USERNAME_CHANGE_REJECTED', `CISO, admin ${request.targetId} kullanıcı adı değişikliği talebini reddetti.`, ip);
+    } else if (request.type === 'MODE_CHANGE') {
+      logAction('MODE_CHANGE_REJECTED', req.user.id, req.user.fullName, null, 'System', `Mod değişikliği talebi reddedildi.`, ip);
     }
 
-    res.status(200).json({ message: 'Doğrulama kodu e-posta adresinize gönderildi.' });
+    res.status(200).json({ message: 'Talep reddedildi.', status: request.status });
   } catch (error) {
-    res.status(500).json({ error: 'Doğrulama kodu gönderilirken hata oluştu.' });
+    res.status(500).json({ error: 'Reddetme başarısız.' });
   }
 });
 
 // ============================================================
-// POST /api/auth/verify-code — Doğrulama Kodunu Kontrol Et
+// POST /api/auth/demo-login — Geriye Dönük Demo Giriş
 // ============================================================
-router.post('/verify-code', async (req, res) => {
+router.post('/demo-login', async (req, res) => {
   try {
-    const { code } = req.body;
-    const record = await SystemSettings.findByPk('kasa_settings');
-    const settings = { ...record.value };
-
-    if (!settings.verificationCode || settings.verificationCode !== code) {
-      return res.status(400).json({ error: 'Geçersiz doğrulama kodu.' });
-    }
-
-    if (Date.now() > settings.verificationExpires) {
-      return res.status(400).json({ error: 'Doğrulama kodunun süresi dolmuş.' });
-    }
-
-    // Kod doğru, e-postayı doğrula
-    settings.verifiedAlertEmail = settings.alertEmail;
-    settings.verificationCode = null;
-    settings.verificationExpires = null;
-
-    await record.update({ value: settings });
-
+    const token = jwt.sign(
+      { role: 'user', systemAccess: true },
+      JWT_SECRET,
+      { expiresIn: '12h' }
+    );
     res.status(200).json({
-      message: 'E-posta başarıyla doğrulandı.',
-      verifiedAlertEmail: settings.verifiedAlertEmail
+      message: 'Standart kullanıcı demo girişi başarılı.',
+      token
     });
   } catch (error) {
-    res.status(500).json({ error: 'Kod doğrulanırken hata oluştu.' });
+    res.status(500).json({ error: 'Demo giriş yapılamadı.' });
   }
+});
+
+// Kasa Lock Geriye Dönük Uyumluluk Rotaları
+router.get('/kasa-status', async (req, res) => {
+  res.status(200).json({ remainingAttempts: 3, lockoutSecondsLeft: 0 });
+});
+
+router.post('/kasa-login', async (req, res) => {
+  const { username, password } = req.body;
+  const settingsRecord = await SystemSettings.findByPk('kasa_settings');
+  const settings = settingsRecord ? settingsRecord.value : {};
+  if (username === settings.masterUsername && await bcrypt.compare(password, settings.masterPasswordHash)) {
+    const token = jwt.sign({ role: 'admin', systemAccess: true }, JWT_SECRET, { expiresIn: '12h' });
+    return res.status(200).json({ token });
+  }
+  res.status(401).json({ error: 'Kasa şifresi hatalı.' });
 });
 
 module.exports = router;

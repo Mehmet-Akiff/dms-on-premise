@@ -7,8 +7,9 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { sequelize, Document, DocumentMetadata, ProcessingJob } = require('../models');
-const { verifyToken } = require('../middleware/auth.middleware');
+const { sequelize, Document, DocumentMetadata, ProcessingJob, AuditLog } = require('../models');
+const { verifyToken, requireAdmin, requireCiso, requireReadPermission, requireWritePermission } = require('../middleware/auth.middleware');
+const { logAction } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -207,6 +208,9 @@ async function processDocumentWithAI(document, job) {
       console.log(`[AI_SERVICE] OCR metni kaydedildi — ${charCount} karakter`);
 
       // Document ve Job durumlarını COMPLETED yap
+      const updatedDoc = await Document.findByPk(document.id, {
+        include: [{ association: 'metadata' }]
+      });
       await document.update({ status: 'COMPLETED' });
       await job.update({
         jobStatus: 'COMPLETED',
@@ -215,6 +219,16 @@ async function processDocumentWithAI(document, job) {
       });
 
       console.log(`[AI_SERVICE] ✅ İşlem başarıyla tamamlandı — Doküman: ${document.id}`);
+
+      // SSE ile durumu canlı yolla
+      if (global.sendDocumentUpdateToClients) {
+        global.sendDocumentUpdateToClients({
+          id: document.id,
+          status: 'COMPLETED',
+          category: category,
+          document: updatedDoc
+        });
+      }
 
     } else {
       // AI servisi hata döndü — detaylı mesaj çıkar
@@ -253,16 +267,328 @@ async function processDocumentWithAI(document, job) {
     } catch (dbError) {
       console.error(`[AI_SERVICE_ERROR] Job.update başarısız:`, dbError.message);
     }
+
+    // SSE ile durumu canlı yolla (Hata durumunda)
+    if (global.sendDocumentUpdateToClients) {
+      global.sendDocumentUpdateToClients({
+        id: document.id,
+        status: 'FAILED',
+        category: 'Diger'
+      });
+    }
   }
 
   console.log(`[AI_SERVICE] ========== İşleme Bitti ==========\n`);
 }
 
 // ============================================================
+// GET /api/documents/audit-logs — Kullanıcı İşlem Geçmişi (Sadece CISO)
+// ============================================================
+
+router.get('/audit-logs', verifyToken, requireCiso, async (req, res) => {
+  try {
+    const { Op } = require('sequelize');
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 25;
+    const offset = (page - 1) * limit;
+    const action = req.query.action || null;
+    const startDate = req.query.startDate || null;
+    const endDate = req.query.endDate || null;
+
+    // Filtre koşulları
+    const where = {};
+    if (action) {
+      where.action = action;
+    }
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt[Op.gte] = new Date(startDate);
+      if (endDate) where.createdAt[Op.lte] = new Date(endDate + 'T23:59:59.999Z');
+    }
+
+    const { count, rows } = await AuditLog.findAndCountAll({
+      where,
+      order: [['created_at', 'DESC']],
+      limit,
+      offset,
+    });
+
+    res.status(200).json({
+      totalCount: count,
+      currentPage: page,
+      totalPages: Math.ceil(count / limit),
+      logs: rows,
+    });
+  } catch (error) {
+    console.error('[HATA] Audit log listeleme:', error.message);
+    res.status(500).json({ error: 'İşlem geçmişi getirilirken bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// POST /api/documents/audit-logs/click — Ekran Tıklama / İndirme / Önizleme Eylemlerini Kaydet
+// ============================================================
+router.post('/audit-logs/click', verifyToken, requireReadPermission, async (req, res) => {
+  const { action, documentId, documentName, details } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+  try {
+    logAction(
+      action || 'CLICK',
+      req.user.id || null,
+      req.user.fullName || 'Bilinmeyen Kullanıcı',
+      documentId || null,
+      documentName || null,
+      details || 'Ekrana tıklandı.',
+      ip
+    );
+    res.status(200).json({ message: 'Eylem başarıyla loglandı.' });
+  } catch (err) {
+    console.error('[HATA] Tıklama logu kaydedilemedi:', err.message);
+    res.status(500).json({ error: 'Tıklama logu kaydedilemedi.' });
+  }
+});
+
+// ============================================================
+// GET /api/documents/stats — Dashboard İstatistikleri
+// ============================================================
+
+router.get('/stats', async (req, res) => {
+  try {
+    const { Op } = require('sequelize');
+
+    // Toplam doküman sayısı (soft-delete olmayanlar)
+    const totalDocuments = await Document.count({ where: { deletedAt: null } });
+
+    // Durum dağılımı
+    const statusCounts = await Document.findAll({
+      attributes: ['status', [sequelize.fn('COUNT', sequelize.col('documents.id')), 'count']],
+      where: { deletedAt: null },
+      group: ['status'],
+      raw: true,
+    });
+
+    // Kategoriye göre dağılım (metadata tablosundan)
+    const categoryCounts = await DocumentMetadata.findAll({
+      attributes: ['category', [sequelize.fn('COUNT', sequelize.col('document_metadata.id')), 'count']],
+      include: [{
+        model: Document,
+        as: 'document',
+        attributes: [],
+        where: { deletedAt: null },
+        required: true,
+      }],
+      group: ['category'],
+      raw: true,
+    });
+
+    // Son 24 saatte yüklenen
+    const last24h = await Document.count({
+      where: {
+        deletedAt: null,
+        createdAt: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+    });
+
+    // Son 7 günde yüklenen
+    const last7d = await Document.count({
+      where: {
+        deletedAt: null,
+        createdAt: { [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+      },
+    });
+
+    // Çöp kutusundaki doküman sayısı
+    const trashCount = await Document.count({ where: { deletedAt: { [Op.ne]: null } }, paranoid: false });
+
+    // Kategorileri konsolide et (uncategorized ve boş olanları 'Diger' yap)
+    const consolidatedCats = {};
+    categoryCounts.forEach(c => {
+      let catName = c.category || 'Diger';
+      if (catName === 'uncategorized' || catName === 'undefined') catName = 'Diger';
+      consolidatedCats[catName] = (consolidatedCats[catName] || 0) + parseInt(c.count);
+    });
+
+    res.status(200).json({
+      totalDocuments,
+      last24h,
+      last7d,
+      trashCount,
+      statusDistribution: statusCounts.reduce((acc, s) => { acc[s.status] = parseInt(s.count); return acc; }, {}),
+      categoryDistribution: Object.keys(consolidatedCats).map(key => ({
+        category: key,
+        count: consolidatedCats[key]
+      })),
+    });
+  } catch (error) {
+    console.error('[HATA] İstatistikler:', error.message);
+    res.status(500).json({ error: 'İstatistikler getirilirken bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// GET /api/documents/:id/download — Orijinal Dosyayı İndir
+// ============================================================
+// ============================================================
+// GET /api/documents/:id/download — Orijinal Dosyayı İndir
+// ============================================================
+router.get('/:id/download', verifyToken, requireReadPermission, async (req, res) => {
+  try {
+    const document = await Document.findByPk(req.params.id, { paranoid: false });
+    if (!document) {
+      return res.status(404).json({ error: 'Belge bulunamadı.' });
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+    const absolutePath = path.resolve(document.filePath);
+
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ error: 'Dosya sunucuda bulunamadı.' });
+    }
+
+    res.download(absolutePath, document.originalName);
+  } catch (error) {
+    console.error('[HATA] Dosya indirme:', error.message);
+    res.status(500).json({ error: 'Dosya indirilirken bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// GET /api/documents/:id/export — OCR Metnini ve Yorumları Word (.doc) Dosyası Olarak İndir
+// ============================================================
+router.get('/:id/export', verifyToken, requireReadPermission, async (req, res) => {
+  try {
+    const document = await Document.findByPk(req.params.id, {
+      include: [{ association: 'metadata' }]
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Belge bulunamadı.' });
+    }
+
+    const text = document.metadata?.extractedText || document.metadata?.extracted_text || 'OCR metni bulunamadı.';
+    const comments = document.metadata?.comments || [];
+    
+    let commentsMarkup = '<p style="color: #94a3b8; font-style: italic;">Yorum bulunmamaktadır.</p>';
+    if (Array.isArray(comments) && comments.length > 0) {
+      commentsMarkup = comments.map(c => {
+        const author = c.author || c.username || 'Bilinmeyen Kullanıcı';
+        const date = c.createdAt || c.created_at || new Date().toISOString();
+        const formattedDate = new Date(date).toLocaleString('tr-TR');
+        return `
+          <div style="background: #fef08a; border-left: 5px solid #eab308; padding: 10px 15px; margin-bottom: 10px; border-radius: 3px; color: #000;">
+            <div style="font-weight: bold; font-size: 0.85em; color: #71717a; margin-bottom: 5px;">Yazar: ${author} | Tarih: ${formattedDate}</div>
+            <div>${c.text || c.comment || ''}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    const docHtml = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <title>${document.originalName}</title>
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333333; padding: 20px; }
+          h2 { color: #8b5cf6; border-bottom: 2px solid #8b5cf6; padding-bottom: 5px; }
+          .doc-meta { background: #f1f5f9; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-size: 0.9em; }
+          .ocr-text { background: #fafafa; padding: 15px; border: 1px solid #e2e8f0; border-radius: 5px; white-space: pre-wrap; margin-bottom: 30px; }
+        </style>
+      </head>
+      <body>
+        <h2>DMS On-Premise Belge Raporu</h2>
+        <div class="doc-meta">
+          <strong>Dosya Adı:</strong> ${document.originalName}<br/>
+          <strong>Kategori:</strong> ${document.metadata?.category || 'Belirtilmemiş'}<br/>
+          <strong>Tarih:</strong> ${new Date(document.createdAt).toLocaleString('tr-TR')}
+        </div>
+
+        <h2>[OCR Çıkarılan Metin]</h2>
+        <div class="ocr-text">${text}</div>
+
+        <h2>[Yorumlar ve Notlar]</h2>
+        <div>${commentsMarkup}</div>
+      </body>
+      </html>
+    `;
+
+    const cleanName = (document.originalName || 'ocr-text').replace(/\.[^/.]+$/, '');
+    res.setHeader('Content-disposition', `attachment; filename=${encodeURIComponent(cleanName)}.doc`);
+    res.setHeader('Content-type', 'application/msword; charset=utf-8');
+    res.write(docHtml);
+    res.end();
+  } catch (error) {
+    console.error('[HATA] OCR dışa aktarma:', error.message);
+    res.status(500).json({ error: 'OCR metni dışa aktarılırken bir hata oluştu.' });
+  }
+});
+
+// ============================================================
+// DELETE /api/documents/bulk — Toplu Belge Silme (Admin Korumalı)
+// ============================================================
+router.delete('/bulk', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { ids, force = false } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Geçersiz veya boş ID listesi.' });
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+
+    if (force) {
+      // Kalıcı toplu silme
+      const documents = await Document.findAll({
+        where: { id: ids },
+        paranoid: false
+      });
+
+      for (const doc of documents) {
+        const absolutePath = path.resolve(doc.filePath);
+        if (fs.existsSync(absolutePath)) {
+          try {
+            fs.unlinkSync(absolutePath);
+          } catch (e) {
+            console.error(`Dosya silinemedi: ${absolutePath}`, e.message);
+          }
+        }
+        await doc.destroy({ force: true });
+      }
+      console.log(`[BULK_FORCE_DELETE] ${documents.length} belge kalıcı olarak silindi.`);
+      // Audit Log
+      const docNames = documents.map(d => d.originalName).join(', ');
+      logAction(req, 'BULK_DELETE', null, null, `${documents.length} belge kalıcı olarak toplu silindi: ${docNames}`);
+    } else {
+      // Çöp kutusuna toplu taşıma (Soft Delete)
+      const docsForLog = await Document.findAll({ where: { id: ids }, attributes: ['id', 'originalName'] });
+      await Document.destroy({ where: { id: ids } });
+      console.log(`[BULK_SOFT_DELETE] ${ids.length} belge çöp kutusuna taşındı.`);
+      // Audit Log
+      const docNames = docsForLog.map(d => d.originalName).join(', ');
+      logAction(req, 'BULK_DELETE', null, null, `${ids.length} belge toplu olarak çöp kutusuna gönderildi: ${docNames}`);
+    }
+
+    res.status(200).json({ message: 'Toplu silme işlemi başarıyla tamamlandı.' });
+  } catch (error) {
+    console.error('[HATA] Toplu silme:', error.message);
+    res.status(500).json({ error: 'Toplu silme işlemi sırasında bir hata oluştu.' });
+  }
+});
+
+// ============================================================
 // POST /api/documents/upload — Doküman Yükle
 // ============================================================
 
-router.post('/upload', upload.single('file'), handleMulterError, async (req, res) => {
+router.post('/upload', verifyToken, requireWritePermission, upload.single('file'), handleMulterError, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Dosya bulunamadı. Lütfen bir dosya yükleyin.' });
@@ -285,6 +611,9 @@ router.post('/upload', upload.single('file'), handleMulterError, async (req, res
     });
 
     console.log(`[UPLOAD] Doküman yüklendi — ID: ${document.id} — Dosya: ${req.file.originalname}`);
+
+    // Audit Log
+    logAction(req, 'UPLOAD', document.id, req.file.originalname, `"${req.file.originalname}" adlı belge sisteme yüklendi.`);
 
     // Asenkron olarak AI servisine gönder (yanıtı beklemeden istemciye 202 dön)
     // .catch() ile unhandled promise rejection koruması
@@ -539,10 +868,17 @@ router.get('/search', async (req, res) => {
 
     // Sıralama
     let orderClause = 'ORDER BY relevance DESC';
-    if (sort === 'newest') orderClause = 'ORDER BY d.created_at DESC';
-    else if (sort === 'oldest') orderClause = 'ORDER BY d.created_at ASC';
-    else if (sort === 'name_asc') orderClause = 'ORDER BY d.original_name ASC';
-    else if (sort === 'name_desc') orderClause = 'ORDER BY d.original_name DESC';
+    if (searchTerm.length === 0 && sort === 'relevance') {
+      orderClause = 'ORDER BY d.created_at DESC';
+    } else if (sort === 'newest') {
+      orderClause = 'ORDER BY d.created_at DESC';
+    } else if (sort === 'oldest') {
+      orderClause = 'ORDER BY d.created_at ASC';
+    } else if (sort === 'name_asc') {
+      orderClause = 'ORDER BY d.original_name ASC';
+    } else if (sort === 'name_desc') {
+      orderClause = 'ORDER BY d.original_name DESC';
+    }
 
     if (searchTerm.length === 0) {
       // SADECE FİLTRELEME (Arama kelimesi yok)
@@ -968,7 +1304,7 @@ router.get('/trash', async (req, res) => {
 // ============================================================
 // POST /api/documents/:id/restore — Dokümanı Çöp Kutusundan Geri Yükle
 // ============================================================
-router.post('/:id/restore', async (req, res) => {
+router.post('/:id/restore', verifyToken, requireAdmin, async (req, res) => {
   try {
     const document = await Document.findByPk(req.params.id, { paranoid: false });
 
@@ -979,6 +1315,9 @@ router.post('/:id/restore', async (req, res) => {
     await document.restore();
     console.log(`[RESTORE] Doküman geri yüklendi: ${document.originalName} (${document.id})`);
 
+    // Audit Log
+    logAction(req, 'RESTORE', document.id, document.originalName, `"${document.originalName}" adlı belge çöp kutusundan geri yüklendi.`);
+
     res.status(200).json({ message: 'Doküman başarıyla geri yüklendi.', document });
   } catch (error) {
     console.error('[HATA] Geri yükleme:', error.message);
@@ -987,9 +1326,9 @@ router.post('/:id/restore', async (req, res) => {
 });
 
 // ============================================================
-// DELETE /api/documents/:id/force — Dokümanı Kalıcı Olarak Sil (Diskten de temizler)
+// DELETE /api/documents/:id/force — Dokümanı Kalıcı Olarak Sil (Admin Korumalı)
 // ============================================================
-router.delete('/:id/force', async (req, res) => {
+router.delete('/:id/force', verifyToken, requireAdmin, async (req, res) => {
   try {
     const fs = require('fs');
     const path = require('path');
@@ -1010,6 +1349,9 @@ router.delete('/:id/force', async (req, res) => {
     await document.destroy({ force: true });
     console.log(`[FORCE_DELETE] Doküman veritabanından kalıcı silindi: ${document.originalName} (${document.id})`);
 
+    // Audit Log
+    logAction(req, 'FORCE_DELETE', document.id, document.originalName, `"${document.originalName}" adlı belge sistemden kalıcı olarak silindi.`);
+
     res.status(200).json({ message: 'Doküman kalıcı olarak silindi.' });
   } catch (error) {
     console.error('[HATA] Kalıcı silme:', error.message);
@@ -1018,9 +1360,9 @@ router.delete('/:id/force', async (req, res) => {
 });
 
 // ============================================================
-// DELETE /api/documents/:id — Dokümanı Çöp Kutusuna Gönder (Soft Delete)
+// DELETE /api/documents/:id — Dokümanı Çöp Kutusuna Gönder (Soft Delete - Admin Korumalı)
 // ============================================================
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const document = await Document.findByPk(req.params.id);
 
@@ -1030,6 +1372,9 @@ router.delete('/:id', async (req, res) => {
 
     await document.destroy();
     console.log(`[SOFT_DELETE] Doküman çöp kutusuna gönderildi: ${document.originalName} (${document.id})`);
+
+    // Audit Log
+    logAction(req, 'DELETE', document.id, document.originalName, `"${document.originalName}" adlı belge çöp kutusuna gönderildi.`);
 
     res.status(200).json({ message: 'Doküman çöp kutusuna gönderildi.', document });
   } catch (error) {
@@ -1042,7 +1387,7 @@ router.delete('/:id', async (req, res) => {
 // GET /api/documents — Tüm Dokümanları Listele
 // ============================================================
 
-router.get('/', async (req, res) => {
+router.get('/', verifyToken, requireReadPermission, async (req, res) => {
   try {
     const documents = await Document.findAll({
       order: [['created_at', 'DESC']],
@@ -1065,7 +1410,7 @@ router.get('/', async (req, res) => {
 // GET /api/documents/:id — Tek Doküman Detayı
 // ============================================================
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', verifyToken, requireReadPermission, async (req, res) => {
   try {
     const document = await Document.findByPk(req.params.id, {
       include: [
@@ -1110,9 +1455,9 @@ router.get('/jobs/:jobId', async (req, res) => {
 });
 
 // ============================================================
-// PUT /api/documents/:id — Doküman Güncelleme (Rich Text Editor)
+// PUT /api/documents/:id — Doküman Güncelleme (Rich Text Editor - Admin Korumalı)
 // ============================================================
-router.put('/:id', async (req, res) => {
+router.put('/:id', verifyToken, requireWritePermission, async (req, res) => {
   try {
     const { title, extractedText, category, comments } = req.body;
     const document = await Document.findByPk(req.params.id, {
@@ -1152,6 +1497,14 @@ router.put('/:id', async (req, res) => {
     }
 
     console.log(`[UPDATE] Doküman güncellendi: ${document.originalName || document.title} (${document.id})`);
+
+    // Audit Log
+    const changedFields = [];
+    if (title !== undefined) changedFields.push('başlık');
+    if (extractedText !== undefined) changedFields.push('OCR metni');
+    if (category !== undefined) changedFields.push('kategori');
+    if (comments !== undefined) changedFields.push('yorumlar');
+    logAction(req, 'UPDATE', document.id, document.originalName || document.title, `"${document.originalName || document.title}" adlı belge güncellendi. Değişen alanlar: ${changedFields.join(', ')}`);
 
     const updatedDocument = await Document.findByPk(req.params.id, {
       include: [{ association: 'metadata' }]

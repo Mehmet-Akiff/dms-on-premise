@@ -11,167 +11,364 @@
             </svg>
           </div>
           <h2>DMS GÜVENLİK DUVARI</h2>
-          <p class="lock-desc">Sisteme erişebilmek için kasa kimlik bilgilerini girin.</p>
+          <p class="lock-desc">Sisteme erişebilmek için giriş yapın veya kayıt olun.</p>
         </div>
 
-        <!-- Form -->
-        <form @submit.prevent="handleLogin" class="lock-form">
-          <div class="input-group">
-            <label>Kasa Kullanıcı Adı</label>
-            <input 
-              v-model="username" 
-              type="text" 
-              placeholder="kasa kullanıcı adı..." 
-              required 
-              :disabled="lockoutSeconds > 0 || isLoading"
-            />
-          </div>
-
-          <div class="input-group">
-            <label>Kasa Şifresi</label>
-            <input 
-              v-model="password" 
-              type="password" 
-              placeholder="••••••••" 
-              required
-              :disabled="lockoutSeconds > 0 || isLoading"
-            />
-          </div>
-
-          <!-- Beni Hatırla Seçeneği -->
-          <div class="remember-me-row">
-            <label class="remember-me-label">
-              <input type="checkbox" v-model="rememberMe" :disabled="lockoutSeconds > 0 || isLoading" />
-              <span>Bu cihazda beni hatırla (Cihazı Güvenli Kaydet)</span>
-            </label>
-          </div>
-
-          <!-- Kalan Hak ve Hata Mesajı -->
-          <div v-if="errorMessage" class="error-banner">
-            {{ errorMessage }}
-          </div>
-
-          <div class="status-row" v-if="lockoutSeconds === 0">
-            <span class="status-label">Giriş Durumu:</span>
-            <span class="status-chip" :class="remainingAttempts <= 1 ? 'chip--danger' : 'chip--warning'">
-              Kalan Hak: {{ remainingAttempts }}
-            </span>
-          </div>
-
-          <!-- Kilit Durumu Sayacı -->
-          <div v-else class="lockout-banner">
-            🚨 Çok fazla hatalı deneme! <br />
-            <strong>{{ formatTime(lockoutSeconds) }}</strong> saniye sonra tekrar deneyin.
-          </div>
-
-          <!-- Gönder Butonu -->
+        <!-- Sekme Seçimi -->
+        <div class="lock-tabs">
           <button 
-            type="submit" 
-            class="btn-unlock" 
-            :disabled="lockoutSeconds > 0 || isLoading"
+            type="button" 
+            class="tab-btn" 
+            :class="{ active: activeTab === 'login' }"
+            @click="switchTab('login')"
           >
+            👤 Giriş Yap
+          </button>
+          <button 
+            type="button" 
+            class="tab-btn" 
+            :class="{ active: activeTab === 'ciso' }"
+            @click="switchTab('ciso')"
+          >
+            🛡️ CISO
+          </button>
+          <button 
+            type="button" 
+            class="tab-btn" 
+            :class="{ active: activeTab === 'register' }"
+            @click="switchTab('register')"
+          >
+            📝 Kayıt Ol
+          </button>
+        </div>
+
+        <!-- 1. GİRİŞ YAP FORMU -->
+        <form v-if="activeTab === 'login'" @submit.prevent="handleLogin" class="lock-form">
+          <div class="input-group">
+            <label>Kullanıcı Adı</label>
+            <input 
+              v-model="loginUsername" 
+              type="text" 
+              placeholder="kullanıcı adı..." 
+              required 
+              :disabled="isLoading"
+            />
+          </div>
+
+          <div class="input-group">
+            <label>Şifre</label>
+            <div class="password-input-wrapper">
+              <input 
+                v-model="loginPassword" 
+                :type="isLoginPassVisible ? 'text' : 'password'" 
+                placeholder="••••••••" 
+                required
+                :disabled="isLoading"
+              />
+              <button 
+                type="button" 
+                class="btn-eye" 
+                @mousedown="isLoginPassVisible = true" 
+                @mouseup="isLoginPassVisible = false"
+                @mouseleave="isLoginPassVisible = false"
+                @touchstart="isLoginPassVisible = true" 
+                @touchend="isLoginPassVisible = false"
+                title="Şifreyi görmek için basılı tutun"
+              >
+                👁️
+              </button>
+            </div>
+          </div>
+
+          <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+
+          <button type="submit" class="btn-unlock" :disabled="isLoading">
             <span v-if="isLoading" class="spinner-xs"></span>
-            {{ isLoading ? 'Kilit Açılıyor...' : 'Kasa Kilidini Aç' }}
+            {{ isLoading ? 'Giriş Yapılıyor...' : 'Giriş Yap' }}
           </button>
         </form>
+
+        <!-- 2. CISO GİRİŞİ FORMU -->
+        <form v-if="activeTab === 'ciso'" @submit.prevent="handleCisoLogin" class="lock-form">
+          <div class="input-group">
+            <label>CISO Kullanıcı Adı</label>
+            <input 
+              v-model="cisoUsername" 
+              type="text" 
+              placeholder="ciso..." 
+              required 
+              :disabled="isLoading"
+            />
+          </div>
+
+          <div class="input-group">
+            <label>CISO Güvenlik Şifresi</label>
+            <div class="password-input-wrapper">
+              <input 
+                v-model="cisoPassword" 
+                :type="isCisoPassVisible ? 'text' : 'password'" 
+                placeholder="••••••••" 
+                required
+                :disabled="isLoading"
+              />
+              <button 
+                type="button" 
+                class="btn-eye" 
+                @mousedown="isCisoPassVisible = true" 
+                @mouseup="isCisoPassVisible = false"
+                @mouseleave="isCisoPassVisible = false"
+                @touchstart="isCisoPassVisible = true" 
+                @touchend="isCisoPassVisible = false"
+                title="Şifreyi görmek için basılı tutun"
+              >
+                👁️
+              </button>
+            </div>
+          </div>
+
+          <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+
+          <button type="submit" class="btn-unlock btn-unlock--ciso" :disabled="isLoading">
+            <span v-if="isLoading" class="spinner-xs"></span>
+            {{ isLoading ? 'Doğrulanıyor...' : 'CISO Girişi Yap' }}
+          </button>
+        </form>
+
+        <!-- 3. KAYIT OL FORMU (E-posta OTP Doğrulamalı) -->
+        <form v-if="activeTab === 'register'" @submit.prevent="handleRegister" class="lock-form">
+          <div class="input-group">
+            <label>Gerçek Ad Soyad</label>
+            <input 
+              v-model="regFullName" 
+              type="text" 
+              placeholder="Örn: Mehmet Akif Ürey" 
+              required 
+              :disabled="isLoading"
+            />
+          </div>
+
+          <div class="input-group">
+            <label>Kullanıcı Adı</label>
+            <input 
+              v-model="regUsername" 
+              type="text" 
+              placeholder="Örn: akif_urey" 
+              required 
+              :disabled="isLoading"
+            />
+          </div>
+
+          <div class="input-group">
+            <label>E-posta Adresi</label>
+            <div class="email-input-group" style="display:flex; gap:0.5rem">
+              <input 
+                v-model="regEmail" 
+                type="email" 
+                placeholder="Örn: guvenlik@sirketiniz.com" 
+                required 
+                :disabled="isLoading || isRegEmailVerified"
+              />
+              <button 
+                type="button" 
+                class="btn-send-code" 
+                style="padding: 0.55rem 0.85rem; font-size: 0.75rem; border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 6px; background: rgba(139, 92, 246, 0.08); color: #a78bfa; font-weight: 600; cursor: pointer; white-space: nowrap;"
+                :disabled="isLoading || isRegSendingCode || isRegEmailVerified || regTimer > 0" 
+                @click="sendRegVerificationCode"
+              >
+                {{ isRegSendingCode ? '...' : (isRegEmailVerified ? '✓ Doğrulandı' : (regTimer > 0 ? `Yeniden Gönder (${formatTime(regTimer)})` : 'Kod Gönder')) }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Kayıt OTP Giriş Alanı -->
+          <div v-if="isRegVerifying && !isRegEmailVerified" class="otp-verification-section" style="background: rgba(139, 92, 246, 0.03); border: 1px dashed rgba(139, 92, 246, 0.25); border-radius: 8px; padding: 0.85rem; margin-top:0.25rem; display: flex; flex-direction: column; gap: 0.75rem;">
+            <p style="font-size: 0.7rem; color: #9ca3af; line-height: 1.4; margin: 0;">E-posta adresinize gönderilen 6 haneli doğrulama kodunu girin.</p>
+            <div class="otp-input-container" style="display: flex; gap: 0.4rem; justify-content: space-between;">
+              <input 
+                v-for="(digit, idx) in regOtpDigits" 
+                :key="idx"
+                :id="'reg-otp-' + idx"
+                v-model="regOtpDigits[idx]"
+                type="text"
+                maxLength="1"
+                style="width: 36px; height: 36px; background: rgba(15, 23, 42, 0.7); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 6px; text-align: center; color: #fff; font-size: 1.1rem; font-weight: 700; outline: none;"
+                @input="handleRegOtpInput($event, idx)"
+                @keydown.delete="handleRegOtpDelete($event, idx)"
+              />
+            </div>
+            <div v-if="regOtpError" style="color: #f87171; font-size: 0.72rem; text-align: center;">{{ regOtpError }}</div>
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem">
+              <button type="button" style="background: transparent; border: 1px solid rgba(255, 255, 255, 0.1); color: #9ca3af; padding: 0.35rem 0.75rem; font-size: 0.72rem; border-radius: 6px; cursor: pointer;" @click="isRegVerifying = false">Vazgeç</button>
+              <button type="button" style="background: #8b5cf6; border: none; color: #fff; padding: 0.35rem 1rem; font-size: 0.72rem; font-weight: 700; border-radius: 6px; cursor: pointer;" @click="verifyRegCode">Doğrula</button>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label>Şifre</label>
+            <div class="password-input-wrapper">
+              <input 
+                v-model="regPassword" 
+                :type="isRegPassVisible ? 'text' : 'password'" 
+                placeholder="Şifre belirleyin..." 
+                required
+                :disabled="isLoading"
+                :style="regPassword ? { borderColor: isRegPasswordValid ? '#22c55e' : '#ef4444' } : {}"
+              />
+              <button 
+                type="button" 
+                class="btn-eye" 
+                @mousedown="isRegPassVisible = true" 
+                @mouseup="isRegPassVisible = false"
+                @mouseleave="isRegPassVisible = false"
+                @touchstart="isRegPassVisible = true" 
+                @touchend="isRegPassVisible = false"
+                title="Şifreyi görmek için basılı tutun"
+              >
+                👁️
+              </button>
+            </div>
+            <!-- Dinamik Şifre Gereksinimleri -->
+            <div v-if="regPassword && regPasswordErrors.length > 0" class="password-requirements" style="font-size:0.68rem; color:#f87171; margin-top:0.25rem; display:flex; flex-direction:column; gap:0.15rem;">
+              <span v-for="err in regPasswordErrors" :key="err">⚠️ {{ err }}</span>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label>Talep Edilen Rol</label>
+            <select v-model="regRole" class="role-select" required :disabled="isLoading">
+              <option value="user">Standart Kullanıcı (Oturum)</option>
+              <option value="admin">Yönetici (Admin)</option>
+            </select>
+          </div>
+
+          <div v-if="successMessage" class="success-banner">{{ successMessage }}</div>
+          <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+
+          <button type="submit" class="btn-unlock btn-unlock--register" :disabled="isLoading || !isRegEmailVerified || !isRegPasswordValid">
+            <span v-if="isLoading" class="spinner-xs"></span>
+            {{ isLoading ? 'İstek Gönderiliyor...' : (isRegEmailVerified ? (isRegPasswordValid ? 'Kayıt Başvurusu Yap' : 'Lütfen Şifre Kurallarını Sağlayın') : 'Lütfen Önce Mail Doğrulayın') }}
+          </button>
+        </form>
+
       </div>
     </div>
   </Transition>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const isLocked = ref(true)
-const username = ref('')
-const password = ref('')
-const rememberMe = ref(true) // Varsayılan cihaz kaydı aktif
-const remainingAttempts = ref(3)
-const lockoutSeconds = ref(0)
+const activeTab = ref('login')
 const isLoading = ref(false)
 const shouldShake = ref(false)
 const errorMessage = ref('')
-let timer = null
+const successMessage = ref('')
 
-// Kasa Durumunu Sorgula
-async function checkKasaStatus() {
-  try {
-    const response = await fetch('/api/auth/kasa-status')
-    if (response.ok) {
-      const data = await response.json()
-      remainingAttempts.value = data.remainingAttempts
-      if (data.lockoutSecondsLeft > 0) {
-        startCountdown(data.lockoutSecondsLeft)
-      }
-    }
-  } catch (error) {
-    console.error('[KasaLock] Durum sorgulama hatası:', error)
+// Login Form Fields
+const loginUsername = ref('')
+const loginPassword = ref('')
+const isLoginPassVisible = ref(false)
+
+// CISO Form Fields
+const cisoUsername = ref('ciso')
+const cisoPassword = ref('')
+const isCisoPassVisible = ref(false)
+
+// Register Form Fields
+const regFullName = ref('')
+const regUsername = ref('')
+const regEmail = ref('')
+const regPassword = ref('')
+const regRole = ref('user')
+const isRegPassVisible = ref(false)
+
+// Dinamik Şifre Validasyonu
+const regPasswordErrors = computed(() => {
+  const p = regPassword.value || '';
+  const errors = [];
+  if (p.length < 8) {
+    errors.push('En az 8 karakter olmalı');
   }
+  if (!/[a-zA-Z]/.test(p)) {
+    errors.push('En az bir harf içermeli');
+  }
+  if (!/[0-9]/.test(p)) {
+    errors.push('En az bir rakam içermeli');
+  }
+  return errors;
+})
+
+const isRegPasswordValid = computed(() => {
+  return regPassword.value && regPasswordErrors.value.length === 0;
+})
+
+// Kayıt Mail OTP Kontrolleri
+const isRegEmailVerified = ref(false)
+const isRegSendingCode = ref(false)
+const isRegVerifying = ref(false)
+const regOtpDigits = ref(['', '', '', '', '', ''])
+const regOtpError = ref('')
+
+const regTimer = ref(0)
+let regInterval = null
+
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Geri sayım sayacını başlat
-function startCountdown(seconds) {
-  lockoutSeconds.value = seconds
-  if (timer) clearInterval(timer)
-  timer = setInterval(() => {
-    lockoutSeconds.value--
-    if (lockoutSeconds.value <= 0) {
-      clearInterval(timer)
-      timer = null
-      checkKasaStatus()
-      errorMessage.value = ''
+function startRegTimer() {
+  if (regInterval) clearInterval(regInterval);
+  regTimer.value = 300;
+  regInterval = setInterval(() => {
+    if (regTimer.value > 0) {
+      regTimer.value--;
+    } else {
+      clearInterval(regInterval);
     }
-  }, 1000)
+  }, 1000);
 }
 
-function formatTime(sec) {
-  const m = Math.floor(sec / 60).toString().padStart(2, '0')
-  const s = (sec % 60).toString().padStart(2, '0')
-  return `${m}:${s}`
+function switchTab(tab) {
+  activeTab.value = tab
+  errorMessage.value = ''
+  successMessage.value = ''
 }
 
+function triggerFormShake() {
+  shouldShake.value = true
+  setTimeout(() => { shouldShake.value = false }, 500)
+}
+
+// 1. Genel Giriş İşlemi
 async function handleLogin() {
-  if (lockoutSeconds.value > 0 || isLoading.value) return
-
   isLoading.value = true
   errorMessage.value = ''
-  shouldShake.value = false
+  successMessage.value = ''
 
   try {
-    const response = await fetch('/api/auth/kasa-login', {
+    const response = await fetch('/api/auth/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: username.value,
-        password: password.value
+        username: loginUsername.value,
+        password: loginPassword.value,
+        isCiso: false
       })
     })
 
     const data = await response.json()
 
     if (response.ok) {
-      // Başarılı: Seçime göre localStorage veya sessionStorage kullan
-      if (rememberMe.value) {
-        localStorage.setItem('kasa_token', data.token)
-      } else {
-        sessionStorage.setItem('kasa_token', data.token)
-      }
-      isLocked.value = false
-      // Parent bileşene haber ver
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('kasa_token', data.token);
+      isLocked.value = false;
       window.dispatchEvent(new Event('kasa-unlocked'))
     } else {
-      // Hatalı Giriş: Sallanma animasyonunu tetikle
-      shouldShake.value = true
-      setTimeout(() => { shouldShake.value = false }, 500)
-      
-      remainingAttempts.value = data.remainingAttempts || 0
-      errorMessage.value = data.message || data.error
-
-      if (response.status === 423 && data.lockoutSecondsLeft > 0) {
-        startCountdown(data.lockoutSecondsLeft)
-      }
+      triggerFormShake()
+      errorMessage.value = data.error || 'Giriş yapılamadı.'
     }
   } catch (error) {
     errorMessage.value = 'Sunucuyla bağlantı kurulamadı.'
@@ -180,18 +377,204 @@ async function handleLogin() {
   }
 }
 
-// Sayfa yüklendiğinde token doğrulaması yap
-onMounted(() => {
-  const token = localStorage.getItem('kasa_token') || sessionStorage.getItem('kasa_token')
+// 2. CISO Giriş İşlemi
+async function handleCisoLogin() {
+  isLoading.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: cisoUsername.value,
+        password: cisoPassword.value,
+        isCiso: true
+      })
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('kasa_token', data.token);
+      isLocked.value = false;
+      window.dispatchEvent(new Event('kasa-unlocked'))
+    } else {
+      triggerFormShake()
+      errorMessage.value = data.error || 'CISO şifresi geçersiz.'
+    }
+  } catch (error) {
+    errorMessage.value = 'Sunucuyla bağlantı kurulamadı.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Kayıt OTP Mail Gönderimi
+async function sendRegVerificationCode() {
+  if (!regEmail.value) {
+    errorMessage.value = 'Lütfen geçerli bir e-posta adresi yazın.'
+    return
+  }
+  isRegSendingCode.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  regOtpError.value = ''
+
+  try {
+    const response = await fetch('/api/auth/register-send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: regEmail.value, role: regRole.value })
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      isRegVerifying.value = true
+      regOtpDigits.value = ['', '', '', '', '', '']
+      successMessage.value = 'Doğrulama kodu gönderildi.'
+      startRegTimer()
+    } else {
+      errorMessage.value = data.error || data.message || 'Kod gönderilemedi.'
+    }
+  } catch (err) {
+    errorMessage.value = 'Sunucu bağlantı hatası.'
+  } finally {
+    isRegSendingCode.value = false
+  }
+}
+
+// Kayıt OTP Doğrulama
+async function verifyRegCode() {
+  const code = regOtpDigits.value.join('')
+  if (code.length !== 6) {
+    regOtpError.value = 'Lütfen 6 haneli kodu eksiksiz girin.'
+    return
+  }
+  regOtpError.value = ''
+
+  try {
+    const response = await fetch('/api/auth/register-verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: regEmail.value, code })
+    })
+
+    if (response.ok) {
+      isRegEmailVerified.value = true
+      isRegVerifying.value = false
+      if (regInterval) clearInterval(regInterval);
+      regTimer.value = 0;
+      successMessage.value = 'E-posta doğrulama başarılı! Artık kayıt başvurusunu tamamlayabilirsiniz.'
+    } else {
+      const data = await response.json()
+      regOtpError.value = data.error || 'Doğrulama kodu geçersiz.'
+    }
+  } catch (err) {
+    regOtpError.value = 'Doğrulama hatası.'
+  }
+}
+
+function handleRegOtpInput(event, index) {
+  const value = event.target.value
+  if (!/^[0-9]$/.test(value)) {
+    regOtpDigits.value[index] = ''
+    return
+  }
+  if (index < 5 && value) {
+    const nextInput = document.getElementById(`reg-otp-${index + 1}`)
+    if (nextInput) nextInput.focus()
+  }
+}
+
+function handleRegOtpDelete(event, index) {
+  if (index > 0 && !regOtpDigits.value[index]) {
+    regOtpDigits.value[index - 1] = ''
+    const prevInput = document.getElementById(`reg-otp-${index - 1}`)
+    if (prevInput) prevInput.focus()
+  }
+}
+
+// 3. Kullanıcı Kayıt Başvurusu
+async function handleRegister() {
+  if (!isRegPasswordValid.value) {
+    errorMessage.value = 'Şifreniz kurallara uygun değil.'
+    return
+  }
+
+  isLoading.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: regFullName.value,
+        username: regUsername.value,
+        email: regEmail.value,
+        password: regPassword.value,
+        role: regRole.value
+      })
+    })
+
+    const data = await response.json()
+
+    if (response.ok) {
+      successMessage.value = data.message || 'Kayıt talebi başarıyla iletildi.'
+      // Temizle
+      regFullName.value = ''
+      regUsername.value = ''
+      regEmail.value = ''
+      regPassword.value = ''
+      isRegEmailVerified.value = false
+    } else {
+      errorMessage.value = data.error || 'Kayıt işlemi başarısız.'
+    }
+  } catch (error) {
+    errorMessage.value = 'Sunucuyla bağlantı kurulamadı.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function handleLockEvent() {
+  const token = localStorage.getItem('token');
   if (token) {
-    isLocked.value = false
-  } else {
-    checkKasaStatus()
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    } catch (e) {
+      console.warn('Logout log could not be synced:', e.message);
+    }
+  }
+  localStorage.removeItem('token');
+  localStorage.removeItem('kasa_token');
+  isLocked.value = true;
+  loginUsername.value = '';
+  loginPassword.value = '';
+  cisoPassword.value = '';
+  isRegEmailVerified.value = false;
+  isRegVerifying.value = false;
+}
+
+onMounted(() => {
+  window.addEventListener('kasa-lock', handleLockEvent);
+  const token = localStorage.getItem('token');
+  if (token) {
+    isLocked.value = false;
   }
 })
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  window.removeEventListener('kasa-lock', handleLockEvent);
+  if (regInterval) clearInterval(regInterval);
 })
 </script>
 
@@ -210,14 +593,14 @@ onUnmounted(() => {
 }
 
 .kasa-lock-card {
-  width: 100%;
-  max-width: 440px;
-  background: rgba(17, 24, 39, 0.7);
-  border: 1px solid rgba(139, 92, 246, 0.25);
-  box-shadow: 0 0 50px rgba(139, 92, 246, 0.15), inset 0 0 20px rgba(139, 92, 246, 0.05);
+  background: rgba(17, 24, 39, 0.85);
+  border: 1px solid rgba(139, 92, 246, 0.2);
   border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
   padding: 2.5rem;
-  backdrop-filter: blur(12px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 40px rgba(139, 92, 246, 0.1);
+  backdrop-filter: blur(20px);
 }
 
 .lock-header {
@@ -226,42 +609,72 @@ onUnmounted(() => {
 }
 
 .lock-icon-wrapper {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1.5px solid rgba(139, 92, 246, 0.3);
   width: 64px;
   height: 64px;
-  background: rgba(139, 92, 246, 0.1);
-  border: 1.5px solid rgba(139, 92, 246, 0.4);
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 0 auto 1rem;
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+  margin: 0 auto 1rem auto;
+  color: #a78bfa;
 }
 
 .lock-svg {
   width: 28px;
   height: 28px;
-  color: #a78bfa;
 }
 
 .lock-header h2 {
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 800;
   color: #fff;
-  letter-spacing: 2px;
-  margin-bottom: 0.5rem;
+  letter-spacing: 1px;
 }
 
 .lock-desc {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: #9ca3af;
-  opacity: 0.85;
+  margin-top: 0.35rem;
+}
+
+.lock-tabs {
+  display: flex;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.25rem;
+  margin-bottom: 1.75rem;
+}
+
+.tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: #fff;
+}
+
+.tab-btn.active {
+  background: #8b5cf6;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.25);
 }
 
 .lock-form {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.2rem;
 }
 
 .input-group {
@@ -271,158 +684,125 @@ onUnmounted(() => {
 }
 
 .input-group label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #a78bfa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.input-group input {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.input-group input, .role-select {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   padding: 0.7rem 1rem;
   color: #fff;
   font-size: 0.85rem;
   outline: none;
-  transition: all 0.25s ease;
+  width: 100%;
 }
 
-.input-group input:focus {
+.input-group input:focus, .role-select:focus {
   border-color: #8b5cf6;
-  box-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(15, 23, 42, 0.9);
 }
 
-/* Beni Hatırla Checkbox Stilleri */
-.remember-me-row {
+.password-input-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
-  margin-top: -0.25rem;
 }
 
-.remember-me-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.76rem;
-  color: #9ca3af;
+.password-input-wrapper input {
+  padding-right: 2.75rem !important;
+}
+
+.btn-eye {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: #a78bfa;
+  font-size: 1rem;
   cursor: pointer;
+  padding: 4px;
+  opacity: 0.65;
   user-select: none;
 }
 
-.remember-me-label input {
-  cursor: pointer;
-  accent-color: #8b5cf6;
-  width: 14px;
-  height: 14px;
+.btn-eye:hover {
+  opacity: 1;
 }
 
 .error-banner {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   color: #f87171;
   font-size: 0.78rem;
-  padding: 0.6rem 0.85rem;
-  border-radius: 6px;
-  text-align: center;
-}
-
-.status-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.78rem;
-}
-
-.status-label {
-  color: #9ca3af;
-}
-
-.status-chip {
-  padding: 0.2rem 0.6rem;
-  border-radius: 5px;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.chip--warning {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  color: #fbbf24;
-}
-
-.chip--danger {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #f87171;
-}
-
-.lockout-banner {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #f87171;
-  font-size: 0.82rem;
-  padding: 0.8rem;
+  padding: 0.65rem 0.85rem;
   border-radius: 8px;
   text-align: center;
-  line-height: 1.5;
 }
 
-.lockout-banner strong {
-  font-size: 1.1rem;
-  color: #fff;
-  letter-spacing: 1px;
+.success-banner {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  color: #4ade80;
+  font-size: 0.78rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  text-align: center;
 }
 
 .btn-unlock {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
   background: linear-gradient(135deg, #a78bfa, #8b5cf6);
   color: #fff;
   border: none;
   padding: 0.75rem;
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 800;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.25s ease;
-  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.25);
-  margin-top: 0.5rem;
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .btn-unlock:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
-  background: linear-gradient(135deg, #c4b5fd, #7c3aed);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.35);
 }
 
 .btn-unlock:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
 }
 
-/* Shake Animation */
+.btn-unlock--ciso {
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
+}
+
+.btn-unlock--ciso:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+}
+
 .shake-anim {
-  animation: shake 0.45s ease;
+  animation: shake 0.4s ease-in-out;
 }
 
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-8px); }
-  40%, 80% { transform: translateX(8px); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
 }
 
-/* Slide Up Transition */
-.slide-up-leave-active {
-  transition: all 0.45s cubic-bezier(1, 0.5, 0.8, 1);
+.slide-up-enter-active, .slide-up-leave-active {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
 }
-.slide-up-leave-to {
-  transform: translateY(-100vh);
+.slide-up-enter-from, .slide-up-leave-to {
+  transform: translateY(30px);
   opacity: 0;
 }
 </style>

@@ -1,46 +1,327 @@
 <template>
   <div class="settings-drawer-wrapper" :class="{ 'drawer-open': isOpen }">
     <div class="drawer-overlay" @click="closeDrawer"></div>
-    <div class="settings-drawer">
+    <div class="settings-drawer" :class="'theme--' + currentUserRole">
       <!-- Header -->
       <div class="drawer-header">
         <div class="header-title">
           <span>⚙️</span>
-          <h3>Kasa Ayarları</h3>
+          <h3>Kasa & Sistem Ayarları</h3>
         </div>
         <button class="btn-close-drawer" @click="closeDrawer">✕</button>
       </div>
 
       <!-- Scrollable Content -->
       <div class="drawer-body">
-        <!-- 1. KASA KIMLIK BILGILERI -->
-        <div class="settings-section">
-          <h4>🔐 Kasa Kimlik Bilgileri</h4>
-          <p class="section-desc">Kasa kilidini açmak için kullanılan yönetici adı ve şifresini güncelleyin.</p>
-          
-          <form @submit.prevent="updateKasaCredentials" class="settings-form">
-            <div class="form-group">
-              <label>Kullanıcı Adı</label>
-              <input v-model="kasaUsername" type="text" placeholder="admin" required />
-            </div>
-            <div class="form-group">
-              <label>Yeni Şifre</label>
-              <input v-model="kasaNewPassword" type="password" placeholder="Yeni şifre girin..." />
-            </div>
-            <button type="submit" class="btn-settings-save" :disabled="isSavingCreds">
-              {{ isSavingCreds ? 'Kaydediliyor...' : 'Kimliği Güncelle' }}
-            </button>
-          </form>
+        
+        <!-- 0. PROFIL KARTI -->
+        <div class="profile-card-container">
+          <div class="profile-avatar">
+            <span v-if="currentUserRole === 'ciso'">🛡️</span>
+            <span v-else-if="currentUserRole === 'admin'">🔑</span>
+            <span v-else>👤</span>
+          </div>
+          <div class="profile-details">
+            <span class="profile-role-tag" :class="'role--' + currentUserRole">
+              {{ getRoleLabel(currentUserRole) }}
+            </span>
+            <h5>{{ currentUserFullName }}</h5>
+            <p>@{{ currentUsername }}</p>
+          </div>
         </div>
 
         <hr class="section-divider" />
 
-        <!-- 2. E-POSTA BILDIRIM AYARLARI -->
+        <!-- 1. PROFİL GÜNCELLEME (Bölümlenmiş Ayrı Formlar) -->
         <div class="settings-section">
-          <h4>📧 Yetkisiz Erişim Alarmı</h4>
-          <p class="section-desc">Ardışık hatalı denemelerde güvenlik uyarısı gönderilecek doğrulanmış e-postayı ayarlayın.</p>
+          <h4>👤 Profil Bilgilerini Güncelle</h4>
+          <p class="section-desc">Profil bilgilerinizi bölümler halinde güncelleyebilirsiniz. Yönetici adı ve kullanıcı adı değişikliği güvenlik nedeniyle CISO onayı gerektirir.</p>
 
-          <!-- Alarm Eşiği -->
+          <!-- Form A: Ad Soyad Değiştirme -->
+          <div class="sub-profile-section">
+            <h5>Ad Soyad Değişikliği (Onay Gerekir)</h5>
+            <form @submit.prevent="updateUserFullName" class="settings-form">
+              <div class="form-group">
+                <input v-model="userFullName" type="text" placeholder="Örn: Mehmet Akif Ürey" required />
+              </div>
+              <button type="submit" class="btn-settings-save">
+                Ad Soyad Güncelleme Talebi Gönder
+              </button>
+            </form>
+          </div>
+
+          <div style="margin: 0.5rem 0; border-top: 1px dashed rgba(255,255,255,0.05);"></div>
+
+          <!-- Form B: Kullanıcı Adı Değiştirme -->
+          <div class="sub-profile-section">
+            <h5>Kullanıcı Adı Değişikliği (Doğrudan Güncellenir)</h5>
+            <form @submit.prevent="updateUserUsername" class="settings-form">
+              <div class="form-group">
+                <input v-model="userUsername" type="text" placeholder="Kullanıcı adı..." required />
+              </div>
+              <button type="submit" class="btn-settings-save">
+                Kullanıcı Adını Güncelle
+              </button>
+            </form>
+          </div>
+
+          <div style="margin: 0.5rem 0; border-top: 1px dashed rgba(255,255,255,0.05);"></div>
+
+          <!-- Form C: Şifre Değiştirme (Doğrudan) -->
+          <div class="sub-profile-section">
+            <h5>Şifre Değişikliği (Doğrudan Güncellenir)</h5>
+            <form @submit.prevent="updateUserPassword" class="settings-form">
+              <div class="form-group">
+                <label>Mevcut Şifre</label>
+                <div class="password-input-wrapper">
+                  <input 
+                    v-model="profileOldPassword" 
+                    :type="isProfileOldPasswordVisible ? 'text' : 'password'" 
+                    placeholder="Mevcut şifreniz..." 
+                    required
+                  />
+                  <button 
+                    type="button" 
+                    class="btn-eye" 
+                    @mousedown="isProfileOldPasswordVisible = true" 
+                    @mouseup="isProfileOldPasswordVisible = false"
+                    @mouseleave="isProfileOldPasswordVisible = false"
+                    @touchstart="isProfileOldPasswordVisible = true" 
+                    @touchend="isProfileOldPasswordVisible = false"
+                  >
+                    👁️
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Yeni Şifre</label>
+                <div class="password-input-wrapper">
+                  <input 
+                    v-model="profileNewPassword" 
+                    :type="isProfileNewPasswordVisible ? 'text' : 'password'" 
+                    placeholder="Yeni şifreniz..." 
+                    required
+                    :style="profileNewPassword ? { borderColor: isProfilePasswordValid ? '#22c55e' : '#ef4444' } : {}"
+                  />
+                  <button 
+                    type="button" 
+                    class="btn-eye" 
+                    @mousedown="isProfileNewPasswordVisible = true" 
+                    @mouseup="isProfileNewPasswordVisible = false"
+                    @mouseleave="isProfileNewPasswordVisible = false"
+                    @touchstart="isProfileNewPasswordVisible = true" 
+                    @touchend="isProfileNewPasswordVisible = false"
+                  >
+                    👁️
+                  </button>
+                </div>
+                <!-- Dinamik Şifre Gereksinimleri -->
+                <div v-if="profileNewPassword && profilePasswordErrors.length > 0" class="password-requirements" style="font-size:0.68rem; color:#f87171; margin-top:0.25rem; display:flex; flex-direction:column; gap:0.15rem;">
+                  <span v-for="err in profilePasswordErrors" :key="err">⚠️ {{ err }}</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Yeni Şifre Tekrar</label>
+                <div class="password-input-wrapper">
+                  <input 
+                    v-model="profileNewPasswordConfirm" 
+                    :type="isProfileNewPasswordConfirmVisible ? 'text' : 'password'" 
+                    placeholder="Yeni şifrenizi tekrar girin..." 
+                    required
+                  />
+                  <button 
+                    type="button" 
+                    class="btn-eye" 
+                    @mousedown="isProfileNewPasswordConfirmVisible = true" 
+                    @mouseup="isProfileNewPasswordConfirmVisible = false"
+                    @mouseleave="isProfileNewPasswordConfirmVisible = false"
+                    @touchstart="isProfileNewPasswordConfirmVisible = true" 
+                    @touchend="isProfileNewPasswordConfirmVisible = false"
+                  >
+                    👁️
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="profileNewPassword && profileNewPasswordConfirm && profileNewPassword !== profileNewPasswordConfirm" class="password-mismatch-banner">
+                ⚠️ Şifreler eşleşmiyor!
+              </div>
+
+              <button type="submit" class="btn-settings-save" :disabled="!isProfilePasswordValid || (profileNewPassword !== profileNewPasswordConfirm)">
+                Şifreyi Güncelle
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <hr class="section-divider" />
+
+        <!-- 2. ONAY BEKLEYEN TALEPLER -->
+        <div class="settings-section" v-if="isAdminOrCiso && approvalsList.length > 0">
+          <h4>⏳ Onay Bekleyen Talepler</h4>
+          <p class="section-desc">Kullanıcı kayıt başvurularını, isim değişikliklerini ve sistem modu geçişlerini doğrudan onaylayın veya reddedin.</p>
+          
+          <div class="approvals-list-wrapper">
+            <div v-for="req in approvalsList" :key="req.id" class="approval-row-card">
+              <div class="approval-info-brief">
+                <span class="approval-type-badge">{{ getApprovalTypeLabel(req.type) }}</span>
+                <p class="approval-detail-text">{{ getApprovalDetailText(req) }}</p>
+                <div class="approval-status-badge-wrap" style="margin-top: 0.25rem;">
+                  <span class="status-badge" :class="'status--' + req.status">
+                    Durum: {{ getStatusLabel(req.status) }}
+                  </span>
+                </div>
+                <small class="approval-meta-sub">
+                  Verilen Onaylar: {{ req.approvalsReceived?.length > 0 ? req.approvalsReceived.join(', ') : 'Henüz onay verilmedi' }} ({{ req.approvalsReceived?.length || 0 }}/{{ req.approvalsRequired }} Onay)
+                </small>
+              </div>
+              <div class="approval-actions" style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;" v-if="req.status === 'pending'">
+                <button class="btn-approval btn-approval--reject" @click="handleApprovalAction(req.id, 'reject')">Reddet</button>
+                <button class="btn-approval btn-approval--approve" @click="handleApprovalAction(req.id, 'approve')">Onayla</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="section-divider" v-if="isAdminOrCiso && approvalsList.length > 0" />
+
+        <!-- 3. KASA KİMLİK & ŞİFRE BİLGİLERİ -->
+        <div class="settings-section" v-if="currentUserRole === 'admin'">
+          <h4>🔐 Kasa Yönetici Şifresi</h4>
+          <p class="section-desc">Kasa kilidini açmak için kullanılan yönetici şifresini güncelleyin.</p>
+          
+          <form @submit.prevent="updateKasaCredentials" class="settings-form">
+            
+            <div class="form-group">
+              <label>Yeni Şifre</label>
+              <div class="password-input-wrapper">
+                <input 
+                  v-model="kasaNewPassword" 
+                  :type="isNewPasswordVisible ? 'text' : 'password'" 
+                  placeholder="Yeni şifre..." 
+                  :style="kasaNewPassword ? { borderColor: isKasaPasswordValid ? '#22c55e' : '#ef4444' } : {}"
+                />
+                <button 
+                  type="button" 
+                  class="btn-eye" 
+                  @mousedown="isNewPasswordVisible = true" 
+                  @mouseup="isNewPasswordVisible = false"
+                  @mouseleave="isNewPasswordVisible = false"
+                  @touchstart="isNewPasswordVisible = true" 
+                  @touchend="isNewPasswordVisible = false"
+                >
+                  👁️
+                </button>
+              </div>
+              <!-- Dinamik Şifre Gereksinimleri -->
+              <div v-if="kasaNewPassword && kasaPasswordErrors.length > 0" class="password-requirements" style="font-size:0.68rem; color:#f87171; margin-top:0.25rem; display:flex; flex-direction:column; gap:0.15rem;">
+                <span v-for="err in kasaPasswordErrors" :key="err">⚠️ {{ err }}</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Yeni Şifre Tekrar</label>
+              <div class="password-input-wrapper">
+                <input 
+                  v-model="kasaNewPasswordConfirm" 
+                  :type="isNewPasswordConfirmVisible ? 'text' : 'password'" 
+                  placeholder="Şifreyi tekrar girin..." 
+                />
+                <button 
+                  type="button" 
+                  class="btn-eye" 
+                  @mousedown="isNewPasswordConfirmVisible = true" 
+                  @mouseup="isNewPasswordConfirmVisible = false"
+                  @mouseleave="isNewPasswordConfirmVisible = false"
+                  @touchstart="isNewPasswordConfirmVisible = true" 
+                  @touchend="isNewPasswordConfirmVisible = false"
+                >
+                  👁️
+                </button>
+              </div>
+            </div>
+
+            <div v-if="kasaNewPassword && kasaNewPasswordConfirm && kasaNewPassword !== kasaNewPasswordConfirm" class="password-mismatch-banner">
+              ⚠️ Şifreler eşleşmiyor!
+            </div>
+
+            <button type="submit" class="btn-settings-save" :disabled="isSavingCreds || (kasaNewPassword !== kasaNewPasswordConfirm)">
+              {{ isSavingCreds ? 'Kaydediliyor...' : 'Yönetici Şifresini Güncelle' }}
+            </button>
+          </form>
+          <hr class="section-divider" />
+        </div>
+
+        <!-- 4. SİSTEM DAĞITIM MODU -->
+        <div class="settings-section" v-if="isAdminOrCiso">
+          <h4>🏢 Sistem Dağıtım Modu</h4>
+          <p class="section-desc">Sistemin çalışma modunu belirleyin. Mod değişikliği TÜM yöneticilerin (Admin) ortak onayı sonrasında geçerli olur.</p>
+          <div class="form-group">
+            <label>Aktif Mod</label>
+            <select v-model="systemMode" class="role-select" @change="updateSystemMode">
+              <option value="single_pc">💻 Tek Bilgisayar (Single PC)</option>
+              <option value="network_sync">🌐 Şirket İçi Ağ (Network/Online Sync)</option>
+            </select>
+          </div>
+          <hr class="section-divider" />
+        </div>
+
+        <!-- 5. KULLANICI YÖNETİMİ & DİNAMİK YETKİLENDİRME -->
+        <div class="settings-section" v-if="isAdminOrCiso">
+          <h4>👥 Kullanıcı Yönetimi & Dinamik İzinler</h4>
+          <p class="section-desc">Çalışan izinlerini anlık olarak yönetin. CISO izinleri kilitlidir. Yöneticiler kendi yetkilerini düşüremezler.</p>
+          
+          <div class="users-list-wrapper">
+            <div v-for="user in usersList" :key="user.id" class="user-row-card">
+              <div class="user-info-brief">
+                <strong>{{ user.fullName }}</strong>
+                <span class="user-meta-sub">@{{ user.username }} ({{ user.email }})</span>
+              </div>
+
+              <div class="user-role-actions">
+                <label class="perm-check-label">
+                  <input 
+                    type="checkbox" 
+                    v-model="user.permissions.canRead" 
+                    :disabled="user.role === 'ciso' || user.role === 'admin'"
+                    @change="togglePermission(user, 'canRead')" 
+                  />
+                  <span>Oku</span>
+                </label>
+                <label class="perm-check-label">
+                  <input 
+                    type="checkbox" 
+                    v-model="user.permissions.canWrite" 
+                    :disabled="user.role === 'ciso' || user.role === 'admin'"
+                    @change="togglePermission(user, 'canWrite')" 
+                  />
+                  <span>Yaz</span>
+                </label>
+                
+                <!-- Yönetici kendi yetkisini düşüremez (disabled kuralı) -->
+                <select 
+                  v-model="user.role" 
+                  class="user-role-select" 
+                  :disabled="user.role === 'ciso' || (user.id === currentUserId && user.role === 'admin')"
+                  @change="changeRole(user)"
+                >
+                  <option value="user">Standart</option>
+                  <option value="admin">Yönetici</option>
+                  <option v-if="user.role === 'ciso'" value="ciso">CISO</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <hr class="section-divider" />
+        </div>
+
+        <!-- 6. E-POSTA BİLDİRİM VE ALARM AYARLARI -->
+        <div class="settings-section" v-if="isAdminOrCiso">
+          <h4>📧 Yetkisiz Erişim Alarmı</h4>
+          <p class="section-desc">Hatalı şifre denemelerinde uyarı gönderilecek doğrulanmış e-postayı ayarlayın.</p>
+
           <div class="form-group" style="margin-bottom:1rem">
             <label>Hatalı Deneme Limiti (Alarm Eşiği)</label>
             <div class="threshold-selector">
@@ -66,7 +347,7 @@
                 <input 
                   v-model="alertEmail" 
                   type="email" 
-                  placeholder="orn: guvenlik@sirket.com" 
+                  placeholder="orn: guvenlik@sirketiniz.com" 
                   required 
                   :disabled="isVerifying"
                 />
@@ -75,83 +356,37 @@
                 </button>
               </div>
             </div>
-          </form>
 
-          <!-- OTP DOĞRULAMA ALANI -->
-          <Transition name="fade-slide">
-            <div v-if="isVerifying" class="otp-verification-section">
-              <div class="otp-header">
-                <h5>Doğrulama Kodunu Girin</h5>
-                <p><strong>{{ alertEmail }}</strong> adresine 6 haneli bir doğrulama kodu gönderildi. (Geri sayım: {{ formatCountdown(otpCountdown) }})</p>
-              </div>
-
-              <!-- OTP Kod Girişi (6 Kutu) -->
-              <div class="otp-input-container">
-                <input 
-                  v-for="(digit, idx) in otpDigits" 
-                  :key="idx"
-                  :id="'otp-' + idx"
-                  v-model="otpDigits[idx]"
-                  type="text"
-                  maxLength="1"
-                  class="otp-digit-input"
-                  @input="handleOtpInput($event, idx)"
-                  @keydown.delete="handleOtpDelete($event, idx)"
-                />
-              </div>
-
-              <div v-if="otpError" class="otp-error-message">
-                {{ otpError }}
-              </div>
-
-              <div class="otp-actions">
-                <button class="btn-otp-cancel" @click="cancelVerification">Vazgeç</button>
-                <button class="btn-otp-verify" @click="verifyCode" :disabled="isCheckingCode">
-                  {{ isCheckingCode ? 'Doğrulanıyor...' : 'Kodu Doğrula' }}
-                </button>
-              </div>
+            <div v-if="mailErrorDetail" class="mail-error-detail-banner">
+              ⚠️ <strong>Hata:</strong> {{ mailErrorDetail }}
             </div>
-          </Transition>
+          </form>
         </div>
 
-        <hr class="section-divider" />
+        <hr class="section-divider" v-if="isAdminOrCiso" />
 
-        <!-- 3. SMTP GÖNDERİCİ AYARLARI -->
-        <div class="settings-section">
+        <!-- 7. SMTP GÖNDERİCİ AYARLARI -->
+        <div class="settings-section" v-if="isAdminOrCiso">
           <h4>📨 SMTP Gönderici Ayarları</h4>
-          <p class="section-desc">E-postaların gönderileceği Gmail veya SMTP sunucu bilgilerini girin. Gmail için "Google Uygulama Şifresi" girilmelidir.</p>
+          <p class="section-desc">Onay ve alarm e-postalarını göndermek için kullanılacak SMTP hesabını doğrulayın.</p>
           
           <form @submit.prevent="updateSmtpConfig" class="settings-form">
             <div class="form-group">
-              <label>SMTP Sunucu Adresi</label>
-              <input v-model="smtpHost" type="text" placeholder="smtp.gmail.com" required />
-            </div>
-            
-            <div class="form-row-custom">
-              <div class="form-group custom-flex-1">
-                <label>Port</label>
-                <input v-model="smtpPort" type="number" placeholder="465" required />
-              </div>
-              <div class="form-group custom-flex-1 checkbox-flex">
-                <label class="smtp-checkbox-label">
-                  <input type="checkbox" v-model="smtpSecure" />
-                  <span>SSL/TLS Güvenli</span>
-                </label>
-              </div>
-            </div>
-
-            <div class="form-group">
               <label>Gönderici E-posta (User)</label>
-              <input v-model="smtpUser" type="email" placeholder="businessandvision@gmail.com" required />
+              <input v-model="smtpUser" type="email" placeholder="orn: dms-bildirim@sirketiniz.com" required />
             </div>
 
             <div class="form-group">
-              <label>Google Uygulama Şifresi (Pass)</label>
-              <input v-model="smtpPass" type="password" placeholder="16 haneli uygulama şifresi..." />
+              <label>SMTP Şifresi (Pass)</label>
+              <input v-model="smtpPass" type="password" placeholder="Şifre..." />
+            </div>
+
+            <div v-if="smtpErrorText" class="mail-error-detail-banner" style="margin-bottom:0.5rem;">
+              ⚠️ <strong>SMTP Hatası:</strong> {{ smtpErrorText }}
             </div>
 
             <button type="submit" class="btn-settings-save" :disabled="isSavingSmtp">
-              {{ isSavingSmtp ? 'Kaydediliyor...' : 'SMTP Ayarlarını Kaydet' }}
+              {{ isSavingSmtp ? 'Göndericiyi Test Et ve Doğrula...' : 'Göndericiyi Test Et ve Doğrula' }}
             </button>
           </form>
         </div>
@@ -161,7 +396,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 
 const props = defineProps({
   isOpen: {
@@ -174,6 +409,25 @@ const emit = defineEmits(['close'])
 
 const kasaUsername = ref('')
 const kasaNewPassword = ref('')
+const kasaNewPasswordConfirm = ref('')
+
+const isNewPasswordVisible = ref(false)
+const isNewPasswordConfirmVisible = ref(false)
+
+const userFullName = ref('')
+const userUsername = ref('')
+
+const profileOldPassword = ref('')
+const profileNewPassword = ref('')
+const profileNewPasswordConfirm = ref('')
+const isProfileOldPasswordVisible = ref(false)
+const isProfileNewPasswordVisible = ref(false)
+const isProfileNewPasswordConfirmVisible = ref(false)
+
+const systemMode = ref('single_pc')
+const usersList = ref([])
+const approvalsList = ref([])
+
 const alertEmail = ref('')
 const verifiedEmail = ref('')
 const alertThreshold = ref(3)
@@ -182,26 +436,93 @@ const isEmailVerified = ref(false)
 const smtpHost = ref('smtp.gmail.com')
 const smtpPort = ref(465)
 const smtpSecure = ref(true)
-const smtpUser = ref('businessandvision@gmail.com')
+const smtpUser = ref('')
 const smtpPass = ref('')
+
+const mailErrorDetail = ref('')
+const smtpErrorText = ref('')
 
 const isSavingCreds = ref(false)
 const isSendingCode = ref(false)
 const isVerifying = ref(false)
-const isCheckingCode = ref(false)
 const isSavingSmtp = ref(false)
 
-const otpDigits = ref(['', '', '', '', '', ''])
-const otpError = ref('')
-const otpCountdown = ref(300) // 5 dakika
-let countdownTimer = null
+const getKasaToken = () => localStorage.getItem('token') || ''
 
-// Ayarları Çek
+// Profil Bilgileri
+const currentUserRole = ref('')
+const currentUserFullName = ref('')
+const currentUsername = ref('')
+const currentUserId = ref('')
+
+// Dinamik Şifre Validasyonları
+const regPasswordErrors = computed(() => {
+  const p = profileNewPassword.value || '';
+  const errors = [];
+  if (p.length < 8) errors.push('En az 8 karakter olmalı');
+  if (!/[a-zA-Z]/.test(p)) errors.push('En az bir harf içermeli');
+  if (!/[0-9]/.test(p)) errors.push('En az bir rakam içermeli');
+  return errors;
+})
+
+const isProfilePasswordValid = computed(() => {
+  return profileNewPassword.value && regPasswordErrors.value.length === 0;
+})
+
+const kasaPasswordErrors = computed(() => {
+  const p = kasaNewPassword.value || '';
+  const errors = [];
+  if (p.length < 8) errors.push('En az 8 karakter olmalı');
+  if (!/[a-zA-Z]/.test(p)) errors.push('En az bir harf içermeli');
+  if (!/[0-9]/.test(p)) errors.push('En az bir rakam içermeli');
+  return errors;
+})
+
+const isKasaPasswordValid = computed(() => {
+  return kasaNewPassword.value && kasaPasswordErrors.value.length === 0;
+})
+
+const profilePasswordErrors = computed(() => {
+  return regPasswordErrors.value;
+})
+
+function updateProfileInfo() {
+  const token = getKasaToken();
+  if (!token) return;
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(window.atob(base64));
+    currentUserRole.value = payload.role || '';
+    currentUserFullName.value = payload.fullName || payload.username || '';
+    currentUsername.value = payload.username || '';
+    currentUserId.value = payload.id || '';
+
+    // Form alanlarına doldur
+    userFullName.value = payload.fullName || '';
+    userUsername.value = payload.username || '';
+  } catch (e) {
+    console.error('[Settings] Profil parse hatası:', e);
+  }
+}
+
+function getRoleLabel(role) {
+  if (role === 'ciso') return '🛡️ CISO'
+  if (role === 'admin') return '🔑 Yönetici'
+  return '👤 Standart Kullanıcı'
+}
+
+// Rol kontrolü
+const isAdminOrCiso = computed(() => {
+  return currentUserRole.value === 'admin' || currentUserRole.value === 'ciso';
+})
+
+// Ayarları ve verileri çek
 async function fetchSettings() {
   try {
     const response = await fetch('/api/auth/settings', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('kasa_token')}`
+        'Authorization': `Bearer ${getKasaToken()}`
       }
     })
     if (response.ok) {
@@ -211,18 +532,262 @@ async function fetchSettings() {
       verifiedEmail.value = data.settings.verifiedAlertEmail || ''
       alertThreshold.value = data.settings.alertThreshold || 3
       isEmailVerified.value = data.settings.isEmailVerified || false
+      systemMode.value = data.mode || 'single_pc'
 
-      // SMTP Ayarlarını yükle
       if (data.settings.smtpConfig) {
         smtpHost.value = data.settings.smtpConfig.host || 'smtp.gmail.com'
         smtpPort.value = data.settings.smtpConfig.port || 465
         smtpSecure.value = data.settings.smtpConfig.secure !== undefined ? data.settings.smtpConfig.secure : true
-        smtpUser.value = data.settings.smtpConfig.auth?.user || 'businessandvision@gmail.com'
+        smtpUser.value = data.settings.smtpConfig.auth?.user || ''
         smtpPass.value = data.settings.smtpConfig.auth?.pass || ''
       }
     }
+
+    if (isAdminOrCiso.value) {
+      await fetchUsers()
+      await fetchApprovals()
+    }
   } catch (error) {
     console.error('[Settings] Ayar çekme hatası:', error)
+  }
+}
+
+// Kullanıcı Listesini Çek
+async function fetchUsers() {
+  try {
+    const response = await fetch('/api/auth/users', {
+      headers: { 'Authorization': `Bearer ${getKasaToken()}` }
+    })
+    if (response.ok) {
+      const data = await response.json()
+      usersList.value = data.users || []
+    }
+  } catch (error) {
+    console.error('[Settings] Kullanıcı çekme hatası:', error)
+  }
+}
+
+// Onay Listesini Çek
+async function fetchApprovals() {
+  try {
+    const response = await fetch('/api/auth/approvals', {
+      headers: { 'Authorization': `Bearer ${getKasaToken()}` }
+    })
+    if (response.ok) {
+      const data = await response.json()
+      approvalsList.value = data.approvals || []
+    }
+  } catch (error) {
+    console.error('[Settings] Onay listesi çekme hatası:', error)
+  }
+}
+
+// Talebi Arayüzden Onayla veya Reddet
+async function handleApprovalAction(id, action) {
+  try {
+    const response = await fetch(`/api/auth/approvals/${id}/${action}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getKasaToken()}` }
+    })
+    const data = await response.json()
+    if (response.ok) {
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('kasa_token', data.token);
+        updateProfileInfo();
+        window.dispatchEvent(new Event('kasa-unlocked'));
+      }
+      alert(data.message || 'İşlem tamamlandı.');
+      await fetchApprovals()
+      await fetchUsers()
+    } else {
+      alert(data.error || 'İşlem başarısız oldu.');
+    }
+  } catch (err) {
+    alert('Onay işlemi gerçekleştirilemedi.')
+  }
+}
+
+function getApprovalTypeLabel(type) {
+  if (type === 'STANDARD_USER_CREATION') return '👤 Standart Kullanıcı Kaydı'
+  if (type === 'ADMIN_CREATION') return '🔑 Yönetici Kaydı'
+  if (type === 'NAME_CHANGE') return '📝 İsim Değişikliği'
+  if (type === 'USERNAME_CHANGE') return '👤 Kullanıcı Adı Değişimi'
+  if (type === 'MODE_CHANGE') return '🏢 Dağıtım Modu Değişimi'
+  return type
+}
+
+function getApprovalDetailText(req) {
+  if (req.type === 'STANDARD_USER_CREATION' || req.type === 'ADMIN_CREATION') {
+    return `${req.requestData?.username} (${req.requestData?.email}) kayıt başvurusu yaptı.`
+  }
+  if (req.type === 'NAME_CHANGE') {
+    return `Yönetici ismini "${req.requestData?.newFullName}" yapmak istiyor.`
+  }
+  if (req.type === 'USERNAME_CHANGE') {
+    return `Yönetici kullanıcı adını "${req.requestData?.newUsername}" yapmak istiyor.`
+  }
+  if (req.type === 'MODE_CHANGE') {
+    return `Sistem dağıtım modunu "${req.requestData?.mode === 'single_pc' ? 'Tek Bilgisayar' : 'Şirket İçi Ağ'}" yapmak istiyor.`
+  }
+  return ''
+}
+
+function getStatusLabel(status) {
+  if (status === 'pending') return 'Bekleniyor'
+  if (status === 'approved') return 'Onaylandı'
+  if (status === 'rejected') return 'Onaylanmadı / Reddedildi'
+  if (status === 'expired') return 'Onaylanmadı (Süresi Geçti)'
+  return status
+}
+
+// 1. Ad Soyad Güncelleme (CISO Onaylı)
+async function updateUserFullName() {
+  try {
+    const response = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({ fullName: userFullName.value })
+    })
+
+    const data = await response.json()
+    if (response.ok) {
+      alert(data.message || 'Profil değişiklik talebi iletildi.');
+      await fetchApprovals()
+    } else {
+      alert(data.error || 'Talep iletilemedi.');
+    }
+  } catch (e) {
+    alert('İşlem sırasında hata oluştu.')
+  }
+}
+
+// 2. Kullanıcı Adı Güncelleme (Doğrudan)
+async function updateUserUsername() {
+  try {
+    const response = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({ username: userUsername.value })
+    })
+
+    const data = await response.json()
+    if (response.ok) {
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('kasa_token', data.token);
+      }
+      alert(data.message || 'Kullanıcı adı başarıyla güncellendi.');
+      updateProfileInfo();
+      window.dispatchEvent(new Event('kasa-unlocked'));
+    } else {
+      alert(data.error || 'Kullanıcı adı güncellenemedi.');
+    }
+  } catch (e) {
+    alert('İşlem sırasında hata oluştu.')
+  }
+}
+
+// 3. Şifre Güncelleme (Doğrudan)
+async function updateUserPassword() {
+  try {
+    const response = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({ 
+        oldPassword: profileOldPassword.value, 
+        newPassword: profileNewPassword.value 
+      })
+    })
+
+    const data = await response.json()
+    if (response.ok) {
+      alert('Şifreniz başarıyla değiştirildi.');
+      profileOldPassword.value = '';
+      profileNewPassword.value = '';
+      profileNewPasswordConfirm.value = '';
+    } else {
+      alert(data.error || 'Şifre güncellenemedi.');
+    }
+  } catch (e) {
+    alert('İşlem sırasında hata oluştu.')
+  }
+}
+
+// Yetkileri Güncelle
+async function togglePermission(user, type) {
+  try {
+    const response = await fetch(`/api/auth/users/${user.id}/permissions`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({
+        permissions: {
+          [type]: user.permissions[type]
+        }
+      })
+    })
+    if (!response.ok) {
+      const data = await response.json()
+      alert(data.error || 'Yetkiler güncellenemedi.')
+      user.permissions[type] = !user.permissions[type]
+    }
+  } catch (e) {
+    user.permissions[type] = !user.permissions[type]
+  }
+}
+
+// Rol Değiştir
+async function changeRole(user) {
+  try {
+    const response = await fetch(`/api/auth/users/${user.id}/role`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({ role: user.role })
+    })
+    if (response.ok) {
+      alert('Kullanıcı rolü başarıyla güncellendi.')
+      await fetchUsers()
+    } else {
+      const data = await response.json()
+      alert(data.error || 'Kullanıcı rolü güncellenemedi.')
+      await fetchUsers() // Rolü eski haline getirmek için listeyi yenile
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+// Sistem Modu Güncelle
+async function updateSystemMode() {
+  try {
+    const response = await fetch('/api/auth/settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({ mode: systemMode.value })
+    })
+    const data = await response.json()
+    alert(data.message || 'Mod değişikliği talebi oluşturuldu.')
+    await fetchApprovals()
+  } catch (e) {
+    alert('Mod güncellenirken hata oluştu.')
   }
 }
 
@@ -233,7 +798,7 @@ async function updateThreshold() {
       method: 'PUT',
       headers: { 
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('kasa_token')}`
+        'Authorization': `Bearer ${getKasaToken()}`
       },
       body: JSON.stringify({ alertThreshold: alertThreshold.value })
     })
@@ -242,15 +807,23 @@ async function updateThreshold() {
   }
 }
 
-// Kimlik Bilgilerini Güncelle
+// Kimlik Bilgilerini Güncelle (Kasa Şifresi)
 async function updateKasaCredentials() {
+  if (kasaNewPassword.value && !isKasaPasswordValid.value) {
+    alert('Şifreniz kurallara uygun değil.');
+    return;
+  }
+  if (kasaNewPassword.value !== kasaNewPasswordConfirm.value) {
+    alert('Yeni şifreler birbiriyle eşleşmiyor!');
+    return;
+  }
   isSavingCreds.value = true
   try {
     const response = await fetch('/api/auth/settings', {
       method: 'PUT',
       headers: { 
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('kasa_token')}`
+        'Authorization': `Bearer ${getKasaToken()}`
       },
       body: JSON.stringify({
         masterUsername: kasaUsername.value,
@@ -260,6 +833,7 @@ async function updateKasaCredentials() {
 
     if (response.ok) {
       kasaNewPassword.value = ''
+      kasaNewPasswordConfirm.value = ''
       alert('Kasa yönetici kimlik bilgileri başarıyla güncellendi!')
     }
   } catch (error) {
@@ -269,15 +843,16 @@ async function updateKasaCredentials() {
   }
 }
 
-// SMTP Ayarlarını Güncelle
+// SMTP Ayarlarını Güncelle (Test Gönderim Korumalı)
 async function updateSmtpConfig() {
   isSavingSmtp.value = true
+  smtpErrorText.value = ''
   try {
     const response = await fetch('/api/auth/settings', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('kasa_token')}`
+        'Authorization': `Bearer ${getKasaToken()}`
       },
       body: JSON.stringify({
         smtpConfig: {
@@ -292,12 +867,15 @@ async function updateSmtpConfig() {
       })
     })
 
+    const data = await response.json()
     if (response.ok) {
-      alert('SMTP Gönderici Ayarları başarıyla kaydedildi!')
-      fetchSettings() // Maskeli halini tekrar çek
+      alert('SMTP gönderici ayarları başarıyla doğrulandı ve kaydedildi!')
+      fetchSettings()
+    } else {
+      smtpErrorText.value = data.message || 'SMTP doğrulaması başarısız. Bilgilerinizi kontrol edin.';
     }
   } catch (error) {
-    console.error('[Settings] SMTP güncelleme hatası:', error)
+    smtpErrorText.value = 'Sunucuyla bağlantı kurulurken beklenmedik bir hata oluştu.';
   } finally {
     isSavingSmtp.value = false
   }
@@ -307,125 +885,31 @@ async function updateSmtpConfig() {
 async function sendVerificationCode() {
   if (!alertEmail.value) return
   isSendingCode.value = true
+  mailErrorDetail.value = ''
 
   try {
     const response = await fetch('/api/auth/send-verification', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('kasa_token')}`
+        'Authorization': `Bearer ${getKasaToken()}`
       },
       body: JSON.stringify({ email: alertEmail.value })
-    })
-
-    if (response.ok) {
-      isVerifying.value = true
-      otpDigits.value = ['', '', '', '', '', '']
-      otpError.value = ''
-      startCountdown()
-    }
-  } catch (error) {
-    console.error('[Settings] Kod gönderme hatası:', error)
-  } finally {
-    isSendingCode.value = false
-  }
-}
-
-// Doğrulama Kodunu Gönder
-async function verifyCode() {
-  const code = otpDigits.value.join('')
-  if (code.length !== 6) {
-    otpError.value = 'Lütfen 6 haneli kodun tamamını girin.'
-    return
-  }
-
-  isCheckingCode.value = true
-  otpError.value = ''
-
-  try {
-    const response = await fetch('/api/auth/verify-code', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('kasa_token')}`
-      },
-      body: JSON.stringify({ code })
     })
 
     const data = await response.json()
 
     if (response.ok) {
-      isEmailVerified.value = true
-      verifiedEmail.value = data.verifiedAlertEmail
-      isVerifying.value = false
-      stopCountdown()
-      alert('E-posta adresi başarıyla doğrulandı ve alarma bağlandı!');
-      fetchSettings(); // Ayarları tekrar yenile
+      isVerifying.value = true
+      alert('Doğrulama kodu alıcı e-postasına gönderildi. Doğrulama kodunu girmek için açılan alanı kullanın.');
     } else {
-      otpError.value = data.error || 'Geçersiz doğrulama kodu.'
+      mailErrorDetail.value = `${data.error || 'Gönderim Hatası'}: ${data.message || ''}`
     }
   } catch (error) {
-    otpError.value = 'Doğrulama sırasında hata oluştu.'
+    mailErrorDetail.value = 'Sunucuyla bağlantı kurulamadı.'
   } finally {
-    isCheckingCode.value = false
+    isSendingCode.value = false
   }
-}
-
-// OTP Kutu Yönetimleri (Word Tarzı Akıcı OTP Girişi)
-function handleOtpInput(event, index) {
-  const value = event.target.value
-  if (!/^[0-9]$/.test(value)) {
-    otpDigits.value[index] = ''
-    return
-  }
-
-  // Sonraki kutuya geç
-  if (index < 5 && value) {
-    const nextInput = document.getElementById(`otp-${index + 1}`)
-    if (nextInput) nextInput.focus()
-  }
-}
-
-function handleOtpDelete(event, index) {
-  // Geri silmede önceki kutuya geç
-  if (index > 0 && !otpDigits.value[index]) {
-    otpDigits.value[index - 1] = ''
-    const prevInput = document.getElementById(`otp-${index - 1}`)
-    if (prevInput) prevInput.focus()
-  }
-}
-
-// Sayaç Fonksiyonları
-function startCountdown() {
-  otpCountdown.value = 300
-  if (countdownTimer) clearInterval(countdownTimer)
-  countdownTimer = setInterval(() => {
-    otpCountdown.value--
-    if (otpCountdown.value <= 0) {
-      cancelVerification()
-    }
-  }, 1000)
-}
-
-function stopCountdown() {
-  if (countdownTimer) {
-    clearInterval(countdownTimer)
-    countdownTimer = null
-  }
-}
-
-function formatCountdown(sec) {
-  const m = Math.floor(sec / 60).toString().padStart(2, '0')
-  const s = (sec % 60).toString().padStart(2, '0')
-  return `${m}:${s}`
-}
-
-function cancelVerification() {
-  isVerifying.value = false
-  stopCountdown()
-  otpDigits.value = ['', '', '', '', '', '']
-  otpError.value = ''
-  fetchSettings()
 }
 
 function closeDrawer() {
@@ -434,18 +918,14 @@ function closeDrawer() {
 
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
+    updateProfileInfo()
     fetchSettings()
-  } else {
-    cancelVerification()
   }
 })
 
 onMounted(() => {
+  updateProfileInfo()
   if (props.isOpen) fetchSettings()
-})
-
-onUnmounted(() => {
-  stopCountdown()
 })
 </script>
 
@@ -485,13 +965,11 @@ onUnmounted(() => {
 .settings-drawer {
   position: absolute;
   top: 0;
-  right: -420px;
+  right: -460px;
   width: 100%;
-  max-width: 400px;
+  max-width: 440px;
   height: 100%;
-  background: rgba(17, 24, 39, 0.92);
-  border-left: 1px solid rgba(139, 92, 246, 0.2);
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5), -5px 0 15px rgba(139, 92, 246, 0.05);
+  background: rgba(17, 24, 39, 0.94);
   display: flex;
   flex-direction: column;
   transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -500,6 +978,42 @@ onUnmounted(() => {
 
 .drawer-open .settings-drawer {
   right: 0;
+}
+
+/* ============================================================
+   ROL BAZLI TEMA STİLLERİ
+   ============================================================ */
+.settings-drawer.theme--user {
+  border-left: 2px solid rgba(59, 130, 246, 0.3);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5), -5px 0 15px rgba(59, 130, 246, 0.05);
+}
+.settings-drawer.theme--user h4 {
+  color: #60a5fa;
+}
+.settings-drawer.theme--user .btn-settings-save {
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+}
+
+.settings-drawer.theme--admin {
+  border-left: 2px solid rgba(245, 158, 11, 0.3);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5), -5px 0 15px rgba(245, 158, 11, 0.05);
+}
+.settings-drawer.theme--admin h4 {
+  color: #fbbf24;
+}
+.settings-drawer.theme--admin .btn-settings-save {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+}
+
+.settings-drawer.theme--ciso {
+  border-left: 2px solid rgba(16, 185, 129, 0.3);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5), -5px 0 15px rgba(16, 185, 129, 0.05);
+}
+.settings-drawer.theme--ciso h4 {
+  color: #34d399;
+}
+.settings-drawer.theme--ciso .btn-settings-save {
+  background: linear-gradient(135deg, #34d399, #059669);
 }
 
 .drawer-header {
@@ -514,10 +1028,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-}
-
-.header-title span {
-  font-size: 1.25rem;
 }
 
 .header-title h3 {
@@ -536,11 +1046,6 @@ onUnmounted(() => {
   border-radius: 4px;
 }
 
-.btn-close-drawer:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.05);
-}
-
 .drawer-body {
   flex-grow: 1;
   padding: 1.5rem;
@@ -550,23 +1055,96 @@ onUnmounted(() => {
   gap: 1.5rem;
 }
 
+.profile-card-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.profile-avatar {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.4rem;
+}
+
+.profile-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.profile-role-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  width: fit-content;
+}
+.profile-role-tag.role--user {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+.profile-role-tag.role--admin {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+.profile-role-tag.role--ciso {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.profile-details h5 {
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.profile-details p {
+  color: #9ca3af;
+  font-size: 0.72rem;
+}
+
 .settings-section {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
 }
 
-.settings-section h4 {
-  font-size: 0.9rem;
+.sub-profile-section {
+  background: rgba(30, 41, 59, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
+.sub-profile-section h5 {
+  font-size: 0.76rem;
   font-weight: 700;
-  color: #a78bfa;
+  color: #e2e8f0;
 }
 
 .section-desc {
   font-size: 0.74rem;
   color: #9ca3af;
   line-height: 1.4;
-  margin-bottom: 0.5rem;
 }
 
 .settings-form {
@@ -587,7 +1165,7 @@ onUnmounted(() => {
   color: #9ca3af;
 }
 
-.form-group input, .threshold-selector select {
+.form-group input, .role-select {
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
@@ -598,13 +1176,9 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.form-group input:focus, .threshold-selector select:focus {
+.form-group input:focus, .role-select:focus {
   border-color: #8b5cf6;
   background: rgba(15, 23, 42, 0.8);
-}
-
-.threshold-selector select {
-  cursor: pointer;
 }
 
 .email-input-group {
@@ -621,17 +1195,10 @@ onUnmounted(() => {
   font-weight: 600;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
   white-space: nowrap;
 }
 
-.btn-send-code:hover:not(:disabled) {
-  background: rgba(139, 92, 246, 0.2);
-  border-color: #a78bfa;
-}
-
 .btn-settings-save {
-  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
   color: #fff;
   border: none;
   padding: 0.6rem;
@@ -639,22 +1206,237 @@ onUnmounted(() => {
   font-weight: 700;
   border-radius: 6px;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.15);
   transition: all 0.2s ease;
 }
 
-.btn-settings-save:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 15px rgba(139, 92, 246, 0.25);
+.btn-settings-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .section-divider {
   border: none;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-  margin: 0.25rem 0;
 }
 
-/* Doğrulama Durumu Kutusu */
+.users-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 250px;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.user-row-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+}
+
+.user-info-brief {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-info-brief strong {
+  font-size: 0.8rem;
+  color: #fff;
+}
+
+.user-meta-sub {
+  font-size: 0.68rem;
+  color: #9ca3af;
+}
+
+.user-role-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  padding-top: 0.4rem;
+}
+
+.perm-check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  color: #d1d5db;
+  cursor: pointer;
+}
+
+.perm-check-label input {
+  cursor: pointer;
+  accent-color: #8b5cf6;
+}
+
+.perm-check-label input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.user-role-select {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 0.68rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.user-role-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.approvals-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 250px;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.approval-row-card {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: 6px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.approval-type-badge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #a78bfa;
+  background: rgba(139, 92, 246, 0.12);
+  padding: 0.15rem 0.4;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.approval-detail-text {
+  font-size: 0.74rem;
+  color: #f3f4f6;
+  line-height: 1.4;
+}
+
+.approval-status-badge-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.status-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.status-badge.status--pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-badge.status--approved {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-badge.status--rejected {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.status-badge.status--expired {
+  background: rgba(156, 163, 175, 0.15);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+.approval-meta-sub {
+  font-size: 0.65rem;
+  color: #9ca3af;
+}
+
+.btn-approval {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-approval--approve {
+  background: #10b981;
+  color: #fff;
+}
+
+.btn-approval--reject {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper input {
+  padding-right: 2.5rem !important;
+}
+
+.btn-eye {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: #a78bfa;
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.6;
+}
+
+.btn-eye:hover {
+  opacity: 1;
+}
+
+.password-mismatch-banner {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  font-size: 0.72rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  text-align: center;
+}
+
 .verification-status-box {
   display: flex;
   align-items: center;
@@ -691,142 +1473,14 @@ onUnmounted(() => {
   opacity: 0.8;
 }
 
-/* OTP Alanı */
-.otp-verification-section {
-  background: rgba(139, 92, 246, 0.03);
-  border: 1px dashed rgba(139, 92, 246, 0.25);
-  border-radius: 10px;
-  padding: 1.25rem;
-  margin-top: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.otp-header h5 {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 0.25rem;
-}
-
-.otp-header p {
-  font-size: 0.7rem;
-  color: #9ca3af;
-  line-height: 1.4;
-}
-
-.otp-input-container {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.4rem;
-}
-
-.otp-digit-input {
-  width: 42px;
-  height: 42px;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  text-align: center;
-  color: #fff;
-  font-size: 1.1rem;
-  font-weight: 700;
-  outline: none;
-  transition: all 0.25s ease;
-}
-
-.otp-digit-input:focus {
-  border-color: #8b5cf6;
-  box-shadow: 0 0 10px rgba(139, 92, 246, 0.25);
-}
-
-.otp-error-message {
+.mail-error-detail-banner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   color: #f87171;
-  font-size: 0.72rem;
-  text-align: center;
-}
-
-.otp-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.btn-otp-cancel {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #9ca3af;
-  padding: 0.4rem 0.85rem;
   font-size: 0.74rem;
+  padding: 0.65rem 0.85rem;
   border-radius: 6px;
-  cursor: pointer;
-}
-
-.btn-otp-cancel:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-}
-
-.btn-otp-verify {
-  background: #8b5cf6;
-  color: #fff;
-  border: none;
-  padding: 0.4rem 1.1rem;
-  font-size: 0.74rem;
-  font-weight: 700;
-  border-radius: 6px;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.2);
-}
-
-.btn-otp-verify:hover:not(:disabled) {
-  background: #7c3aed;
-}
-
-.btn-otp-verify:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Custom SMTP Layout */
-.form-row-custom {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-}
-
-.custom-flex-1 {
-  flex: 1;
-  min-width: 0;
-}
-
-.checkbox-flex {
-  justify-content: center;
-  padding-bottom: 0.6rem;
-}
-
-.smtp-checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.74rem;
-  color: #9ca3af;
-  cursor: pointer;
-  user-select: none;
-}
-
-.smtp-checkbox-label input {
-  accent-color: #8b5cf6;
-  cursor: pointer;
-}
-
-/* Transitions */
-.fade-slide-enter-active, .fade-slide-leave-active {
-  transition: all 0.3s ease;
-}
-.fade-slide-enter-from, .fade-slide-leave-to {
-  opacity: 0;
-  transform: translateY(10px);
+  line-height: 1.4;
+  word-break: break-word;
 }
 </style>

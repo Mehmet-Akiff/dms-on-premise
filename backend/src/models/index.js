@@ -9,6 +9,8 @@ const Document = require('./Document');
 const DocumentMetadata = require('./DocumentMetadata');
 const ProcessingJob = require('./ProcessingJob');
 const SystemSettings = require('./SystemSettings');
+const AuditLog = require('./AuditLog');
+const ApprovalRequest = require('./ApprovalRequest');
 
 // ============================================================
 // Model İlişkileri (Associations)
@@ -47,6 +49,17 @@ ProcessingJob.belongsTo(Document, {
   as: 'document',
 });
 
+// User → AuditLog (1:N) — Kullanıcı işlem geçmişi
+User.hasMany(AuditLog, {
+  foreignKey: 'user_id',
+  as: 'auditLogs',
+  onDelete: 'SET NULL',
+});
+AuditLog.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
 // ============================================================
 // Dışa Aktarım
 // ============================================================
@@ -58,4 +71,6 @@ module.exports = {
   DocumentMetadata,
   ProcessingJob,
   SystemSettings,
+  AuditLog,
+  ApprovalRequest,
 };

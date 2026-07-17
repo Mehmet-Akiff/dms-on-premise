@@ -1,6 +1,6 @@
 /**
  * DMS On-Premise - User Modeli
- * Kullanıcı bilgilerini ve kimlik doğrulama verilerini tutar.
+ * Kullanıcı bilgilerini, rollerini ve yetkilerini tutar.
  */
 
 const { DataTypes } = require('sequelize');
@@ -20,6 +20,14 @@ const User = sequelize.define('users', {
       len: [2, 200],
     },
   },
+  username: {
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    unique: true,
+    validate: {
+      len: [3, 100],
+    },
+  },
   email: {
     type: DataTypes.STRING(255),
     allowNull: false,
@@ -34,14 +42,26 @@ const User = sequelize.define('users', {
     field: 'password_hash',
   },
   role: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.ENUM('ciso', 'admin', 'user'),
     allowNull: false,
     defaultValue: 'user',
-    comment: 'Kullanıcı rolü (admin, user vb.)'
-  }
+  },
+  permissions: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+    defaultValue: {
+      canRead: true,
+      canWrite: false,
+    },
+  },
+  status: {
+    type: DataTypes.ENUM('pending_approval', 'active'),
+    allowNull: false,
+    defaultValue: 'pending_approval',
+  },
 }, {
-  underscored: true, // created_at ve updated_at alanlarını otomatik yılan-kasa yapar
-  timestamps: true
+  underscored: true,
+  timestamps: true,
 });
 
 module.exports = User;
