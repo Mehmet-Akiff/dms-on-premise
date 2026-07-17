@@ -711,6 +711,8 @@ async function sendForgotPasswordEmail() {
   justify-content: center;
   align-items: center;
   z-index: 99999;
+  overflow-y: auto;
+  padding: 2rem 0;
 }
 
 .kasa-lock-card {
@@ -722,6 +724,23 @@ async function sendForgotPasswordEmail() {
   padding: 2.5rem;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 40px rgba(139, 92, 246, 0.1);
   backdrop-filter: blur(20px);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.kasa-lock-card::-webkit-scrollbar {
+  width: 6px;
+}
+.kasa-lock-card::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+}
+.kasa-lock-card::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+}
+.kasa-lock-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.5);
 }
 
 .lock-header {
