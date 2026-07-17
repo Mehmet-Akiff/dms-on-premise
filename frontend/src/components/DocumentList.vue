@@ -352,6 +352,7 @@
             <div v-else-if="isEditing && selectedDoc" class="ocr-edit-mode">
               <DocumentEditor
                 :documentId="selectedDoc.id"
+                :documentName="selectedDoc.originalName || selectedDoc.original_name || ''"
                 :initialText="detailData?.metadata?.extractedText || detailData?.metadata?.extracted_text || ''"
                 @save="handleEditorSave"
                 @cancel="handleEditorCancel"

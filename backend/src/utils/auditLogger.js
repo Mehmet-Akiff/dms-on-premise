@@ -65,7 +65,31 @@ function logAction(
     };
   }
 
-  AuditLog.create(logData).catch(err => {
+  AuditLog.create(logData).then(async (newLog) => {
+    try {
+      const fs = require('fs');
+      const { SystemSettings } = require('../models');
+      const record = await SystemSettings.findByPk('kasa_settings');
+      let path = '/app/uploads/dms-audit.jsonl';
+      if (record && record.value?.logFilePath) {
+        path = record.value.logFilePath;
+      }
+      const logLine = JSON.stringify({
+        id: newLog.id,
+        userId: newLog.userId,
+        userName: newLog.userName,
+        action: newLog.action,
+        documentId: newLog.documentId,
+        documentName: newLog.documentName,
+        details: newLog.details,
+        ipAddress: newLog.ipAddress,
+        createdAt: newLog.createdAt
+      }) + '\n';
+      fs.appendFileSync(path, logLine);
+    } catch (fsErr) {
+      console.warn('[AUDIT_LOG_FILE_ERR] Log dosyasına yazılamadı:', fsErr.message);
+    }
+  }).catch(err => {
     console.error('[AUDIT_LOG_HATA] İşlem geçmişi kaydedilemedi:', err.message);
   });
 }

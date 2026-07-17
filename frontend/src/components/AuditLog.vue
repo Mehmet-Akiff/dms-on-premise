@@ -15,14 +15,26 @@
           <p class="audit-subtitle">Sistem üzerinde yapılan tüm aksiyonların kronolojik kaydı</p>
         </div>
       </div>
-      <span class="audit-badge" v-if="totalCount > 0">{{ totalCount }} kayıt</span>
+      <div style="display:flex; align-items:center; gap:0.5rem;">
+        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: #34d399;" @click="exportLogs('csv')" title="CSV Olarak İndir">📥 CSV İndir</button>
+        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: #34d399;" @click="exportLogs('json')" title="JSON Olarak İndir">📥 JSON İndir</button>
+        <span class="audit-badge" v-if="totalCount > 0">{{ totalCount }} kayıt</span>
+      </div>
     </div>
 
     <!-- Filtreler -->
-    <div class="audit-filters">
+    <div class="audit-filters" style="display:flex; flex-wrap:wrap; gap:0.75rem;">
+      <div class="filter-group">
+        <label class="filter-label">Kullanıcı Ara</label>
+        <input type="text" v-model="filterUser" @input="fetchLogs(1)" placeholder="Ad veya kullanıcı adı..." class="filter-select" style="padding:0.4rem 0.6rem; height:32px;" />
+      </div>
+      <div class="filter-group" style="flex:1.5;">
+        <label class="filter-label">Detay Ara</label>
+        <input type="text" v-model="filterDetails" @input="fetchLogs(1)" placeholder="Aksiyon açıklaması..." class="filter-select" style="padding:0.4rem 0.6rem; height:32px;" />
+      </div>
       <div class="filter-group">
         <label class="filter-label">Aksiyon</label>
-        <select v-model="filterAction" @change="fetchLogs(1)" class="filter-select">
+        <select v-model="filterAction" @change="fetchLogs(1)" class="filter-select" style="height:32px;">
           <option value="">Tümü</option>
           <option value="UPLOAD">📤 Yükleme</option>
           <option value="UPDATE">✏️ Güncelleme</option>
@@ -36,13 +48,13 @@
       </div>
       <div class="filter-group">
         <label class="filter-label">Başlangıç</label>
-        <input type="date" v-model="filterStartDate" @change="fetchLogs(1)" class="filter-input" />
+        <input type="date" v-model="filterStartDate" @change="fetchLogs(1)" class="filter-input" style="height:32px;" />
       </div>
       <div class="filter-group">
         <label class="filter-label">Bitiş</label>
-        <input type="date" v-model="filterEndDate" @change="fetchLogs(1)" class="filter-input" />
+        <input type="date" v-model="filterEndDate" @change="fetchLogs(1)" class="filter-input" style="height:32px;" />
       </div>
-      <button class="filter-clear-btn" @click="clearFilters" title="Filtreleri Temizle">
+      <button class="filter-clear-btn" style="height:32px; align-self:flex-end;" @click="clearFilters" title="Filtreleri Temizle">
         🔄 Sıfırla
       </button>
     </div>
@@ -114,7 +126,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 
 const logs = ref([])
 const isLoading = ref(true)
@@ -126,6 +138,19 @@ const totalPages = ref(1)
 const filterAction = ref('')
 const filterStartDate = ref('')
 const filterEndDate = ref('')
+const filterUser = ref('')
+const filterDetails = ref('')
+
+watch(filterStartDate, (newStart) => {
+  if (newStart && filterEndDate.value && newStart > filterEndDate.value) {
+    filterEndDate.value = newStart;
+  }
+});
+watch(filterEndDate, (newEnd) => {
+  if (newEnd && filterStartDate.value && newEnd < filterStartDate.value) {
+    filterStartDate.value = newEnd;
+  }
+});
 
 async function fetchLogs(page = 1) {
   isLoading.value = true
@@ -138,6 +163,8 @@ async function fetchLogs(page = 1) {
     if (filterAction.value) params.set('action', filterAction.value)
     if (filterStartDate.value) params.set('startDate', filterStartDate.value)
     if (filterEndDate.value) params.set('endDate', filterEndDate.value)
+    if (filterUser.value) params.set('username', filterUser.value)
+    if (filterDetails.value) params.set('details', filterDetails.value)
 
     const response = await fetch(`/api/documents/audit-logs?${params.toString()}`, {
       headers: {
@@ -165,7 +192,55 @@ function clearFilters() {
   filterAction.value = ''
   filterStartDate.value = ''
   filterEndDate.value = ''
+  filterUser.value = ''
+  filterDetails.value = ''
   fetchLogs(1)
+}
+
+function exportLogs(format) {
+  const token = localStorage.getItem('token')
+  const params = new URLSearchParams()
+  params.set('limit', '500')
+  if (filterAction.value) params.set('action', filterAction.value)
+  if (filterStartDate.value) params.set('startDate', filterStartDate.value)
+  if (filterEndDate.value) params.set('endDate', filterEndDate.value)
+  if (filterUser.value) params.set('username', filterUser.value)
+  if (filterDetails.value) params.set('details', filterDetails.value)
+
+  fetch(`/api/documents/audit-logs?${params.toString()}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+    .then(r => r.json())
+    .then(data => {
+      const exportList = data.logs || [];
+      if (format === 'json') {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportList, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", `dms_audit_logs_${new Date().toISOString().split('T')[0]}.json`);
+        dlAnchorElem.click();
+      } else if (format === 'csv') {
+        let csvContent = "data:text/csv;charset=utf-8,Tarih,Kullanici,Aksiyon,Belge,Detay,IP\n";
+        exportList.forEach(log => {
+          const row = [
+            log.createdAt,
+            log.userName,
+            log.action,
+            log.documentName || '',
+            (log.details || '').replace(/,/g, ';'),
+            log.ipAddress || ''
+          ].join(",");
+          csvContent += row + "\n";
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `dms_audit_logs_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    });
 }
 
 function formatDate(dateStr) {
