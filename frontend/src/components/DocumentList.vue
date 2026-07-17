@@ -44,11 +44,22 @@
       <p>Dokümanlar yükleniyor...</p>
     </div>
 
+    <!-- Toplu İşlem Barı -->
+    <div v-if="selectedIds.length > 0 && isAdmin" class="bulk-action-bar">
+      <span class="bulk-count">{{ selectedIds.length }} belge seçildi</span>
+      <button class="action-btn action-btn--danger bulk-delete-btn" @click="triggerBulkDelete">
+        🗑️ Seçilenleri Sil
+      </button>
+    </div>
+
     <!-- Tablo -->
-    <div class="doc-table-wrap" v-else-if="documents.length > 0">
+    <div class="doc-table-wrap" v-if="documents.length > 0">
       <table class="doc-table">
         <thead>
           <tr>
+            <th style="width: 40px; text-align: center;">
+              <input type="checkbox" :checked="isAllSelected" @change="toggleSelectAll" />
+            </th>
             <th>Dosya Adı</th>
             <th>Kategori</th>
             <th>Tür</th>
@@ -60,7 +71,10 @@
         <tbody>
           <!-- Kesin Eşleşmeler -->
           <template v-for="doc in primaryResults" :key="doc.id">
-            <tr class="doc-row">
+            <tr class="doc-row" :class="{ 'doc-row--selected': selectedIds.includes(doc.id) }">
+              <td style="text-align: center;">
+                <input type="checkbox" :value="doc.id" v-model="selectedIds" />
+              </td>
               <td class="doc-name">
                 <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
                 <span class="doc-name-text">{{ doc.originalName || doc.original_name }}</span>
@@ -69,8 +83,8 @@
                 </span>
               </td>
               <td>
-                <span class="category-badge" :class="'cat--' + (doc.category || 'diger').toLowerCase()">
-                  {{ doc.category || 'Diğer' }}
+                <span class="category-badge" :class="'cat--' + getCleanCategoryClass(doc.category || doc.metadata?.category)">
+                  {{ getCleanCategoryLabel(doc.category || doc.metadata?.category) }}
                 </span>
               </td>
               <td>
@@ -87,6 +101,7 @@
                 <!-- Çöp Kutusu Modu Aksiyonları -->
                 <template v-if="isTrashView">
                   <button 
+                    v-if="isAdmin"
                     class="action-btn action-btn--success" 
                     @click="restoreDocument(doc)"
                     title="Belgeyi Çöp Kutusundan Kurtar"
@@ -97,6 +112,7 @@
                     </svg>
                   </button>
                   <button 
+                    v-if="isAdmin"
                     class="action-btn action-btn--danger" 
                     @click="triggerDelete(doc)"
                     title="Belgeyi Kalıcı Olarak Sil"
@@ -126,7 +142,7 @@
                   </span>
                   
                   <button 
-                    v-if="doc.status !== 'PROCESSING'"
+                    v-if="doc.status !== 'PROCESSING' && isAdmin"
                     class="action-btn action-btn--danger" 
                     @click="triggerDelete(doc)"
                     title="Çöp Kutusuna Gönder"
@@ -141,7 +157,7 @@
             </tr>
             <!-- Arama Highlight Satırı -->
             <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight">
-              <td colspan="6">
+              <td colspan="7">
                 <div class="search-highlight" v-html="doc.highlight"></div>
               </td>
             </tr>
@@ -149,7 +165,7 @@
 
           <!-- Olası Eşleşmeler Ayırıcı -->
           <tr v-if="isSearchMode && dimmedResults.length > 0 && primaryResults.length > 0" class="dimmed-separator-row">
-            <td colspan="6">
+            <td colspan="7">
               <div class="dimmed-separator">
                 <div class="dimmed-separator-line"></div>
                 <span class="dimmed-separator-text">💡 Olası Eşleşmeler ({{ dimmedResults.length }})</span>
@@ -160,7 +176,10 @@
 
           <!-- Olası (Dimmed) Eşleşmeler -->
           <template v-for="doc in dimmedResults" :key="'dim-' + doc.id">
-            <tr class="doc-row doc-row--dimmed">
+            <tr class="doc-row doc-row--dimmed" :class="{ 'doc-row--selected': selectedIds.includes(doc.id) }">
+              <td style="text-align: center;">
+                <input type="checkbox" :value="doc.id" v-model="selectedIds" />
+              </td>
               <td class="doc-name">
                 <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
                 <span class="doc-name-text">{{ doc.originalName || doc.original_name }}</span>
@@ -169,8 +188,8 @@
                 </span>
               </td>
               <td>
-                <span class="category-badge" :class="'cat--' + (doc.category || 'diger').toLowerCase()">
-                  {{ doc.category || 'Diğer' }}
+                <span class="category-badge" :class="'cat--' + getCleanCategoryClass(doc.category || doc.metadata?.category)">
+                  {{ getCleanCategoryLabel(doc.category || doc.metadata?.category) }}
                 </span>
               </td>
               <td>
@@ -187,6 +206,7 @@
                 <!-- Çöp Kutusu Modu Aksiyonları -->
                 <template v-if="isTrashView">
                   <button 
+                    v-if="isAdmin"
                     class="action-btn action-btn--success" 
                     @click="restoreDocument(doc)"
                     title="Belgeyi Çöp Kutusundan Kurtar"
@@ -197,6 +217,7 @@
                     </svg>
                   </button>
                   <button 
+                    v-if="isAdmin"
                     class="action-btn action-btn--danger" 
                     @click="triggerDelete(doc)"
                     title="Belgeyi Kalıcı Olarak Sil"
@@ -226,7 +247,7 @@
                   </span>
                   
                   <button 
-                    v-if="doc.status !== 'PROCESSING'"
+                    v-if="doc.status !== 'PROCESSING' && isAdmin"
                     class="action-btn action-btn--danger" 
                     @click="triggerDelete(doc)"
                     title="Çöp Kutusuna Gönder"
@@ -240,7 +261,7 @@
               </td>
             </tr>
             <tr v-if="isSearchMode && doc.highlight" class="doc-row-highlight doc-row--dimmed">
-              <td colspan="6">
+              <td colspan="7">
                 <div class="search-highlight" v-html="doc.highlight"></div>
               </td>
             </tr>
@@ -268,137 +289,185 @@
               <h3 class="modal-title">{{ selectedDoc.originalName || selectedDoc.original_name }}</h3>
               <span class="status-badge status--completed" style="font-size:0.72rem">
                 <span class="status-dot"></span>
-                Tamamlandı
+                {{ selectedDoc.status }}
               </span>
             </div>
-            <div class="modal-header-actions" style="display:flex; align-items:center; gap:0.75rem">
-              <!-- Orijinal Belgeyi Aç Butonu -->
+            <div class="modal-header-actions" style="display:flex; align-items:center; gap:0.6rem">
+              <!-- Orijinal Belgeyi İndir Butonu -->
               <a 
-                :href="'/uploads/' + selectedDoc.filePath.split('/').pop()" 
-                target="_blank" 
-                class="action-link-btn" 
-                title="Orijinal Belgeyi Yeni Sekmede Aç"
+                :href="'/api/documents/' + selectedDoc.id + '/download'" 
+                class="action-link-btn shadow-btn" 
+                title="Orijinal Belgeyi Bilgisayara İndir"
+                @click="trackAction('DOWNLOAD', selectedDoc.id, selectedDoc.originalName || selectedDoc.original_name, 'Belge indirildi.')"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.25rem">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                  <polyline points="15 3 21 3 21 9"></polyline>
-                  <line x1="10" y1="14" x2="21" y2="3"></line>
-                </svg>
-                <span>Belgeyi Aç</span>
+                📥 İndir
+              </a>
+
+              <!-- OCR Metnini Word Olarak İndir Butonu -->
+              <a 
+                v-if="detailData?.metadata?.extracted_text || detailData?.metadata?.extractedText"
+                :href="'/api/documents/' + selectedDoc.id + '/export'" 
+                class="action-link-btn shadow-btn accent-btn" 
+                title="OCR Raporunu Word (.doc) Olarak İndir"
+                @click="trackAction('EXPORT', selectedDoc.id, selectedDoc.originalName || selectedDoc.original_name, 'Belge Word (.doc) raporu indirildi.')"
+              >
+                📝 Raporu İndir (.doc)
               </a>
               
               <button class="modal-close" @click="closeDetail">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
             </div>
           </div>
 
-          <!-- Meta Bilgiler -->
-          <div class="modal-meta" v-if="detailData">
+          <!-- Meta Bilgiler (Kategori ve Dosya Yolu Kopyalama) -->
+          <div class="modal-meta" v-if="detailData" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <div class="meta-item" v-if="detailData.metadata?.category">
-              <span class="meta-label">Kategori</span>
-              <span class="meta-value">{{ detailData.metadata.category }}</span>
+              <span class="meta-label">Kategori:</span>
+              <span class="meta-value">{{ getCleanCategoryLabel(detailData.metadata.category) }}</span>
+            </div>
+            <div class="meta-item file-path-brief" style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="meta-label">Dosya Konumu:</span>
+              <span class="meta-value" style="font-family: monospace; font-size: 0.72rem; color: #a78bfa; background: rgba(167, 139, 250, 0.08); padding: 0.2rem 0.5rem; border-radius: 4px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ selectedDoc.filePath }}</span>
+              <button 
+                class="action-link-btn" 
+                style="padding: 0.2rem 0.5rem; font-size: 0.7rem; border: 1px solid var(--border);"
+                @click="copyFilePath(selectedDoc.filePath)"
+              >
+                📋 Kopyala
+              </button>
             </div>
           </div>
 
-          <!-- OCR Çıktısı -->
+          <!-- OCR Çıktısı ve Kaydırma Akışı -->
           <div class="modal-body">
             <div v-if="isLoadingDetail" class="modal-loading">
               <div class="spinner-sm"></div>
-              <p>OCR metni yükleniyor...</p>
+              <p>Yükleniyor...</p>
             </div>
             
             <!-- DÜZENLEME MODU (DocumentEditor) -->
-            <div v-else-if="isEditing && detailData" class="ocr-edit-mode">
+            <div v-else-if="isEditing && selectedDoc" class="ocr-edit-mode">
               <DocumentEditor
                 :documentId="selectedDoc.id"
-                :initialText="detailData.metadata?.extractedText || detailData.metadata?.extracted_text || ''"
+                :initialText="detailData?.metadata?.extractedText || detailData?.metadata?.extracted_text || ''"
                 @save="handleEditorSave"
                 @cancel="handleEditorCancel"
               />
             </div>
 
-            <div v-else-if="detailData?.metadata?.extracted_text || detailData?.metadata?.extractedText" class="ocr-output">
-              <div class="ocr-header">
-                <span class="ocr-label">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
-                  </svg>
-                  Çıkarılan Metin (OCR)
-                </span>
-                
-                <div class="ocr-header-actions" style="display:flex; align-items:center; gap:0.75rem">
-                  <button 
-                    class="action-link-btn" 
-                    style="border: 1px solid var(--border); background: rgba(139, 92, 246, 0.08); font-size: 0.75rem; padding: 0.35rem 0.65rem;"
-                    @click="isEditing = true"
-                    title="Metni Düzenle"
-                  >
-                    ✏️ Düzenle
-                  </button>
+            <!-- Kaydırma Akışı (Summary -> OCR Text -> Preview) -->
+            <div v-else class="modal-scroll-flow" style="display: flex; flex-direction: column; gap: 1.5rem;">
+              
+              <!-- 1. Yapay Zeka Özeti -->
+              <div class="summary-section" style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 8px; padding: 1.25rem;">
+                <h5 style="margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; color: #a78bfa;">🤖 Yapay Zeka Belge Özeti</h5>
+                <p style="font-size: 0.82rem; line-height: 1.5; color: var(--text-primary);">{{ aiSummary }}</p>
+              </div>
+
+              <!-- 2. Çıkarılan Tam Metin -->
+              <div v-if="detailData?.metadata?.extracted_text || detailData?.metadata?.extractedText" class="ocr-output">
+                <div class="ocr-header">
+                  <span class="ocr-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+                    </svg>
+                    Çıkarılan Tam Metin (OCR)
+                  </span>
                   
-                  <!-- Doküman içi arama çubuğu -->
-                  <div class="doc-search-box">
-                    <input
-                      v-model="docSearchQuery"
-                      type="text"
-                      class="doc-search-input"
-                      placeholder="Metin içinde ara..."
-                      @input="onDocSearch"
-                      @keydown.enter.prevent="nextMatch"
-                    />
-                    <div class="doc-search-nav" v-if="matchCount > 0">
-                      <span class="doc-search-count">{{ activeMatchIndex + 1 }} / {{ matchCount }}</span>
-                      <button class="doc-nav-btn" @click="prevMatch" title="Önceki">▲</button>
-                      <button class="doc-nav-btn" @click="nextMatch" title="Sonraki">▼</button>
+                  <div class="ocr-header-actions" style="display:flex; align-items:center; gap:0.75rem">
+                    <button 
+                      class="action-link-btn" 
+                      style="border: 1px solid var(--border); background: rgba(139, 92, 246, 0.08); font-size: 0.75rem; padding: 0.35rem 0.65rem;"
+                      @click="isEditing = true"
+                      title="Metni Düzenle"
+                    >
+                      ✏️ Metin Düzenle
+                    </button>
+                    
+                    <!-- Doküman içi arama çubuğu -->
+                    <div class="doc-search-box">
+                      <input
+                        v-model="docSearchQuery"
+                        type="text"
+                        class="doc-search-input"
+                        placeholder="Metin içinde ara..."
+                        @input="onDocSearch"
+                        @keydown.enter.prevent="nextMatch"
+                      />
+                      <div class="doc-search-nav" v-if="matchCount > 0">
+                        <span class="doc-search-count">{{ activeMatchIndex + 1 }} / {{ matchCount }}</span>
+                        <button class="doc-nav-btn" @click="prevMatch" title="Önceki">▲</button>
+                        <button class="doc-nav-btn" @click="nextMatch" title="Sonraki">▼</button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <!-- Satır/Paragraf Bazlı Yorum Destekli Okuma Alanı -->
-              <div class="ocr-lines-container">
-                <div v-for="line in parsedLines" :key="line.index" class="ocr-line-row">
-                  <div class="ocr-line-main-group">
-                    <div class="ocr-line-text" v-html="line.html"></div>
-                    <button class="btn-comment-trigger" @click="toggleCommentInput(line.index)" title="Bu satıra yorum ekle">
-                      💬
-                    </button>
-                  </div>
-                  
-                  <div v-if="activeCommentLineIndex === line.index" class="line-comment-input-area">
-                    <input 
-                      v-model="newCommentText" 
-                      type="text" 
-                      placeholder="Bu satır hakkında ne düşünüyorsunuz?" 
-                      class="line-comment-input" 
-                      @keydown.enter.prevent="addComment(line.index)"
-                    />
-                    <button class="btn-comment-add" @click="addComment(line.index)">Ekle</button>
-                  </div>
 
-                  <div v-if="line.comments && line.comments.length > 0" class="line-comments-list">
-                    <div v-for="comment in line.comments" :key="comment.id" class="line-comment-box">
-                      <span class="comment-icon">💬</span>
-                      <p class="comment-text">{{ comment.text }}</p>
-                      <button class="btn-comment-delete" @click="deleteComment(comment.id)" title="Yorumu sil">
-                        🗑️
+                <!-- Satır/Paragraf Bazlı Yorum Destekli Okuma Alanı -->
+                <div class="ocr-lines-container">
+                  <div v-for="line in parsedLines" :key="line.index" class="ocr-line-row">
+                    <div class="ocr-line-main-group">
+                      <div class="ocr-line-text" v-html="line.html"></div>
+                      <button class="btn-comment-trigger" @click="toggleCommentInput(line.index)" title="Bu satıra yorum ekle">
+                        💬
                       </button>
                     </div>
+                    
+                    <div v-if="activeCommentLineIndex === line.index" class="line-comment-input-area">
+                      <input 
+                        v-model="newCommentText" 
+                        type="text" 
+                        placeholder="Bu satır hakkında ne düşünüyorsunuz?" 
+                        class="line-comment-input" 
+                        @keydown.enter.prevent="addComment(line.index)"
+                      />
+                      <button class="btn-comment-add" @click="addComment(line.index)">Ekle</button>
+                    </div>
+
+                    <div v-if="line.comments && line.comments.length > 0" class="line-comments-list">
+                      <div v-for="comment in line.comments" :key="comment.id" class="line-comment-box">
+                        <span class="comment-icon">💬</span>
+                        <p class="comment-text">{{ comment.text }}</p>
+                        <button class="btn-comment-delete" @click="deleteComment(comment.id)" title="Yorumu sil">
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div v-else class="modal-empty">
-              <p>Bu doküman için henüz çıkarılmış metin bulunmuyor.</p>
-              <button 
-                class="action-link-btn" 
-                style="margin-top: 1rem; border: 1px solid var(--border); background: rgba(139, 92, 246, 0.08);"
-                @click="isEditing = true"
-              >
-                ✏️ Metin Ekle
-              </button>
+
+              <div v-else class="modal-empty" style="border: 1px dashed var(--border); border-radius: 8px; padding: 1.5rem; text-align: center;">
+                <p>Bu doküman için henüz çıkarılmış metin bulunmuyor.</p>
+                <button 
+                  class="action-link-btn" 
+                  style="margin-top: 1rem; border: 1px solid var(--border); background: rgba(139, 92, 246, 0.08);"
+                  @click="isEditing = true"
+                >
+                  ✏️ Metin Ekle
+                </button>
+              </div>
+
+              <!-- 3. Orijinal Görsel / PDF Önizlemesi -->
+              <div class="original-preview-section" style="border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                <h5 style="margin-bottom: 0.75rem; font-size: 0.85rem; font-weight: 700; color: #a78bfa;">🖼️ Orijinal Belge Önizlemesi</h5>
+                <div class="preview-frame-wrapper" style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 300px; max-height: 500px;">
+                  <iframe 
+                    v-if="isPdf(selectedDoc.mimeType || selectedDoc.mime_type)" 
+                    :src="'/uploads/' + getFileName(selectedDoc.filePath)" 
+                    style="width: 100%; height: 500px; border: none;"
+                  ></iframe>
+                  <img 
+                    v-else 
+                    :src="'/uploads/' + getFileName(selectedDoc.filePath)" 
+                    style="max-width: 100%; max-height: 500px; object-fit: contain;" 
+                  />
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -410,12 +479,17 @@
       <div v-if="deleteModalOpen" class="modal-overlay" @click.self="deleteModalOpen = false">
         <div class="modal modal--danger">
           <div class="modal-header">
-            <h3 class="modal-title" style="color: #ef4444">Belgeyi Sil</h3>
+            <h3 class="modal-title" style="color: #ef4444">{{ isBulkDelete ? 'Toplu Belge Sil' : 'Belgeyi Sil' }}</h3>
             <button class="modal-close" @click="deleteModalOpen = false">✕</button>
           </div>
           <div class="modal-body text-center" style="padding: 1.5rem; text-align: center">
             <p style="margin-bottom: 1.5rem; font-size: 0.95rem; line-height: 1.5">
-              "<strong>{{ docToDelete?.originalName || docToDelete?.original_name }}</strong>" isimli belgeyi 
+              <span v-if="isBulkDelete">
+                Seçilen <strong>{{ selectedIds.length }} adet</strong> belgeyi 
+              </span>
+              <span v-else>
+                "<strong>{{ docToDelete?.originalName || docToDelete?.original_name }}</strong>" isimli belgeyi 
+              </span>
               <span style="color: #ef4444; font-weight: 600">{{ isTrashView ? 'sistemden KALICI olarak silmek' : 'ÇÖP KUTUSUNA göndermek' }}</span> istediğinize emin misiniz?
             </p>
             <div class="modal-danger-actions" style="display: flex; gap: 0.75rem; justify-content: center">
@@ -448,6 +522,66 @@ const selectedDoc = ref(null)
 const detailData = ref(null)
 const isLoadingDetail = ref(false)
 const isEditing = ref(false)
+
+// AI Özeti bulucu
+const aiSummary = computed(() => {
+  const jobs = detailData.value?.jobs || [];
+  const completedJob = jobs.find(j => j.jobStatus === 'COMPLETED' && j.resultSummary);
+  return completedJob ? completedJob.resultSummary : 'Bu doküman için AI özeti bulunmamaktadır.';
+})
+
+function getFileName(filePath) {
+  if (!filePath) return '';
+  return filePath.split(/[/\\]/).pop();
+}
+
+function isPdf(mime) {
+  return mime && mime.toLowerCase().includes('pdf');
+}
+
+function copyFilePath(path) {
+  navigator.clipboard.writeText(path);
+  alert('Dosya yolu kopyalandı: ' + path);
+  if (selectedDoc.value) {
+    trackAction('COPY_PATH', selectedDoc.value.id, selectedDoc.value.originalName || selectedDoc.value.original_name, `Belge dosya yolu kopyalandı: ${path}`);
+  }
+}
+
+async function trackAction(action, documentId, documentName, details) {
+  try {
+    await fetch('/api/documents/audit-logs/click', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({ action, documentId, documentName, details })
+    })
+  } catch (e) {
+    console.error('[Track] Log gönderme hatası:', e.message);
+  }
+}
+
+// SSE Canlı Güncelleme Dinleyici
+let eventSource = null
+
+// Rol kontrolü: Kullanıcı admin mi? (localStorage'dan veya jwt'den oku)
+const isAdmin = computed(() => {
+  const token = localStorage.getItem('token');
+  if (!token) return false;
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(window.atob(base64));
+    return payload.role === 'admin' || payload.role === 'ciso';
+  } catch (e) {
+    return false;
+  }
+})
+
+// Seçim State'leri
+const selectedIds = ref([])
+const isBulkDelete = ref(false)
 
 // Çöp Kutusu ve Güvenli Silme State'leri
 const isTrashView = ref(false)
@@ -531,11 +665,64 @@ function toggleTrashView() {
   }
 }
 
+// Seçim Metotları
+const isAllSelected = computed(() => {
+  const currentList = primaryResults.value;
+  if (currentList.length === 0) return false;
+  return currentList.every(d => selectedIds.value.includes(d.id));
+})
+
+function toggleSelectAll() {
+  const currentList = primaryResults.value;
+  if (isAllSelected.value) {
+    // Mevcut sayfadaki veya filtrelenmiş listedeki ID'leri seçimden kaldır
+    const currentIds = currentList.map(d => d.id);
+    selectedIds.value = selectedIds.value.filter(id => !currentIds.includes(id));
+  } else {
+    // Mevcut listedeki seçilmeyen ID'leri seçime ekle
+    currentList.forEach(d => {
+      if (!selectedIds.value.includes(d.id)) {
+        selectedIds.value.push(d.id);
+      }
+    });
+  }
+}
+
+function toggleSelect(id) {
+  const idx = selectedIds.value.indexOf(id);
+  if (idx > -1) {
+    selectedIds.value.splice(idx, 1);
+  } else {
+    selectedIds.value.push(id);
+  }
+}
+
+// Toplu silme onay modalını tetikle
+function triggerBulkDelete() {
+  if (selectedIds.value.length === 0) return;
+  isBulkDelete.value = true;
+  docToDelete.value = null; // Tekli silme olmadığından temizle
+  deleteCountdown.value = 3;
+  deleteModalOpen.value = true;
+
+  if (deleteInterval) clearInterval(deleteInterval);
+
+  deleteInterval = setInterval(() => {
+    if (deleteCountdown.value > 0) {
+      deleteCountdown.value--;
+    } else {
+      clearInterval(deleteInterval);
+      deleteInterval = null;
+    }
+  }, 1000);
+}
+
 // Silme onay modalını tetikle (3 saniye kilitle)
 function triggerDelete(doc) {
-  docToDelete.value = doc
-  deleteCountdown.value = 3
-  deleteModalOpen.value = true
+  isBulkDelete.value = false;
+  docToDelete.value = doc;
+  deleteCountdown.value = 3;
+  deleteModalOpen.value = true;
   
   if (deleteInterval) clearInterval(deleteInterval)
   
@@ -549,43 +736,83 @@ function triggerDelete(doc) {
   }, 1000)
 }
 
-// Silme işlemini onayla (Soft veya Kalıcı)
+// Silme işlemini onayla (Soft veya Kalıcı - Toplu veya Tekli)
 async function confirmDelete() {
-  if (deleteCountdown.value > 0 || !docToDelete.value) return
+  if (deleteCountdown.value > 0) return;
   
-  isDeleting.value = true
-  const id = docToDelete.value.id
+  isDeleting.value = true;
+  const token = localStorage.getItem('token');
   
   try {
-    let url = `/api/documents/${id}`
-    let method = 'DELETE'
-    
-    if (isTrashView.value) {
-      url = `/api/documents/${id}/force`
-    }
-    
-    const response = await fetch(url, { method })
-    if (response.ok) {
-      deleteModalOpen.value = false
-      docToDelete.value = null
+    if (isBulkDelete.value) {
+      // TOPLU SİLME
+      const response = await fetch('/api/documents/bulk', {
+        method: 'DELETE',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ids: selectedIds.value,
+          force: isTrashView.value
+        })
+      });
+
+      if (response.ok) {
+        deleteModalOpen.value = false;
+        selectedIds.value = [];
+        if (isTrashView.value) {
+          fetchTrashDocuments();
+        } else {
+          fetchDocuments();
+        }
+      }
+    } else {
+      // TEKLİ SİLME
+      if (!docToDelete.value) return;
+      const id = docToDelete.value.id;
+      let url = `/api/documents/${id}`;
+      let method = 'DELETE';
       
       if (isTrashView.value) {
-        fetchTrashDocuments()
-      } else {
-        fetchDocuments()
+        url = `/api/documents/${id}/force`;
+      }
+      
+      const response = await fetch(url, { 
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        deleteModalOpen.value = false;
+        docToDelete.value = null;
+        selectedIds.value = selectedIds.value.filter(selId => selId !== id);
+        
+        if (isTrashView.value) {
+          fetchTrashDocuments();
+        } else {
+          fetchDocuments();
+        }
       }
     }
   } catch (error) {
-    console.error('[DocumentList] Silme hatası:', error)
+    console.error('[DocumentList] Silme hatası:', error);
   } finally {
-    isDeleting.value = false
+    isDeleting.value = false;
   }
 }
 
 // Dokümanı Çöp Kutusundan Kurtar (Restore)
 async function restoreDocument(doc) {
   try {
-    const response = await fetch(`/api/documents/${doc.id}/restore`, { method: 'POST' })
+    const token = localStorage.getItem('token');
+    const response = await fetch(`/api/documents/${doc.id}/restore`, { 
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
     if (response.ok) {
       fetchTrashDocuments()
     }
@@ -808,6 +1035,8 @@ async function openDetail(doc) {
   docSearchQuery.value = searchQuery.value || '' // Arama sorgusuyla başlat
   activeMatchIndex.value = 0
 
+  trackAction('PREVIEW', doc.id, doc.originalName || doc.original_name, 'Belge detayları, AI özeti ve OCR metni görüntülendi.');
+
   try {
     const response = await fetch(`/api/documents/${doc.id}`)
     if (response.ok) {
@@ -927,17 +1156,74 @@ function formatDate(dateStr) {
   })
 }
 
+function getCleanCategoryClass(cat) {
+  if (!cat) return 'diger';
+  const c = cat.toLowerCase();
+  if (c === 'uncategorized' || c === 'undefined' || c === 'diger') return 'diger';
+  return c;
+}
+
+function getCleanCategoryLabel(cat) {
+  if (!cat || cat === 'uncategorized' || cat === 'undefined' || cat === 'Diger') return 'Diğer';
+  return cat;
+}
+
 // ============================================================
 // Yaşam Döngüsü (Lifecycle)
 // ============================================================
 
+// SSE Gerçek Zamanlı Güncelleme Bağlantısı
+function startSseConnection() {
+  if (typeof window === 'undefined') return;
+  
+  // Varsa eski bağlantıyı temizle
+  if (eventSource) {
+    eventSource.close();
+  }
+
+  eventSource = new EventSource('/api/events');
+
+  eventSource.addEventListener('document_updated', (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      console.log('[SSE_EVENT] Canlı durum güncellemesi alındı:', data);
+      
+      const index = documents.value.findIndex(d => d.id === data.id);
+      if (index !== -1) {
+        // Durumu ve varsa güncel nesneyi güncelle
+        documents.value[index].status = data.status;
+        if (data.category) {
+          documents.value[index].category = data.category;
+        }
+        if (data.document) {
+          // Bütün veriyi güncelle
+          documents.value[index] = { ...documents.value[index], ...data.document };
+        }
+      }
+    } catch (err) {
+      console.error('[SSE_PARSE_ERR] Gelen veri çözülemedi:', err);
+    }
+  });
+
+  eventSource.onerror = (err) => {
+    console.warn('[SSE_ERR] SSE bağlantı hatası oluştu, yeniden bağlanmaya çalışılacak:', err);
+    eventSource.close();
+    // 5 saniye sonra yeniden bağlanmayı dene
+    setTimeout(startSseConnection, 5000);
+  };
+}
+
 onMounted(() => {
   fetchDocuments()
   startPolling()
+  startSseConnection()
 })
 
 onUnmounted(() => {
   stopPolling()
+  if (eventSource) {
+    eventSource.close()
+  }
 })
 </script>
 
@@ -1054,6 +1340,45 @@ onUnmounted(() => {
 }
 
 /* Tablo */
+/* Toplu İşlem Çubuğu */
+.bulk-action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  margin: 0.75rem 1.5rem;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.05);
+  animation: pulse-glow-red 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow-red {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.25); }
+  50% { border-color: rgba(239, 68, 68, 0.55); }
+}
+
+.bulk-count {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #f87171;
+}
+
+.bulk-delete-btn {
+  font-size: 0.76rem !important;
+  font-weight: 700 !important;
+  padding: 0.4rem 0.85rem !important;
+}
+
+.doc-row--selected {
+  background: rgba(239, 68, 68, 0.03) !important;
+}
+
+.doc-row--selected:hover {
+  background: rgba(239, 68, 68, 0.06) !important;
+}
+
 .doc-table-wrap {
   overflow-x: auto;
 }

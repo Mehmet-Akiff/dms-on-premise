@@ -108,11 +108,13 @@ async function saveContent() {
   if (!props.documentId) return
 
   isSaving.value = true
+  const token = localStorage.getItem('token');
   try {
     const response = await fetch(`/api/documents/${props.documentId}`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
         // Düz metin olarak da kaydedebiliriz ancak zengin düzenlemeyi korumak için html olarak kaydediyoruz

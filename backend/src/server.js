@@ -68,6 +68,46 @@ app.get('/api/health', async (req, res) => {
 // API Rotaları
 // ============================================================
 
+// ============================================================
+// Server-Sent Events (SSE) Altyapısı (Gerçek Zamanlı Güncelleme)
+// ============================================================
+
+global.sseClients = [];
+
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  // Bağlantıyı kaydet
+  global.sseClients.push(res);
+  console.log(`[SSE] Yeni bir istemci bağlandı. Toplam dinleyici: ${global.sseClients.length}`);
+
+  // Heartbeat (Bağlantının açık kalmasını garantilemek için 20s'de bir boş yorum yolla)
+  const keepAlive = setInterval(() => {
+    res.write(': keepalive\n\n');
+  }, 20000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    global.sseClients = global.sseClients.filter(client => client !== res);
+    console.log(`[SSE] İstemci bağlantıyı kesti. Kalan dinleyici: ${global.sseClients.length}`);
+  });
+});
+
+// İstemcilere veri fırlatan global fonksiyon
+global.sendDocumentUpdateToClients = (documentData) => {
+  const message = `event: document_updated\ndata: ${JSON.stringify(documentData)}\n\n`;
+  global.sseClients.forEach(client => {
+    try {
+      client.write(message);
+    } catch (e) {
+      console.error('[SSE_WRITE_ERR] İstemciye veri yazılamadı:', e.message);
+    }
+  });
+};
+
 app.use('/api/auth', authRoutes);
 app.use('/api/documents', documentRoutes);
 
@@ -101,19 +141,19 @@ const startServer = async () => {
       console.log('[DB] Tablolar senkronize edildi.');
 
       // Kasa Varsayılan Ayarlarını Başlat
-      const { SystemSettings } = require('./models');
+      const { SystemSettings, User } = require('./models');
       const bcrypt = require('bcryptjs');
       const defaultSettings = await SystemSettings.findByPk('kasa_settings');
       if (!defaultSettings) {
         const salt = await bcrypt.genSalt(10);
-        const masterPasswordHash = await bcrypt.hash('DmsSecureKasa2026!', salt);
+        const masterPasswordHash = await bcrypt.hash('admin', salt);
         await SystemSettings.create({
           key: 'kasa_settings',
           value: {
             masterUsername: 'admin',
             masterPasswordHash: masterPasswordHash,
-            alertEmail: 'admin@dms.com',
-            verifiedAlertEmail: 'admin@dms.com',
+            alertEmail: '',
+            verifiedAlertEmail: '',
             alertThreshold: 3,
             verificationCode: null,
             verificationExpires: null,
@@ -122,13 +162,45 @@ const startServer = async () => {
               port: 465,
               secure: true,
               auth: {
-                user: 'security@gmail.com',
+                user: '',
                 pass: ''
               }
             }
           }
         });
         console.log('[DB] Kasa varsayılan şifresi ("admin" / "DmsSecureKasa2026!") oluşturuldu.');
+      }
+
+      // Varsayılan CISO Hesabını Tohumla
+      const cisoExists = await User.findOne({ where: { role: 'ciso' } });
+      if (!cisoExists) {
+        const passwordHash = await bcrypt.hash('ciso_secure_2026', 10);
+        await User.create({
+          fullName: 'Security Officer',
+          username: 'ciso',
+          email: 'ciso@dms.com',
+          passwordHash,
+          role: 'ciso',
+          status: 'active',
+          permissions: { canRead: true, canWrite: true }
+        });
+        console.log('[DB] Varsayılan CISO hesabı oluşturuldu (ciso / ciso_secure_2026)');
+      }
+
+      // Varsayılan Admin Hesabını Tohumla
+      const adminExists = await User.findOne({ where: { username: 'admin' } });
+      if (!adminExists) {
+        const passwordHash = await bcrypt.hash('admin', 10);
+        await User.create({
+          fullName: 'Sistem Yöneticisi',
+          username: 'admin',
+          email: 'admin@dms.com',
+          passwordHash,
+          role: 'admin',
+          status: 'active',
+          permissions: { canRead: true, canWrite: true }
+        });
+        console.log('[DB] Varsayılan Admin hesabı oluşturuldu (admin / admin)');
       }
 
       // Fuzzy Search için pg_trgm eklentisini güvenli bir şekilde aktifleştir

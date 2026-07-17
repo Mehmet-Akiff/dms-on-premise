@@ -11,8 +11,22 @@
         <p class="subtitle">Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi</p>
       </div>
       <div class="header-actions" style="display:flex; align-items:center; gap:0.75rem">
+        <!-- Rol ve İsim Gösterimi -->
+        <div v-if="currentUserRole" class="user-role-badge-wrap" style="display: flex; align-items: center; gap: 0.5rem; margin-right: 0.5rem;">
+          <span :class="['role-badge', 'role-badge--' + currentUserRole]">
+            {{ getRoleLabel(currentUserRole) }}
+          </span>
+          <span class="header-username" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.05); padding: 0.25rem 0.6rem; border-radius: 6px;">{{ currentUserFullName }}</span>
+        </div>
+
+        <button v-if="isCiso" class="btn-audit-toggle" @click="isAuditLogOpen = true" title="Sistem Günlükleri">
+          📋 Sistem Günlükleri
+        </button>
         <button class="btn-settings-toggle" @click="isSettingsOpen = true" title="Kasa Ayarları">
           ⚙️ Kasa Ayarları
+        </button>
+        <button class="btn-lock-toggle" @click="promptLockKasa" title="Güvenli Çıkış (Sistemi Kilitle)">
+          🔒 Güvenli Çıkış
         </button>
         <div class="header-status">
           <span class="status-indicator status-indicator--online"></span>
@@ -42,12 +56,44 @@
         </div>
       </section>
 
-      <!-- Sağ Panel: Arama + Doküman Listesi -->
+      <!-- Sağ Panel: Dashboard + Arama + Doküman Listesi -->
       <section class="panel panel--list">
+        <Dashboard ref="dashboardRef" />
         <SearchBar @results="onSearchResults" @clear="onSearchClear" @loading="onSearchLoading" />
         <DocumentList ref="documentListRef" />
       </section>
     </main>
+
+    <!-- CISO Audit Log Modalı -->
+    <div v-if="isAuditLogOpen" class="audit-log-modal-overlay" @click.self="isAuditLogOpen = false">
+      <div class="audit-log-modal-content">
+        <div class="modal-close-header">
+          <h3>📋 Sistem Günlükleri (CISO Yetkili Alanı)</h3>
+          <button class="btn-close-modal" @click="isAuditLogOpen = false">✕ Kapat</button>
+        </div>
+        <div class="modal-body-scroll">
+          <AuditLog />
+        </div>
+      </div>
+    </div>
+
+    <!-- Çıkış Onay Modalı -->
+    <div v-if="isLogoutConfirmOpen" class="logout-confirm-overlay" @click.self="isLogoutConfirmOpen = false">
+      <div class="logout-confirm-card">
+        <h4>🔒 Güvenli Çıkış Onayı</h4>
+        <p>Sistemi kilitlemek ve oturumu sonlandırmak istediğinizden emin misiniz?</p>
+        <div class="confirm-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.2rem;">
+          <button class="btn-confirm-cancel" @click="isLogoutConfirmOpen = false">Vazgeç</button>
+          <button 
+            class="btn-confirm-logout" 
+            :disabled="logoutConfirmTimer > 0"
+            @click="confirmLockKasa"
+          >
+            {{ logoutConfirmTimer > 0 ? `Evet, Çıkış Yap (${logoutConfirmTimer}s)` : 'Evet, Çıkış Yap' }}
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Footer -->
     <footer class="dms-footer">
@@ -63,19 +109,100 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import FileUpload from './components/FileUpload.vue'
 import DocumentList from './components/DocumentList.vue'
 import SearchBar from './components/SearchBar.vue'
 import KasaLock from './components/KasaLock.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
+import Dashboard from './components/Dashboard.vue'
+import AuditLog from './components/AuditLog.vue'
 
 const documentListRef = ref(null)
+const dashboardRef = ref(null)
 const isSettingsOpen = ref(false)
+const isAuditLogOpen = ref(false)
+
+const isLogoutConfirmOpen = ref(false)
+const logoutConfirmTimer = ref(0)
+let logoutTimerInterval = null
+
+const currentUserRole = ref('')
+const currentUserFullName = ref('')
+
+function getRoleLabel(role) {
+  if (role === 'ciso') return '🛡️ CISO'
+  if (role === 'admin') return '🔑 Yönetici'
+  return '👤 Standart'
+}
+
+function updateUserInfo() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    currentUserRole.value = '';
+    currentUserFullName.value = '';
+    return;
+  }
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(window.atob(base64));
+    currentUserRole.value = payload.role || '';
+    currentUserFullName.value = payload.fullName || payload.username || '';
+  } catch (e) {
+    currentUserRole.value = '';
+    currentUserFullName.value = '';
+  }
+}
+
+function promptLockKasa() {
+  isLogoutConfirmOpen.value = true;
+  logoutConfirmTimer.value = 2;
+  if (logoutTimerInterval) clearInterval(logoutTimerInterval);
+  logoutTimerInterval = setInterval(() => {
+    if (logoutConfirmTimer.value > 0) {
+      logoutConfirmTimer.value--;
+    } else {
+      clearInterval(logoutTimerInterval);
+    }
+  }, 1000);
+}
+
+function confirmLockKasa() {
+  isLogoutConfirmOpen.value = false;
+  lockKasa();
+}
+
+function lockKasa() {
+  window.dispatchEvent(new Event('kasa-lock'))
+}
+
+onMounted(() => {
+  updateUserInfo();
+  window.addEventListener('kasa-unlocked', updateUserInfo);
+  window.addEventListener('kasa-lock', updateUserInfo);
+})
+
+onUnmounted(() => {
+  window.removeEventListener('kasa-unlocked', updateUserInfo);
+  window.removeEventListener('kasa-lock', updateUserInfo);
+  if (logoutTimerInterval) clearInterval(logoutTimerInterval);
+})
+
+// Admin rol kontrolü (Reaktif)
+const isAdmin = computed(() => {
+  return currentUserRole.value === 'admin' || currentUserRole.value === 'ciso';
+})
+
+// CISO rol kontrolü (Reaktif)
+const isCiso = computed(() => {
+  return currentUserRole.value === 'ciso';
+})
 
 function onDocumentUploaded() {
-  // Yükleme başarılı olduğunda doküman listesini yenile
+  // Yükleme başarılı olduğunda doküman listesini ve dashboard'u yenile
   documentListRef.value?.refresh()
+  dashboardRef.value?.refresh()
 }
 
 function onSearchResults(results, term) {
@@ -228,7 +355,7 @@ body {
    ============================================================ */
 .dms-main {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: 300px 1fr;
   gap: 1.5rem;
   flex: 1;
   align-items: start;
@@ -325,5 +452,194 @@ body {
   border-color: #a78bfa;
   box-shadow: 0 0 15px rgba(139, 92, 246, 0.25);
   transform: translateY(-1px);
+}
+
+.btn-lock-toggle {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  padding: 0.5rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.05);
+}
+
+.btn-lock-toggle:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: #f87171;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-audit-toggle {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #34d399;
+  padding: 0.5rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
+}
+
+.btn-audit-toggle:hover {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #34d399;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Modallar */
+.audit-log-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 7, 18, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.audit-log-modal-content {
+  background: #0f172a;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 12px;
+  width: 92%;
+  max-width: 1150px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8);
+}
+
+.modal-close-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-close-header h3 {
+  color: #34d399;
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.btn-close-modal {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.modal-body-scroll {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.logout-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 7, 18, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+
+.logout-confirm-card {
+  background: #111827;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 380px;
+  padding: 1.75rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.logout-confirm-card h4 {
+  color: #f87171;
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.logout-confirm-card p {
+  color: #9ca3af;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 0 0 1.25rem 0;
+}
+
+.btn-confirm-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-confirm-logout {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-confirm-logout:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Rol Rozeti Stilleri */
+.role-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.role-badge--user {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+.role-badge--admin {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+.role-badge--ciso {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
 }
 </style>
