@@ -21,6 +21,19 @@ const loginAttempts = {};
 // Bellek içi e-posta gönderim limit takibi (2 ardışık mail sonrası 1 dk bekleme)
 const emailRequestLogs = {};
 
+function addWorkingDays(startDate, days) {
+  let result = new Date(startDate);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const day = result.getDay();
+    if (day !== 0 && day !== 6) { // 0: Pazar, 6: Cumartesi
+      added++;
+    }
+  }
+  return result;
+}
+
 function checkAndRecordEmailLimit(email, ip, role) {
   const now = Date.now();
   const keys = [email, ip].filter(Boolean);
@@ -175,6 +188,17 @@ router.post('/login', async (req, res) => {
         attemptsInfo.lockUntil = Date.now() + duration;
       }
       return res.status(401).json({ error: 'Hatalı kullanıcı adı veya şifre.' });
+    }
+
+    // E-posta Çakışma Kontrolü (Tek e-posta kuralı)
+    if (user.email) {
+      const emailUsageCount = await User.count({ where: { email: user.email } });
+      if (emailUsageCount > 1) {
+        return res.status(409).json({ 
+          error: 'E-posta çakışması tespit edildi.', 
+          message: 'Bu e-posta adresi sistemde birden fazla hesapta tanımlanmıştır. Lütfen giriş yapabilmek için e-postanızı değiştirin veya sistem yöneticinizle görüşün.' 
+        });
+      }
     }
 
     if (user.status !== 'active') {
@@ -517,21 +541,39 @@ router.get('/approve', async (req, res) => {
         return res.status(404).send('<h1>Hata: Kullanıcı bulunamadı.</h1>');
       }
 
-      request.status = 'approved';
-      await request.save();
+      const received = request.approvalsReceived || [];
+      const sig = 'CISO (E-posta)';
+      if (!received.includes(sig)) {
+        received.push(sig);
+      }
+      request.approvalsReceived = received;
+      request.changed('approvalsReceived', true);
 
-      const oldName = user.fullName;
-      user.fullName = request.requestData.newFullName;
-      await user.save();
+      if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
+        request.status = 'approved';
+        await request.save();
 
-      logCisoAction('NAME_CHANGE_APPROVED', `CISO, admin ${user.username} ismini değiştirdi. Eski: ${oldName}, Yeni: ${user.fullName}`, ip);
+        const oldName = user.fullName;
+        user.fullName = request.requestData.newFullName;
+        await user.save();
 
-      return res.status(200).send(`
-        <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
-          <h1 style="color: #4ade80;">✓ İsim Değişikliği Onaylandı</h1>
-          <p>Yönetici ismi ${user.fullName} olarak güncellendi.</p>
-        </div>
-      `);
+        logCisoAction('NAME_CHANGE_APPROVED', `İsim değişikliği onaylandı (Çift Onay). Eski: ${oldName}, Yeni: ${user.fullName}`, ip);
+
+        return res.status(200).send(`
+          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+            <h1 style="color: #4ade80;">✓ İsim Değişikliği Onaylandı</h1>
+            <p>Yönetici ismi ${user.fullName} olarak güncellendi.</p>
+          </div>
+        `);
+      } else {
+        await request.save();
+        return res.status(200).send(`
+          <div style="font-family: sans-serif; text-align: center; padding: 3rem; background: #0f172a; color: #fff; height: 100vh;">
+            <h1 style="color: #fbbf24;">Onay Alındı (E-posta)</h1>
+            <p>E-posta onayınız kaydedildi. Şimdi ayarlar panelindeki onay bekleyen talepler kısmından da onaylamanız gerekmektedir (Çift Onay).</p>
+          </div>
+        `);
+      }
     }
 
     if (request.type === 'USERNAME_CHANGE') {
@@ -1072,23 +1114,40 @@ router.get('/approvals', verifyToken, async (req, res) => {
     });
     
     const now = Date.now();
-    const list = approvals.map(reqRecord => {
+    const list = [];
+
+    for (const reqRecord of approvals) {
       const isExpired = reqRecord.requestData?.expiresAt && reqRecord.requestData.expiresAt < now;
       let displayStatus = reqRecord.status;
       if (reqRecord.status === 'pending' && isExpired) {
         displayStatus = 'expired';
       }
-      return {
-        id: reqRecord.id,
-        type: reqRecord.type,
-        targetId: reqRecord.targetId,
-        requestData: reqRecord.requestData,
-        approvalsRequired: reqRecord.approvalsRequired,
-        approvalsReceived: reqRecord.approvalsReceived,
-        status: displayStatus,
-        createdAt: reqRecord.createdAt
-      };
-    });
+
+      let shouldShow = true;
+
+      // Admin veya CISO profil talepleri: Sadece CISO görebilir.
+      if (reqRecord.type === 'NAME_CHANGE' || reqRecord.type === 'USERNAME_CHANGE') {
+        const targetUser = await User.findByPk(reqRecord.targetId);
+        if (targetUser && (targetUser.role === 'admin' || targetUser.role === 'ciso')) {
+          if (req.user.role !== 'ciso') {
+            shouldShow = false;
+          }
+        }
+      }
+
+      if (shouldShow) {
+        list.push({
+          id: reqRecord.id,
+          type: reqRecord.type,
+          targetId: reqRecord.targetId,
+          requestData: reqRecord.requestData,
+          approvalsRequired: reqRecord.approvalsRequired,
+          approvalsReceived: reqRecord.approvalsReceived,
+          status: displayStatus,
+          createdAt: reqRecord.createdAt
+        });
+      }
+    }
 
     res.status(200).json({ approvals: list });
   } catch (error) {
@@ -1122,6 +1181,10 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Yönetici profil değişikliklerini sadece CISO onaylayabilir.' });
     }
 
+    if ((request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') && req.user.role === 'ciso') {
+      return res.status(403).json({ error: 'Yeni kullanıcı onaylama/reddetme işlemini sadece Sistem Yöneticisi (Admin) yapabilir.' });
+    }
+
     if (request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') {
       const user = await User.findByPk(request.targetId);
       if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
@@ -1150,24 +1213,50 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
       const user = await User.findByPk(request.targetId);
       if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-      request.status = 'approved';
-      await request.save();
+      const received = request.approvalsReceived || [];
+      const sig = 'CISO (Arayüz)';
+      if (!received.includes(sig)) {
+        received.push(sig);
+      }
+      request.approvalsReceived = received;
+      request.changed('approvalsReceived', true);
 
-      const oldName = user.fullName;
-      user.fullName = request.requestData.newFullName;
-      await user.save();
+      if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
+        request.status = 'approved';
+        await request.save();
 
-      logCisoAction('NAME_CHANGE_APPROVED', `İsim değişikliği onaylandı. Eski: ${oldName}, Yeni: ${user.fullName}`, ip);
+        const oldName = user.fullName;
+        user.fullName = request.requestData.newFullName;
+        await user.save();
+
+        logCisoAction('NAME_CHANGE_APPROVED', `İsim değişikliği onaylandı (Çift Onay). Eski: ${oldName}, Yeni: ${user.fullName}`, ip);
+      } else {
+        await request.save();
+      }
     } else if (request.type === 'USERNAME_CHANGE') {
       const user = await User.findByPk(request.targetId);
       if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-      request.status = 'approved';
-      await request.save();
+      const received = request.approvalsReceived || [];
+      const sig = 'CISO (Arayüz)';
+      if (!received.includes(sig)) {
+        received.push(sig);
+      }
+      request.approvalsReceived = received;
+      request.changed('approvalsReceived', true);
 
-      const oldUsername = user.username;
-      user.username = request.requestData.newUsername;
-      await user.save();
+      if (received.includes('CISO (E-posta)') && received.includes('CISO (Arayüz)')) {
+        request.status = 'approved';
+        await request.save();
+
+        const oldUsername = user.username;
+        user.username = request.requestData.newUsername;
+        await user.save();
+
+        logCisoAction('USERNAME_CHANGE_APPROVED', `Kullanıcı adı değişikliği onaylandı (Çift Onay). Eski: ${oldUsername}, Yeni: ${user.username}`, ip);
+      } else {
+        await request.save();
+      }
 
       logCisoAction('USERNAME_CHANGE_APPROVED', `Kullanıcı adı değişikliği onaylandı. Eski: ${oldUsername}, Yeni: ${user.username}`, ip);
     } else if (request.type === 'MODE_CHANGE') {
@@ -1284,6 +1373,112 @@ router.post('/kasa-login', async (req, res) => {
     return res.status(200).json({ token });
   }
   res.status(401).json({ error: 'Kasa şifresi hatalı.' });
+});
+
+// ============================================================
+// LOG DOSYASI YÖNETİM ROTALARI
+// ============================================================
+router.get('/log-file-status', verifyToken, async (req, res) => {
+  if (req.user.role !== 'ciso' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Yetkisiz erişim.' });
+  }
+  try {
+    const fs = require('fs');
+    const { SystemSettings } = require('../models');
+    const record = await SystemSettings.findByPk('kasa_settings');
+    let path = '/app/uploads/dms-audit.jsonl';
+    if (record && record.value?.logFilePath) {
+      path = record.value.logFilePath;
+    }
+    const exists = fs.existsSync(path);
+    res.status(200).json({ exists, path });
+  } catch (err) {
+    res.status(500).json({ error: 'Log dosyası durumu alınamadı.' });
+  }
+});
+
+router.post('/create-log-file', verifyToken, async (req, res) => {
+  if (req.user.role !== 'ciso' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Yetkisiz erişim.' });
+  }
+  try {
+    const fs = require('fs');
+    const { SystemSettings } = require('../models');
+    const record = await SystemSettings.findByPk('kasa_settings') || await SystemSettings.create({ key: 'kasa_settings', value: {} });
+    let path = record.value?.logFilePath || '/app/uploads/dms-audit.jsonl';
+    
+    fs.writeFileSync(path, '');
+    
+    const { logAction } = require('../utils/auditLogger');
+    logAction('LOG_FILE_CREATED', req.user.id, req.user.fullName, null, null, `Yeni log dosyası oluşturuldu: ${path}`, req.ip);
+
+    res.status(200).json({ message: 'Log dosyası başarıyla oluşturuldu.', path });
+  } catch (err) {
+    res.status(500).json({ error: 'Log dosyası oluşturulamadı.', details: err.message });
+  }
+});
+
+router.post('/import-log-file', verifyToken, async (req, res) => {
+  if (req.user.role !== 'ciso' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Yetkisiz erişim.' });
+  }
+  const { filePath } = req.body;
+  if (!filePath) {
+    return res.status(400).json({ error: 'Dosya yolu gereklidir.' });
+  }
+  try {
+    const fs = require('fs');
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Belirtilen dosya bulunamadı. Lütfen yolu kontrol edin.' });
+    }
+    
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n').filter(l => l.trim() !== '');
+    const parsedLogs = [];
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        const log = JSON.parse(lines[i]);
+        if (!log.action || !log.userName) {
+          throw new Error('Eksik alanlar');
+        }
+        parsedLogs.push(log);
+      } catch (parseErr) {
+        return res.status(400).json({ error: `Geçersiz log formatı. Satır: ${i + 1} geçerli bir log satırı değil.` });
+      }
+    }
+    
+    const { SystemSettings, AuditLog } = require('../models');
+    const record = await SystemSettings.findByPk('kasa_settings') || await SystemSettings.create({ key: 'kasa_settings', value: {} });
+    const val = record.value || {};
+    val.logFilePath = filePath;
+    record.value = val;
+    record.changed('value', true);
+    await record.save();
+
+    for (const log of parsedLogs) {
+      await AuditLog.findOrCreate({
+        where: {
+          action: log.action,
+          createdAt: new Date(log.createdAt),
+          details: log.details || ''
+        },
+        defaults: {
+          userId: log.userId || null,
+          userName: log.userName,
+          documentId: log.documentId || null,
+          documentName: log.documentName || null,
+          ipAddress: log.ipAddress || null
+        }
+      });
+    }
+
+    const { logAction } = require('../utils/auditLogger');
+    logAction('LOG_FILE_IMPORTED', req.user.id, req.user.fullName, null, null, `Dosya içe aktarıldı ve aktif log dosyası yapıldı: ${filePath}`, req.ip);
+
+    res.status(200).json({ message: 'Log dosyası başarıyla içe aktarıldı ve aktif olarak ayarlandı.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Log dosyası yüklenirken hata oluştu.', details: err.message });
+  }
 });
 
 module.exports = router;

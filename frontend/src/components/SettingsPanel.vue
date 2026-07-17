@@ -55,7 +55,7 @@
           <!-- Form B: Kullanıcı Adı Değiştirme -->
           <div class="sub-profile-section">
             <h5>Kullanıcı Adı Değişikliği (Doğrudan Güncellenir)</h5>
-            <form @submit.prevent="updateUserUsername" class="settings-form">
+            <form @submit.prevent="askConfirm('Kullanıcı adını güncellemek istediğinize emin misiniz?', updateUserUsername)" class="settings-form">
               <div class="form-group">
                 <input v-model="userUsername" type="text" placeholder="Kullanıcı adı..." required />
               </div>
@@ -70,7 +70,7 @@
           <!-- Form C: Şifre Değiştirme (Doğrudan) -->
           <div class="sub-profile-section">
             <h5>Şifre Değişikliği (Doğrudan Güncellenir)</h5>
-            <form @submit.prevent="updateUserPassword" class="settings-form">
+            <form @submit.prevent="askConfirm('Şifrenizi güncellemek istediğinize emin misiniz?', updateUserPassword)" class="settings-form">
               <div class="form-group">
                 <label>Mevcut Şifre</label>
                 <div class="password-input-wrapper">
@@ -158,13 +158,13 @@
 
         <hr class="section-divider" />
 
-        <!-- 2. ONAY BEKLEYEN TALEPLER -->
-        <div class="settings-section" v-if="isAdminOrCiso && approvalsList.length > 0">
-          <h4>⏳ Onay Bekleyen Talepler</h4>
-          <p class="section-desc">Kullanıcı kayıt başvurularını, isim değişikliklerini ve sistem modu geçişlerini doğrudan onaylayın veya reddedin.</p>
+        <!-- 2. ONAY BEKLEYEN DİĞER TALEPLER -->
+        <div class="settings-section" v-if="isAdminOrCiso && otherApprovals.length > 0">
+          <h4>⏳ Onay Bekleyen Profil & Sistem Talepleri</h4>
+          <p class="section-desc">Profil ismi veya sistem dağıtım modu değişikliklerini onaylayın.</p>
           
           <div class="approvals-list-wrapper">
-            <div v-for="req in approvalsList" :key="req.id" class="approval-row-card">
+            <div v-for="req in otherApprovals" :key="req.id" class="approval-row-card">
               <div class="approval-info-brief">
                 <span class="approval-type-badge">{{ getApprovalTypeLabel(req.type) }}</span>
                 <p class="approval-detail-text">{{ getApprovalDetailText(req) }}</p>
@@ -176,10 +176,37 @@
                 <small class="approval-meta-sub">
                   Verilen Onaylar: {{ req.approvalsReceived?.length > 0 ? req.approvalsReceived.join(', ') : 'Henüz onay verilmedi' }} ({{ req.approvalsReceived?.length || 0 }}/{{ req.approvalsRequired }} Onay)
                 </small>
+                
+                <!-- Geri sayım sayacı gösterimi (NAME_CHANGE ise) -->
+                <div v-if="req.type === 'NAME_CHANGE' && req.status === 'pending'" style="margin-top:0.4rem; font-size:0.7rem; color:#f59e0b; font-weight:600;">
+                  ⏳ CISO Onayı İçin Kalan Süre: {{ getWorkingDaysCountdown(req.createdAt, req.requestData?.expiresAt) }}
+                </div>
               </div>
               <div class="approval-actions" style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;" v-if="req.status === 'pending'">
-                <button class="btn-approval btn-approval--reject" @click="handleApprovalAction(req.id, 'reject')">Reddet</button>
-                <button class="btn-approval btn-approval--approve" @click="handleApprovalAction(req.id, 'approve')">Onayla</button>
+                <button class="btn-approval btn-approval--reject" @click="askConfirm('Bu profil/sistem talebini reddetmek istediğinize emin misiniz?', () => handleApprovalAction(req.id, 'reject'))">Reddet</button>
+                <button class="btn-approval btn-approval--approve" @click="askConfirm('Bu profil/sistem talebini onaylamak istediğinize emin misiniz?', () => handleApprovalAction(req.id, 'approve'))">Onayla</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2B. YENİ KULLANICI BAŞVURULARI (Sadece Admin Yönetebilir) -->
+        <div class="settings-section" v-if="currentUserRole === 'admin' && registrationApprovals.length > 0">
+          <h4>🔔 Yeni Kullanıcı Başvuruları</h4>
+          <p class="section-desc">Sisteme yeni kaydolmak isteyen kullanıcıların onay işlemlerini gerçekleştirin.</p>
+          
+          <div class="approvals-list-wrapper">
+            <div v-for="req in registrationApprovals" :key="req.id" class="approval-row-card">
+              <div class="approval-info-brief">
+                <span class="approval-type-badge">{{ getApprovalTypeLabel(req.type) }}</span>
+                <p class="approval-detail-text">{{ getApprovalDetailText(req) }}</p>
+                <small class="approval-meta-sub">
+                  Onay Verenler: {{ req.approvalsReceived?.length > 0 ? req.approvalsReceived.join(', ') : 'Henüz onay verilmedi' }} ({{ req.approvalsReceived?.length || 0 }}/{{ req.approvalsRequired }} Onay)
+                </small>
+              </div>
+              <div class="approval-actions" style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;" v-if="req.status === 'pending'">
+                <button class="btn-approval btn-approval--reject" @click="askConfirm('Bu kullanıcı başvurusunu reddetmek istediğinize emin misiniz?', () => handleApprovalAction(req.id, 'reject'))">Reddet</button>
+                <button class="btn-approval btn-approval--approve" @click="askConfirm('Bu kullanıcı başvurusunu onaylamak istediğinize emin misiniz?', () => handleApprovalAction(req.id, 'approve'))">Onayla</button>
               </div>
             </div>
           </div>
@@ -192,7 +219,7 @@
           <h4>🔐 Kasa Yönetici Şifresi</h4>
           <p class="section-desc">Kasa kilidini açmak için kullanılan yönetici şifresini güncelleyin.</p>
           
-          <form @submit.prevent="updateKasaCredentials" class="settings-form">
+          <form @submit.prevent="askConfirm('Kasa şifrenizi değiştirmek istediğinize emin misiniz?', updateKasaCredentials)" class="settings-form">
             
             <div class="form-group">
               <label>Yeni Şifre</label>
@@ -260,7 +287,7 @@
           <p class="section-desc">Sistemin çalışma modunu belirleyin. Mod değişikliği TÜM yöneticilerin (Admin) ortak onayı sonrasında geçerli olur.</p>
           <div class="form-group">
             <label>Aktif Mod</label>
-            <select v-model="systemMode" class="role-select" @change="updateSystemMode">
+            <select v-model="systemMode" class="role-select" @change="askConfirm('Sistem modunu değiştirmek istediğinize emin misiniz?', updateSystemMode)">
               <option value="single_pc">💻 Tek Bilgisayar (Single PC)</option>
               <option value="network_sync">🌐 Şirket İçi Ağ (Network/Online Sync)</option>
             </select>
@@ -286,7 +313,7 @@
                     type="checkbox" 
                     v-model="user.permissions.canRead" 
                     :disabled="user.role === 'ciso' || user.role === 'admin'"
-                    @change="togglePermission(user, 'canRead')" 
+                    @change="askConfirm('Okuma iznini değiştirmek istiyor musunuz?', () => togglePermission(user, 'canRead'))" 
                   />
                   <span>Oku</span>
                 </label>
@@ -295,7 +322,7 @@
                     type="checkbox" 
                     v-model="user.permissions.canWrite" 
                     :disabled="user.role === 'ciso' || user.role === 'admin'"
-                    @change="togglePermission(user, 'canWrite')" 
+                    @change="askConfirm('Yazma iznini değiştirmek istiyor musunuz?', () => togglePermission(user, 'canWrite'))" 
                   />
                   <span>Yaz</span>
                 </label>
@@ -305,7 +332,7 @@
                   v-model="user.role" 
                   class="user-role-select" 
                   :disabled="user.role === 'ciso' || (user.id === currentUserId && user.role === 'admin')"
-                  @change="changeRole(user)"
+                  @change="askConfirm('Kullanıcı rolünü değiştirmek istediğinize emin misiniz?', () => changeRole(user))"
                 >
                   <option value="user">Standart</option>
                   <option value="admin">Yönetici</option>
@@ -340,7 +367,7 @@
             <p v-if="verifiedEmail && isEmailVerified" class="status-detail">Doğrulanmış Alıcı: {{ verifiedEmail }}</p>
           </div>
 
-          <form @submit.prevent="sendVerificationCode" class="settings-form" style="margin-top:1rem">
+          <form @submit.prevent="askConfirm('E-posta bildirim adresini doğrulayıp kod göndermek istediğinize emin misiniz?', sendVerificationCode)" class="settings-form" style="margin-top:1rem">
             <div class="form-group">
               <label>Bildirim E-posta Adresi</label>
               <div class="email-input-group">
@@ -354,6 +381,24 @@
                 <button type="submit" class="btn-send-code" :disabled="isSendingCode || isVerifying">
                   {{ isSendingCode ? '...' : 'Kod Gönder' }}
                 </button>
+              </div>
+            </div>
+            
+            <!-- Alarm Maili Doğrulama Kodu Giriş Alanı -->
+            <div v-if="isVerifying" class="otp-verification-section" style="background: rgba(16, 185, 129, 0.03); border: 1px dashed rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 0.85rem; margin-top:0.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+              <p style="font-size: 0.7rem; color: #9ca3af; line-height: 1.4; margin: 0;">E-posta adresinize gönderilen 6 haneli doğrulama kodunu girin.</p>
+              <div class="otp-input-container" style="display: flex; gap: 0.4rem; justify-content: center;">
+                <input 
+                  v-model="verificationCode"
+                  type="text"
+                  maxLength="6"
+                  placeholder="6 Haneli Kod"
+                  style="width: 150px; height: 36px; background: rgba(15, 23, 42, 0.7); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 6px; text-align: center; color: #fff; font-size: 1.1rem; font-weight: 700; outline: none;"
+                />
+              </div>
+              <div style="display:flex; justify-content:flex-end; gap:0.5rem">
+                <button type="button" style="background: transparent; border: 1px solid rgba(255, 255, 255, 0.1); color: #9ca3af; padding: 0.35rem 0.75rem; font-size: 0.72rem; border-radius: 6px; cursor: pointer;" @click="isVerifying = false">Vazgeç</button>
+                <button type="button" style="background: #10b981; border: none; color: #fff; padding: 0.35rem 1rem; font-size: 0.72rem; font-weight: 700; border-radius: 6px; cursor: pointer;" @click="verifyAlarmCode">Doğrula</button>
               </div>
             </div>
 
@@ -370,7 +415,7 @@
           <h4>📨 SMTP Gönderici Ayarları</h4>
           <p class="section-desc">Onay ve alarm e-postalarını göndermek için kullanılacak SMTP hesabını doğrulayın.</p>
           
-          <form @submit.prevent="updateSmtpConfig" class="settings-form">
+          <form @submit.prevent="askConfirm('SMTP gönderici ayarlarını doğrulamak ve kaydetmek istediğinize emin misiniz?', updateSmtpConfig)" class="settings-form">
             <div class="form-group">
               <label>Gönderici E-posta (User)</label>
               <input v-model="smtpUser" type="email" placeholder="orn: dms-bildirim@sirketiniz.com" required />
@@ -387,6 +432,62 @@
 
             <button type="submit" class="btn-settings-save" :disabled="isSavingSmtp">
               {{ isSavingSmtp ? 'Göndericiyi Test Et ve Doğrula...' : 'Göndericiyi Test Et ve Doğrula' }}
+            </button>
+          </form>
+        </div>
+
+        <!-- 7B. LOG DOSYASI YÖNETİMİ (Sadece CISO ve Admin) -->
+        <div class="settings-section" v-if="isAdminOrCiso">
+          <h4>📁 Log Dosyası Yönetimi</h4>
+          <p class="section-desc">Sistem işlem günlüklerinin yazılacağı fiziksel log dosyasını yapılandırın. Loglar arayüzden sıfırlanamaz, ancak yedek dosyaları yükleyebilirsiniz.</p>
+          
+          <div class="log-status-card" style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 1rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <p style="margin:0; font-size:0.8rem; color:#9ca3af;">Aktif Log Yolu:</p>
+                <code style="font-size:0.75rem; color:#34d399; font-weight:700;">{{ logFilePath || '/app/uploads/dms-audit.jsonl' }}</code>
+              </div>
+              <span :style="{ background: logFileExists ? '#065f46' : '#991b1b', color: logFileExists ? '#34d399' : '#f87171', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: '700' }">
+                {{ logFileExists ? 'BAĞLI' : 'DOSYA BULUNAMADI' }}
+              </span>
+            </div>
+            
+            <div v-if="!logFileExists" style="margin-top:1rem; border-top:1px dashed rgba(255,255,255,0.08); padding-top:0.75rem;">
+              <p style="font-size:0.72rem; color:#ef4444; margin:0 0 0.5rem 0;">⚠️ Log dosyası disk üzerinde bulunamadı! Yeni bir kayıt dosyası oluşturmak ister misiniz?</p>
+              <button type="button" class="btn-approval btn-approval--approve" @click="askConfirm('Yeni boş bir log dosyası oluşturmak istediğinize emin misiniz?', createLogFile)">
+                Evet, Yeni Dosya Oluştur
+              </button>
+            </div>
+          </div>
+
+          <form @submit.prevent="askConfirm('Belirtilen log dosyasını içe aktarmak ve log yolunu değiştirmek istediğinize emin misiniz?', importLogFile)" class="settings-form">
+            <div class="form-group">
+              <label>Önceki Log Dosya Yolunu Belirt (İçe Aktar)</label>
+              <div style="display:flex; gap:0.5rem;">
+                <input v-model="importFilePath" type="text" placeholder="Örn: /app/uploads/eski-audit.jsonl" required style="flex:1;" />
+                <button type="submit" class="btn-settings-save" style="margin:0; padding:0.55rem 1rem; white-space:nowrap; font-size:0.75rem;">Dosyayı Yükle</button>
+              </div>
+            </div>
+          </form>
+        </div>
+        
+        <!-- 8. MESAİ SAATLERİ AYARI (Sadece Admin) -->
+        <div class="settings-section" v-if="currentUserRole === 'admin'">
+          <h4>🕒 CISO Onay Talebi Mesai Ayarı</h4>
+          <p class="section-desc">CISO onay bekleyen taleplerin 3 iş günü geri sayım takibinde kullanılan günlük mesai saatlerini belirleyin.</p>
+          <form @submit.prevent="askConfirm('Mesai saatlerini kaydetmek istediğinize emin misiniz?', saveWorkingHours)" class="settings-form">
+            <div style="display:flex; gap:0.75rem;">
+              <div class="form-group" style="flex:1;">
+                <label>Mesai Başlangıcı</label>
+                <input v-model="workingHoursStart" type="time" required />
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Mesai Bitişi</label>
+                <input v-model="workingHoursEnd" type="time" required />
+              </div>
+            </div>
+            <button type="submit" class="btn-settings-save" style="margin-top:0.5rem;">
+              Saat Ayarlarını Kaydet
             </button>
           </form>
         </div>
@@ -448,6 +549,60 @@ const isVerifying = ref(false)
 const isSavingSmtp = ref(false)
 
 const getKasaToken = () => localStorage.getItem('token') || ''
+
+// Alarm Mail Doğrulama Kodu
+const verificationCode = ref('')
+
+// Genel Onay Modalı Değişkenleri
+const isGlobalConfirmOpen = ref(false)
+const globalConfirmMessage = ref('')
+const globalConfirmTimer = ref(0)
+let globalConfirmAction = null
+let globalConfirmInterval = null
+
+function askConfirm(message, action) {
+  globalConfirmMessage.value = message;
+  globalConfirmAction = action;
+  isGlobalConfirmOpen.value = true;
+  globalConfirmTimer.value = 1; // 1 saniye inaktif
+  if (globalConfirmInterval) clearInterval(globalConfirmInterval);
+  globalConfirmInterval = setInterval(() => {
+    if (globalConfirmTimer.value > 0) {
+      globalConfirmTimer.value--;
+    } else {
+      clearInterval(globalConfirmInterval);
+    }
+  }, 1000);
+}
+
+function executeGlobalConfirm() {
+  isGlobalConfirmOpen.value = false;
+  if (globalConfirmAction) globalConfirmAction();
+}
+
+function cancelGlobalConfirm() {
+  isGlobalConfirmOpen.value = false;
+  fetchUsers();
+  fetchSettings();
+}
+
+// Mesai Saatleri Değişkenleri
+const workingHoursStart = ref('09:00')
+const workingHoursEnd = ref('18:00')
+
+// Log Dosyası Yönetim Değişkenleri
+const logFileExists = ref(true)
+const logFilePath = ref('')
+const importFilePath = ref('')
+
+// Bölümlenmiş onay listeleri
+const registrationApprovals = computed(() => {
+  return approvalsList.value.filter(req => req.type === 'STANDARD_USER_CREATION' || req.type === 'ADMIN_CREATION')
+})
+
+const otherApprovals = computed(() => {
+  return approvalsList.value.filter(req => req.type !== 'STANDARD_USER_CREATION' && req.type !== 'ADMIN_CREATION')
+})
 
 // Profil Bilgileri
 const currentUserRole = ref('')
@@ -541,11 +696,16 @@ async function fetchSettings() {
         smtpUser.value = data.settings.smtpConfig.auth?.user || ''
         smtpPass.value = data.settings.smtpConfig.auth?.pass || ''
       }
+      if (data.settings.workingHours) {
+        workingHoursStart.value = data.settings.workingHours.start || '09:00'
+        workingHoursEnd.value = data.settings.workingHours.end || '18:00'
+      }
     }
 
     if (isAdminOrCiso.value) {
       await fetchUsers()
       await fetchApprovals()
+      await checkLogFileStatus()
     }
   } catch (error) {
     console.error('[Settings] Ayar çekme hatası:', error)
@@ -910,6 +1070,132 @@ async function sendVerificationCode() {
   } finally {
     isSendingCode.value = false
   }
+}
+
+// Alarm E-posta Kodu Doğrulama
+async function verifyAlarmCode() {
+  if (!verificationCode.value) return
+  mailErrorDetail.value = ''
+  try {
+    const response = await fetch('/api/auth/verify-code', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({ email: alertEmail.value, code: verificationCode.value })
+    })
+    const data = await response.json()
+    if (response.ok) {
+      alert('E-posta başarıyla doğrulandı ve kaydedildi.');
+      isVerifying.value = false;
+      verificationCode.value = '';
+      fetchSettings();
+    } else {
+      mailErrorDetail.value = data.error || 'Doğrulama kodu geçersiz.';
+    }
+  } catch (e) {
+    mailErrorDetail.value = 'Sunucuyla bağlantı kurulamadı.';
+  }
+}
+
+// Mesai Saatlerini Kaydet (Sadece Admin)
+async function saveWorkingHours() {
+  try {
+    const response = await fetch('/api/auth/settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({
+        workingHours: { start: workingHoursStart.value, end: workingHoursEnd.value }
+      })
+    })
+    if (response.ok) {
+      alert('Mesai saatleri başarıyla kaydedildi.');
+      fetchSettings();
+    } else {
+      alert('Mesai saatleri kaydedilemedi.');
+    }
+  } catch (e) {
+    alert('Bağlantı hatası.');
+  }
+}
+
+// Log Durumu Kontrolleri
+async function checkLogFileStatus() {
+  try {
+    const response = await fetch('/api/auth/log-file-status', {
+      headers: { 'Authorization': `Bearer ${getKasaToken()}` }
+    })
+    if (response.ok) {
+      const data = await response.json()
+      logFileExists.value = data.exists;
+      logFilePath.value = data.path;
+    }
+  } catch (e) {
+    console.error('Log durumu alınamadı', e);
+  }
+}
+
+async function createLogFile() {
+  try {
+    const response = await fetch('/api/auth/create-log-file', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getKasaToken()}` }
+    })
+    if (response.ok) {
+      alert('Yeni log kayıt dosyası oluşturuldu.');
+      await checkLogFileStatus();
+    } else {
+      alert('Dosya oluşturulamadı.');
+    }
+  } catch (e) {
+    alert('Hata oluştu.');
+  }
+}
+
+async function importLogFile() {
+  if (!importFilePath.value) {
+    alert('Lütfen bir dosya yolu girin.');
+    return;
+  }
+  try {
+    const response = await fetch('/api/auth/import-log-file', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getKasaToken()}`
+      },
+      body: JSON.stringify({ filePath: importFilePath.value })
+    })
+    const data = await response.json()
+    if (response.ok) {
+      alert(data.message || 'Log dosyası başarıyla yüklendi.');
+      importFilePath.value = '';
+      await checkLogFileStatus();
+    } else {
+      alert(data.error || 'Log dosyası içe aktarılamadı.');
+    }
+  } catch (e) {
+    alert('Hata oluştu.');
+  }
+}
+
+// CISO Onay Talebi Kalan Süre Sayacı
+function getWorkingDaysCountdown(createdAtStr, expiresAtStr) {
+  const now = new Date();
+  const expiresAt = new Date(Number(expiresAtStr) || expiresAtStr);
+  if (now >= expiresAt) {
+    return 'SÜRE DOLDU (ZAMAN AŞIMI)';
+  }
+  const diffMs = expiresAt - now;
+  const totalMins = Math.floor(diffMs / (60 * 1000));
+  const days = Math.floor(totalMins / (24 * 60));
+  const hours = Math.floor((totalMins % (24 * 60)) / 60);
+  const mins = totalMins % 60;
+  return `${days} gün ${hours} saat ${mins} dakika`;
 }
 
 function closeDrawer() {
@@ -1482,5 +1768,41 @@ onMounted(() => {
   border-radius: 6px;
   line-height: 1.4;
   word-break: break-word;
+}
+
+/* Genel Onay Modalı Stilleri */
+.global-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 7, 18, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 12000;
+}
+.global-confirm-card {
+  background: #111827;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 380px;
+  padding: 1.75rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+.global-confirm-card h4 {
+  color: #a78bfa;
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem 0;
+}
+.global-confirm-card p {
+  color: #9ca3af;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 0 0 1.25rem 0;
 }
 </style>

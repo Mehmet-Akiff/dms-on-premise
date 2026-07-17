@@ -31,10 +31,28 @@
       <button class="btn-cancel" @click="cancelEdit" :disabled="isSaving">
         Vazgeç
       </button>
-      <button class="btn-save" @click="saveContent" :disabled="isSaving">
+      <button class="btn-save" @click="triggerSaveConfirm" :disabled="isSaving">
         <span v-if="isSaving" class="spinner-xs"></span>
         {{ isSaving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet' }}
       </button>
+    </div>
+
+    <!-- Kaydetme Onay Modalı -->
+    <div v-if="isSaveConfirmOpen" class="editor-confirm-overlay" @click.self="isSaveConfirmOpen = false">
+      <div class="editor-confirm-card">
+        <h4>📝 Belge Değişikliklerini Kaydet</h4>
+        <p>"<strong>{{ documentName || 'Belge' }}</strong>" içeriğinde yaptığınız düzenlemeleri kaydetmek istediğinize emin misiniz?</p>
+        <div class="confirm-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.2rem;">
+          <button class="btn-cancel" @click="isSaveConfirmOpen = false">Vazgeç</button>
+          <button 
+            class="btn-save" 
+            :disabled="saveConfirmTimer > 0"
+            @click="executeSave"
+          >
+            {{ saveConfirmTimer > 0 ? `Evet, Kaydet (${saveConfirmTimer}s)` : 'Evet, Kaydet' }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -48,6 +66,10 @@ const props = defineProps({
   documentId: {
     type: String,
     required: true
+  },
+  documentName: {
+    type: String,
+    default: ''
   },
   initialText: {
     type: String,
@@ -103,6 +125,29 @@ onMounted(() => {
 watch(() => props.initialText, () => {
   loadInitialContent()
 })
+
+const isSaveConfirmOpen = ref(false)
+const saveConfirmTimer = ref(0)
+let saveConfirmInterval = null
+
+function triggerSaveConfirm() {
+  isSaveConfirmOpen.value = true
+  saveConfirmTimer.value = 1
+  if (saveConfirmInterval) clearInterval(saveConfirmInterval)
+  saveConfirmInterval = setInterval(() => {
+    if (saveConfirmTimer.value > 0) {
+      saveConfirmTimer.value--
+    } else {
+      clearInterval(saveConfirmInterval)
+      saveConfirmInterval = null
+    }
+  }, 1000)
+}
+
+function executeSave() {
+  isSaveConfirmOpen.value = false
+  saveContent()
+}
 
 async function saveContent() {
   if (!props.documentId) return
@@ -320,5 +365,45 @@ function cancelEdit() {
   background: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.4);
   color: #ef4444;
+}
+
+/* Onay Modalı Stilleri */
+.editor-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 7, 18, 0.7);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 11000;
+  pointer-events: auto;
+}
+
+.editor-confirm-card {
+  background: #111827;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;
+  padding: 1.75rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.editor-confirm-card h4 {
+  color: #a78bfa;
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.editor-confirm-card p {
+  color: #9ca3af;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 0 0 1.25rem 0;
 }
 </style>

@@ -294,11 +294,19 @@ router.get('/audit-logs', verifyToken, requireCiso, async (req, res) => {
     const action = req.query.action || null;
     const startDate = req.query.startDate || null;
     const endDate = req.query.endDate || null;
+    const username = req.query.username || null;
+    const details = req.query.details || null;
 
     // Filtre koşulları
     const where = {};
     if (action) {
       where.action = action;
+    }
+    if (username) {
+      where.userName = { [Op.iLike]: `%${username}%` };
+    }
+    if (details) {
+      where.details = { [Op.iLike]: `%${details}%` };
     }
     if (startDate || endDate) {
       where.createdAt = {};
