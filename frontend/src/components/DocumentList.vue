@@ -891,14 +891,7 @@ function toggleSelectAll() {
   }
 }
 
-function toggleSelect(id) {
-  const idx = selectedIds.value.indexOf(id);
-  if (idx > -1) {
-    selectedIds.value.splice(idx, 1);
-  } else {
-    selectedIds.value.push(id);
-  }
-}
+
 
 // Toplu silme onay modalını tetikle
 function triggerBulkDelete() {

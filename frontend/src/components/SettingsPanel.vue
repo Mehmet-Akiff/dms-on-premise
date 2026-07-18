@@ -631,10 +631,8 @@ function getActionLabel(action) {
   return labels[action] || action;
 }
 
-const alertEmail = ref('')
 const verifiedEmail = ref('')
 const alertThreshold = ref(3)
-const isEmailVerified = ref(false)
 const doubleApprovalEnabled = ref(false)
 
 const smtpHost = ref('smtp.gmail.com')
@@ -648,14 +646,9 @@ const mailErrorDetail = ref('')
 const smtpErrorText = ref('')
 
 const isSavingCreds = ref(false)
-const isSendingCode = ref(false)
-const isVerifying = ref(false)
 const isSavingSmtp = ref(false)
 
 const getKasaToken = () => localStorage.getItem('token') || ''
-
-// Alarm Mail Doğrulama Kodu
-const verificationCode = ref('')
 
 // Genel Onay Modalı Değişkenleri
 const isGlobalConfirmOpen = ref(false)
@@ -789,10 +782,8 @@ async function fetchSettings() {
     if (response.ok) {
       const data = await response.json()
       kasaUsername.value = data.settings.masterUsername
-      alertEmail.value = data.settings.alertEmail || ''
       verifiedEmail.value = data.settings.verifiedAlertEmail || ''
       alertThreshold.value = data.settings.alertThreshold || 3
-      isEmailVerified.value = data.settings.isEmailVerified || false
       systemMode.value = data.mode || 'single_pc'
       doubleApprovalEnabled.value = data.settings.doubleApprovalEnabled || false
       if (currentUserRole.value === 'ciso') {
@@ -1183,37 +1174,6 @@ async function updateSmtpConfig() {
   }
 }
 
-// Doğrulama Kodu Gönder
-async function sendVerificationCode() {
-  if (!alertEmail.value) return
-  isSendingCode.value = true
-  mailErrorDetail.value = ''
-
-  try {
-    const response = await fetch('/api/auth/send-verification', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getKasaToken()}`
-      },
-      body: JSON.stringify({ email: alertEmail.value })
-    })
-
-    const data = await response.json()
-
-    if (response.ok) {
-      isVerifying.value = true
-      toast.info('Doğrulama kodu e-posta adresinize gönderildi.')
-    } else {
-      mailErrorDetail.value = `${data.error || 'Gönderim Hatası'}: ${data.message || ''}`
-    }
-  } catch (error) {
-    mailErrorDetail.value = 'Sunucuyla bağlantı kurulamadı.'
-  } finally {
-    isSendingCode.value = false
-  }
-}
-
 // E-posta Doğrulama Kodu Gönder (Profil e-posta değişikliği)
 async function sendEmailOtp() {
   if (!userEmail.value) return;
@@ -1278,33 +1238,6 @@ async function verifyEmailOtp() {
     }
   } catch (e) {
     toast.error('Sunucu bağlantısı kurulamadı.');
-  }
-}
-
-// Alarm E-posta Kodu Doğrulama
-async function verifyAlarmCode() {
-  if (!verificationCode.value) return
-  mailErrorDetail.value = ''
-  try {
-    const response = await fetch('/api/auth/verify-code', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getKasaToken()}`
-      },
-      body: JSON.stringify({ email: alertEmail.value, code: verificationCode.value })
-    })
-    const data = await response.json()
-    if (response.ok) {
-      toast.success('E-posta başarıyla doğrulandı ve kaydedildi.')
-      isVerifying.value = false;
-      verificationCode.value = '';
-      fetchSettings();
-    } else {
-      mailErrorDetail.value = data.error || 'Doğrulama kodu geçersiz.';
-    }
-  } catch (e) {
-    mailErrorDetail.value = 'Sunucuyla bağlantı kurulamadı.';
   }
 }
 
@@ -1712,23 +1645,6 @@ onMounted(() => {
   background: rgba(15, 23, 42, 0.8);
 }
 
-.email-input-group {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.btn-send-code {
-  background: rgba(139, 92, 246, 0.1);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #a78bfa;
-  padding: 0.5rem 1rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  border-radius: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
 .btn-settings-save {
   color: #fff;
   border: none;
@@ -1983,12 +1899,6 @@ onMounted(() => {
   background: rgba(34, 197, 94, 0.08);
   border: 1px solid rgba(34, 197, 94, 0.2);
   color: #4ade80;
-}
-
-.verification-status-box.status--unverified {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #f87171;
 }
 
 .status-dot {

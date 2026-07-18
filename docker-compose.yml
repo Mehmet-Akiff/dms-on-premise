@@ -1,16 +1,13 @@
 # ============================================================
 # DMS On-Premise - Docker Compose Yapılandırması
-# Versiyon: 3.8
 # Servisler: frontend, backend, ai-service, db
 # Ağ: dms-network (bridge, izole)
 # ============================================================
 
-version: '3.8'
-
 services:
   # --------------------------------------------------------
   # 1. FRONTEND - Vue 3 (Vite) + Nginx
-  # Host'a açık port: 80
+  # Host'a açık tek port: 80
   # --------------------------------------------------------
   frontend:
     build:
@@ -27,19 +24,23 @@ services:
 
   # --------------------------------------------------------
   # 2. BACKEND - Node.js (Express)
-  # Host'a açık port: 3000
+  # Dış dünyaya kapalıdır, sadece Nginx proxy üzerinden erişilir.
   # --------------------------------------------------------
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: dms_backend
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgres://dms_user:dms_secure_pass@db:5432/dms_db
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
       - AI_SERVICE_URL=http://ai-service:8000
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_DEFAULT_PASSWORD=${ADMIN_DEFAULT_PASSWORD}
+      - CISO_DEFAULT_PASSWORD=${CISO_DEFAULT_PASSWORD}
+      - KASA_DEFAULT_PASSWORD=${KASA_DEFAULT_PASSWORD}
     volumes:
       - upload-data:/app/uploads
     networks:
@@ -59,19 +60,18 @@ services:
 
   # --------------------------------------------------------
   # 3. AI SERVICE - Python (FastAPI + Tesseract + SpaCy)
-  # Host'a port AÇILMIYOR (tamamen izole)
+  # Dış dünyaya kapalıdır, sadece backend üzerinden erişilir.
   # --------------------------------------------------------
   ai-service:
     build:
       context: ./ai-service
       dockerfile: Dockerfile
     container_name: dms_ai_service
-    # Yerel erişim için port açıldı
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       - TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
-      - DATABASE_URL=postgres://dms_user:dms_secure_pass@db:5432/dms_db
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
     volumes:
       - upload-data:/app/shared-uploads
     networks:
@@ -82,18 +82,17 @@ services:
 
   # --------------------------------------------------------
   # 4. DATABASE - PostgreSQL 15
-  # Host'a port AÇILMIYOR (tamamen izole)
+  # Dış dünyaya kapalıdır, sadece iç ağdan erişilebilir.
   # --------------------------------------------------------
   db:
     image: postgres:15-alpine
     container_name: dms_db
-    # ports yok - sadece iç ağdan erişilebilir
     environment:
-      - POSTGRES_USER=dms_user
-      - POSTGRES_PASSWORD=dms_secure_pass
-      - POSTGRES_DB=dms_db
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dms_user -d dms_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5

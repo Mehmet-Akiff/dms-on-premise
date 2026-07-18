@@ -22,18 +22,23 @@ function getSensitivityWhere(user) {
   
   return {
     [Op.or]: [
-      { uploadedBy: user.id },
+      { userId: user.id },
       { sensitivity: { [Op.in]: allowedSensitivities } }
     ]
   };
 }
 
-function getSensitivitySql(user) {
+function getSensitivitySql(user, replacements = null) {
   if (!user) return " AND d.sensitivity = 'public'";
   if (user.role === 'admin') return "";
   
   const allowedSens = user.role === 'ciso' ? "'public', 'medium'" : "'public'";
-  return ` AND (d.uploaded_by = '${user.id}' OR d.sensitivity IN (${allowedSens}))`;
+  if (replacements) {
+    replacements.currentUserId = user.id;
+    return ` AND (d.user_id = :currentUserId OR d.sensitivity IN (${allowedSens}))`;
+  }
+  const safeUserId = String(user.id).replace(/[^a-zA-Z0-9-]/g, '');
+  return ` AND (d.user_id = '${safeUserId}' OR d.sensitivity IN (${allowedSens}))`;
 }
 
 function hasSensitivityAccess(document, user) {
@@ -42,7 +47,7 @@ function hasSensitivityAccess(document, user) {
   if (user.role === 'admin') return true;
   
   // Kendi yüklediği belgeye her zaman erişebilir
-  if (document.uploadedBy === user.id || document.uploaded_by === user.id) return true;
+  if (document.userId === user.id || document.user_id === user.id) return true;
   
   if (user.role === 'ciso') {
     return document.sensitivity === 'public' || document.sensitivity === 'medium';
@@ -725,7 +730,7 @@ router.post('/upload', verifyToken, requireWritePermission, upload.single('file'
 // DELETE /api/documents/clear-ghosts — Hayalet PENDING Kayıtlarını Temizle
 // ============================================================
 
-router.delete('/clear-ghosts', async (req, res) => {
+router.delete('/clear-ghosts', verifyToken, requireAdmin, async (req, res) => {
   try {
     console.log('[TEMİZLİK] Hayalet PENDING kayıtları temizleniyor...');
 
@@ -883,7 +888,7 @@ router.get('/search', verifyToken, async (req, res) => {
     let queryStr = '';
     const isFuzzy = mode === 'fuzzy';
     const replacements = {};
-    let extraFilters = getSensitivitySql(req.user) + ' AND d.deleted_at IS NULL';
+    let extraFilters = getSensitivitySql(req.user, replacements) + ' AND d.deleted_at IS NULL';
 
     // 1. Negatif (hariç tutma) ve Pozitif kelimeleri ayrıştır
     const excludeWords = [];
@@ -1167,7 +1172,7 @@ router.get('/ai-search', verifyToken, async (req, res) => {
 
     // 2. Çözümlenen parametrelerle iç arama sorgumuzu çalıştıralım
     // Filtreler
-    let extraFilters = getSensitivitySql(req.user) + ' AND d.deleted_at IS NULL';
+    let extraFilters = getSensitivitySql(req.user, replacements) + ' AND d.deleted_at IS NULL';
 
     if (detectedFileType === 'pdf') {
       extraFilters += ` AND d.mime_type = 'application/pdf'`;

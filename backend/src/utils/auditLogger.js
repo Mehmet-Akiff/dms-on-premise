@@ -5,7 +5,9 @@
  * Çift imza desteği sayesinde hem Express request nesnesiyle hem de doğrudan sistem parametreleriyle çalışabilir.
  */
 
+const fs = require('fs');
 const AuditLog = require('../models/AuditLog');
+const { SystemSettings } = require('../models');
 
 /**
  * @param {Object|string} reqOrAction - Express request nesnesi veya doğrudan aksiyon adı
@@ -67,8 +69,6 @@ function logAction(
 
   AuditLog.create(logData).then(async (newLog) => {
     try {
-      const fs = require('fs');
-      const { SystemSettings } = require('../models');
       const record = await SystemSettings.findByPk('kasa_settings');
       let path = '/app/uploads/dms-audit.jsonl';
       if (record && record.value?.logFilePath) {
@@ -85,9 +85,15 @@ function logAction(
         ipAddress: newLog.ipAddress,
         createdAt: newLog.createdAt
       }) + '\n';
-      fs.appendFileSync(path, logLine);
+      
+      // Asenkron olarak dosyaya ekleme
+      fs.appendFile(path, logLine, (err) => {
+        if (err) {
+          console.warn('[AUDIT_LOG_FILE_ERR] Log dosyasına yazılamadı:', err.message);
+        }
+      });
     } catch (fsErr) {
-      console.warn('[AUDIT_LOG_FILE_ERR] Log dosyasına yazılamadı:', fsErr.message);
+      console.warn('[AUDIT_LOG_FILE_ERR] Ayarlar çekilemedi veya dosya yolu bulunamadı:', fsErr.message);
     }
   }).catch(err => {
     console.error('[AUDIT_LOG_HATA] İşlem geçmişi kaydedilemedi:', err.message);
