@@ -6,7 +6,7 @@
         <div class="stat-icon">📊</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.totalDocuments }}</span>
-          <span class="stat-label">Toplam Doküman</span>
+          <span class="stat-label">{{ $t('dashboard.totalDocs') }}</span>
         </div>
         <div class="stat-glow stat-glow--blue"></div>
       </div>
@@ -15,7 +15,7 @@
         <div class="stat-icon">⏱️</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.last24h }}</span>
-          <span class="stat-label">Son 24 Saat</span>
+          <span class="stat-label">{{ $t('dashboard.last24h') }}</span>
         </div>
         <div class="stat-glow stat-glow--green"></div>
       </div>
@@ -24,7 +24,7 @@
         <div class="stat-icon">📅</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.last7d }}</span>
-          <span class="stat-label">Son 7 Gün</span>
+          <span class="stat-label">{{ $t('dashboard.last7d') }}</span>
         </div>
         <div class="stat-glow stat-glow--purple"></div>
       </div>
@@ -33,7 +33,7 @@
         <div class="stat-icon">🗑️</div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.trashCount }}</span>
-          <span class="stat-label">Çöp Kutusu</span>
+          <span class="stat-label">{{ $t('dashboard.trash') }}</span>
         </div>
         <div class="stat-glow stat-glow--red"></div>
       </div>
@@ -47,7 +47,7 @@
           <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
           <line x1="12" y1="22.08" x2="12" y2="12"/>
         </svg>
-        Kategoriye Göre Dağılım
+        {{ $t('dashboard.categoryDist') }}
       </h4>
       <div class="category-bars">
         <div 

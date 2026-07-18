@@ -20,26 +20,29 @@
             <span :class="['role-badge', 'role-badge--' + currentUserRole]">
               {{ getRoleLabel(currentUserRole) }}
             </span>
-            <span class="header-username" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.05); padding: 0.25rem 0.6rem; border-radius: 6px;">{{ currentUserFullName }}</span>
+            <span class="header-username" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.05); padding: 0.25rem 0.6rem; border-radius: 6px;">{{ formatFullName(currentUserFullName) }}</span>
           </div>
 
+          <button class="btn-settings-toggle" @click="toggleLanguage" title="Dil Değiştir / Change Language">
+            🌍 {{ locale === 'tr' ? 'EN' : 'TR' }}
+          </button>
           <button v-if="isCiso" class="btn-audit-toggle" @click="isAuditLogOpen = true" title="Sistem Günlükleri">
-            📋 Sistem Günlükleri
+            📋 {{ $t('nav.documents') === 'Documents' ? 'Audit Logs' : 'Sistem Günlükleri' }}
           </button>
           <button class="btn-settings-toggle" @click="isNotificationsOpen = true" title="Bildirimler & Onay Talepleri" style="position:relative;">
-            🔔 Bildirimler
+            🔔 {{ $t('nav.documents') === 'Documents' ? 'Notifications' : 'Bildirimler' }}
             <span v-if="pendingApprovalsCount > 0" class="notif-badge" style="position:absolute; top:-5px; right:-5px; background:#ef4444; color:#fff; font-size:0.65rem; font-weight:800; padding:0.15rem 0.35rem; border-radius:999px; border:2px solid var(--bg-secondary); min-width:18px; text-align:center; box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);">
               {{ pendingApprovalsCount }}
             </span>
           </button>
           <button v-if="currentUserRole === 'admin' || currentUserRole === 'ciso'" class="btn-settings-toggle" @click="isUsersModalOpen = true" title="Kullanıcı Listesi & Çevrimiçi Takip">
-            👥 Kullanıcı Listesi
+            👥 {{ $t('nav.users') }}
           </button>
           <button class="btn-settings-toggle" @click="isSettingsOpen = true" title="Kasa Ayarları">
-            ⚙️ Kasa Ayarları
+            ⚙️ {{ $t('nav.settings') }}
           </button>
           <button class="btn-lock-toggle" @click="promptLockKasa" title="Güvenli Çıkış (Sistemi Kilitle)">
-            🔒 Güvenli Çıkış
+            🔒 {{ $t('nav.logout') }}
           </button>
           <div class="header-status">
             <span class="status-indicator status-indicator--online"></span>
@@ -159,6 +162,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import FileUpload from './components/FileUpload.vue'
 import DocumentList from './components/DocumentList.vue'
 import SearchBar from './components/SearchBar.vue'
@@ -176,6 +180,20 @@ const isAuditLogOpen = ref(false)
 const isUsersModalOpen = ref(false)
 const isNotificationsOpen = ref(false)
 const isKasaLocked = ref(true)
+
+const { t, locale } = useI18n()
+
+function toggleLanguage() {
+  const newLocale = locale.value === 'tr' ? 'en' : 'tr';
+  locale.value = newLocale;
+  localStorage.setItem('dms_locale', newLocale);
+}
+
+function formatFullName(name) {
+  if (!name) return '';
+  return name.replace(/Sistem Y.*neticisi/gi, 'Sistem Yöneticisi')
+             .replace(/G.*venlik Y.*neticisi/gi, 'Güvenlik Yöneticisi');
+}
 
 const isLogoutConfirmOpen = ref(false)
 const logoutConfirmTimer = ref(0)
@@ -231,8 +249,8 @@ function onStatClick(type) {
 
 function getRoleLabel(role) {
   if (role === 'ciso') return '🛡️ CISO'
-  if (role === 'admin') return '🔑 Yönetici'
-  return '👤 Standart'
+  if (role === 'admin') return locale.value === 'tr' ? '🔑 Yönetici' : '🔑 Admin'
+  return locale.value === 'tr' ? '👤 Standart' : '👤 Standard'
 }
 
 function updateUserInfo() {
@@ -295,11 +313,13 @@ onMounted(() => {
   updateUserInfo();
   window.addEventListener('kasa-unlocked', updateUserInfo);
   window.addEventListener('kasa-lock', updateUserInfo);
+  window.addEventListener('profile-updated', updateUserInfo);
 })
 
 onUnmounted(() => {
   window.removeEventListener('kasa-unlocked', updateUserInfo);
   window.removeEventListener('kasa-lock', updateUserInfo);
+  window.removeEventListener('profile-updated', updateUserInfo);
   if (logoutTimerInterval) clearInterval(logoutTimerInterval);
 })
 

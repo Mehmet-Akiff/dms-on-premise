@@ -10,7 +10,7 @@
               <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
           </div>
-          <h2>DMS GÜVENLİK DUVARI</h2>
+          <h2>{{ $t('auth.loginTitle') || 'DMS GÜVENLİK DUVARI' }}</h2>
           <p class="lock-desc">Sisteme erişebilmek için giriş yapın veya kayıt olun.</p>
         </div>
 
@@ -22,7 +22,7 @@
             :class="{ active: activeTab === 'login' }"
             @click="switchTab('login')"
           >
-            👤 Giriş Yap
+            👤 {{ $t('nav.login') || 'Giriş Yap' }}
           </button>
           <button 
             type="button" 
@@ -45,7 +45,7 @@
         <!-- 1. GİRİŞ YAP FORMU -->
         <form v-if="activeTab === 'login'" @submit.prevent="handleLogin" class="lock-form">
           <div class="input-group">
-            <label>Kullanıcı Adı</label>
+            <label>{{ $t('auth.username') || 'Kullanıcı Adı' }}</label>
             <input 
               v-model="loginUsername" 
               type="text" 
@@ -56,7 +56,7 @@
           </div>
 
           <div class="input-group">
-            <label>Şifre</label>
+            <label>{{ $t('auth.password') || 'Şifre' }}</label>
             <div class="password-input-wrapper">
               <input 
                 v-model="loginPassword" 
@@ -90,7 +90,7 @@
 
           <button type="submit" class="btn-unlock" :disabled="isLoading">
             <span v-if="isLoading" class="spinner-xs"></span>
-            {{ isLoading ? 'Giriş Yapılıyor...' : 'Giriş Yap' }}
+            {{ isLoading ? 'Giriş Yapılıyor...' : ($t('auth.loginBtn') || 'Giriş Yap') }}
           </button>
         </form>
 

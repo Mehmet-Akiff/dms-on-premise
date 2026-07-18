@@ -917,6 +917,9 @@ async function updateUserFullName() {
     const data = await response.json()
     if (response.ok) {
       toast.success(data.message || 'Profil değişiklik talebi iletildi.')
+      if (!data.pendingApproval) {
+        window.dispatchEvent(new Event('profile-updated'));
+      }
       await fetchApprovals()
     } else {
       toast.error(data.error || 'Talep iletilemedi.')
@@ -946,6 +949,7 @@ async function updateUserUsername() {
       }
       toast.success(data.message || 'Kullanıcı adı başarıyla güncellendi.')
       updateProfileInfo();
+      window.dispatchEvent(new Event('profile-updated'));
       window.dispatchEvent(new Event('kasa-unlocked'));
     } else {
       toast.error(data.error || 'Kullanıcı adı güncellenemedi.')
@@ -1224,6 +1228,7 @@ async function verifyEmailOtp() {
     const data = await response.json();
     if (response.ok) {
       toast.success('E-posta adresiniz başarıyla güncellendi!');
+      window.dispatchEvent(new Event('profile-updated'));
       emailOtpSent.value = false;
       emailOtp.value = '';
       userEmail.value = '';
