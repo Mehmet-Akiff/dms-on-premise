@@ -856,57 +856,57 @@ router.put('/profile', verifyToken, async (req, res) => {
 
     // 3. İsim Değişikliği (Admin veya CISO ise Onaya Gider)
     if (fullName && fullName !== user.fullName) {
-      if (user.role === 'admin' || user.role === 'ciso') {
-        const targetEmail = user.role === 'ciso' ? user.email : cisoEmail;
-        const waitSeconds = checkAndRecordEmailLimit(targetEmail, ip, user.role);
-        if (waitSeconds > 0) {
-          const minStr = waitSeconds >= 60 ? `${Math.ceil(waitSeconds / 60)} dakika` : `${waitSeconds} saniye`;
-          return res.status(429).json({ 
-            error: 'E-posta limitine takıldınız.', 
-            message: `Yeni bir onay maili göndermek için lütfen ${minStr} bekleyin.` 
-          });
-        }
-
-        const token = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-        await ApprovalRequest.create({
-          type: 'NAME_CHANGE',
-          targetId: user.id,
-          requestData: { fullName: fullName, oldFullName: user.fullName, newFullName: fullName, expiresAt },
-          approvalsRequired: 1,
-          status: 'pending',
-          token
-        });
-
-        // CISO veya kendisine mail gönder
-        try {
-          const transporter = getMailTransporter(settings.smtpConfig);
-          const fromUser = settings.smtpConfig?.auth?.user || 'security@dms.com';
-          await transporter.sendMail({
-            from: `"DMS Security" <${fromUser}>`,
-            to: targetEmail,
-            subject: 'DMS - Ad Soyad Değişikliği Onay Talebi',
-            text: `${user.role === 'ciso' ? 'CISO' : 'Yönetici'} ${user.username} gerçek ismini "${fullName}" yapmak istiyor.\n\nLütfen aşağıdaki 6 haneli güvenlik kodunu DMS Bildirim panelindeki ilgili alana girerek onaylayın:\n\nGüvenlik Kodu: ${token}`
-          });
-        } catch (mailErr) {
-          console.warn('Onay maili gönderilemedi:', mailErr.message);
-        }
-
-        console.log(`\n[NAME_CHANGE ONAY GÜVENLİK KODU] Güvenlik Kodu: ${token}\n`);
-        return res.status(202).json({ 
-          message: 'İsim değişikliği talebi alındı. E-posta onay kodu veya onay paneli bekleniyor.',
-          pendingApproval: true,
-          token
-        });
-      } else {
-        const oldName = user.fullName;
-        user.fullName = fullName;
-        if (user.role === 'ciso') {
-          logCisoAction('NAME_CHANGE', `CISO ismini güncelledi. Eski: ${oldName}, Yeni: ${fullName}`, ip);
-        } else {
-          logAction('NAME_CHANGE', user.id, user.fullName, null, null, `İsim güncellendi. Eski: ${oldName}, Yeni: ${fullName}`, ip);
-        }
+      let targetEmail = user.role === 'ciso' ? user.email : cisoEmail;
+      
+      if (!targetEmail || targetEmail === 'ciso@dms.com') {
+        return res.status(400).json({ error: "Sistemde CISO (G�venlik Y�neticisi) e-postas� tan�ml� olmad��� i�in onay maili g�nderilemiyor." });
       }
+
+      const waitSeconds = checkAndRecordEmailLimit(targetEmail, ip, user.role);
+      if (waitSeconds > 0) {
+        const minStr = waitSeconds >= 60 ? Math.ceil(waitSeconds / 60) + ' dakika' : waitSeconds + ' saniye';
+        return res.status(429).json({ 
+          error: 'E-posta limitine tak�ld�n�z.', 
+          message: 'Yeni bir onay maili g�ndermek i�in l�tfen ' + minStr + ' bekleyin.' 
+        });
+      }
+
+      const token = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+      await ApprovalRequest.create({
+        type: 'NAME_CHANGE',
+        targetId: user.id,
+        requestData: { fullName: fullName, oldFullName: user.fullName, newFullName: fullName, expiresAt },
+        approvalsRequired: 1,
+        status: 'pending',
+        token
+      });
+
+      try {
+        const transporter = getMailTransporter(settings.smtpConfig);
+        const fromUser = settings.smtpConfig?.auth?.user || 'security@dms.com';
+        await transporter.sendMail({
+          from: '"DMS Security" <' + fromUser + '>',
+          to: targetEmail,
+          subject: 'DMS - Ad Soyad De�i�ikli�i Onay Talebi',
+          text: 'Kullan�c� ' + user.username + ' (' + user.role + ') ger�ek ismini "' + fullName + '" yapmak istiyor.
+
+L�tfen a�a��daki 6 haneli g�venlik kodunu DMS Bildirim panelindeki ilgili alana girerek onaylay�n:
+
+G�venlik Kodu: ' + token
+        });
+      } catch (mailErr) {
+        console.warn('Onay maili g�nderilemedi:', mailErr.message);
+      }
+
+      console.log('
+[NAME_CHANGE ONAY G�VENL�K KODU] G�venlik Kodu: ' + token + '
+');
+      return res.status(202).json({ 
+        message: '�sim de�i�ikli�i talebi al�nd�. E-posta onay kodu veya onay paneli bekleniyor.',
+        pendingApproval: true,
+        token
+      });
     }
 
     await user.save();
@@ -1280,7 +1280,7 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
 
     if ((request.type === 'STANDARD_USER_CREATION' || request.type === 'ADMIN_CREATION') && req.user.role === 'ciso') {
       await t.rollback();
-      return res.status(403).json({ error: 'Yeni kullanıcı onaylama/reddetme işlemini sadece Sistem Yöneticisi (Admin) yapabilir.' });
+      return res.status(403).json({ error: 'Yeni kullanıcı onaylama/reddetme işlemini sadece Sistem Yoneticisi (Admin) yapabilir.' });
     }
 
     const received = request.approvalsReceived || [];

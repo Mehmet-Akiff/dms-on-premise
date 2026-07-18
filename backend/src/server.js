@@ -264,7 +264,7 @@ const startServer = async () => {
       if (!adminExists) {
         const passwordHash = await bcrypt.hash('admin', 10);
         await User.create({
-          fullName: 'Sistem Yöneticisi',
+          fullName: 'Sistem Yoneticisi',
           username: 'admin',
           email: 'admin@dms.com',
           passwordHash,

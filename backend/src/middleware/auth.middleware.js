@@ -40,7 +40,7 @@ const verifyToken = async (req, res, next) => {
       if (decoded.systemAccess && !decoded.id) {
         req.user = {
           id: null,
-          fullName: decoded.role === 'admin' ? 'Sistem Yöneticisi' : 'Demo Kullanıcı',
+          fullName: decoded.role === 'admin' ? 'Sistem Yoneticisi' : 'Demo Kullanıcı',
           username: decoded.role === 'admin' ? 'admin' : 'demo_user',
           role: decoded.role,
           permissions: {
