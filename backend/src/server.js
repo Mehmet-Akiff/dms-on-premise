@@ -13,6 +13,9 @@ const path = require('path');
 const { sequelize } = require('./models');
 const documentRoutes = require('./routes/document.routes');
 const authRoutes = require('./routes/auth.routes');
+const chatRoutes = require('./routes/chat.routes');
+const http = require('http');
+const socketModule = require('./socket');
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -21,7 +24,11 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 // ============================================================
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// Socket.io başlat
+socketModule.init(server);
 
 // Ortam değişkenleri
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://dms_user:dms_secure_pass@localhost:5432/dms_db';
@@ -112,6 +119,7 @@ global.sendDocumentUpdateToClients = (documentData) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/chat', chatRoutes);
 
 // ============================================================
 // 404 ve Genel Hata Yönetimi
@@ -298,7 +306,7 @@ const startServer = async () => {
 
   try {
     // Sunucuyu başlat
-    app.listen(PORT, '0.0.0.0', () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`
   ╔══════════════════════════════════════════════╗
   ║   DMS Backend API - Çalışıyor               ║

@@ -13,6 +13,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    image: dms-frontend:latest
     container_name: dms_frontend
     ports:
       - "80:80"
@@ -30,6 +31,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: dms-backend:latest
     container_name: dms_backend
     expose:
       - "3000"
@@ -66,6 +68,7 @@ services:
     build:
       context: ./ai-service
       dockerfile: Dockerfile
+    image: dms-ai-service:latest
     container_name: dms_ai_service
     expose:
       - "8000"

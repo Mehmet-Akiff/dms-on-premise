@@ -11,6 +11,8 @@ const ProcessingJob = require('./ProcessingJob');
 const SystemSettings = require('./SystemSettings');
 const AuditLog = require('./AuditLog');
 const ApprovalRequest = require('./ApprovalRequest');
+const ChatRoom = require('./ChatRoom');
+const Message = require('./Message');
 
 // ============================================================
 // Model İlişkileri (Associations)
@@ -61,6 +63,21 @@ AuditLog.belongsTo(User, {
 });
 
 // ============================================================
+// Staj 2 - Intranet Chat (WebSocket) İlişkileri
+// ============================================================
+
+// User → Message (1:N) - Gönderilen ve alınan mesajlar
+User.hasMany(Message, { foreignKey: 'sender_id', as: 'sentMessages' });
+Message.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
+
+User.hasMany(Message, { foreignKey: 'receiver_id', as: 'receivedMessages' });
+Message.belongsTo(User, { foreignKey: 'receiver_id', as: 'receiver' });
+
+// ChatRoom → Message (1:N) - Odaya ait mesajlar
+ChatRoom.hasMany(Message, { foreignKey: 'room_id', as: 'messages', onDelete: 'CASCADE' });
+Message.belongsTo(ChatRoom, { foreignKey: 'room_id', as: 'room' });
+
+// ============================================================
 // Dışa Aktarım
 // ============================================================
 
@@ -73,4 +90,6 @@ module.exports = {
   SystemSettings,
   AuditLog,
   ApprovalRequest,
+  ChatRoom,
+  Message,
 };
