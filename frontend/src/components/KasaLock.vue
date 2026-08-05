@@ -18,7 +18,7 @@
             </svg>
           </div>
           <h2>{{ $t('auth.loginTitle') }}</h2>
-          <p class="lock-desc">Sisteme erişebilmek için giriş yapın veya kayıt olun.</p>
+          <p class="lock-desc">{{ $t('auth.lockDesc') || 'Sisteme erişebilmek için giriş yapın veya kayıt olun.' }}</p>
         </div>
 
         <!-- Sekme Seçimi -->
@@ -84,14 +84,14 @@
         <!-- 2. CISO HIZLI GİRİŞ FORMU -->
         <form v-else-if="activeTab === 'ciso'" @submit.prevent="handleCisoLogin" class="lock-form">
           <div class="ciso-info-banner">
-            🛡️ CISO (Güvenlik Yöneticisi) özel erişim modudur. Sistem günlükleri ve güvenlik politikalarını yönetir.
+            🛡️ {{ $t('auth.cisoDesc') || 'CISO (Güvenlik Yöneticisi) özel erişim modudur. Sistem günlükleri ve güvenlik politikalarını yönetir.' }}
           </div>
           <div class="form-group">
-            <label>CISO {{ $t('auth.password') }}</label>
+            <label>{{ $t('auth.cisoPassLabel') || 'CISO Şifresi' }}</label>
             <input 
               v-model="cisoPassword" 
               type="password" 
-              placeholder="CISO Şifresi" 
+              :placeholder="$t('auth.cisoPassLabel') || 'CISO Şifresi'" 
               required
             />
           </div>
@@ -101,7 +101,7 @@
           </div>
 
           <button type="submit" class="btn-unlock btn-ciso" :disabled="isLoading">
-            {{ isLoading ? $t('common.loading') : 'CISO Girişi Yap' }}
+            {{ isLoading ? $t('common.loading') : ($t('auth.cisoLoginBtn') || 'CISO Girişi Yap') }}
           </button>
         </form>
 
@@ -144,10 +144,10 @@
             />
           </div>
           <div class="form-group">
-            <label>Rol Seçimi</label>
+            <label>{{ $t('auth.roleSelect') || 'Rol Seçimi' }}</label>
             <select v-model="regRole" class="form-select">
-              <option value="user">Standart Kullanıcı (Onay Gerekebilir)</option>
-              <option value="admin">Sistem Yöneticisi (Admin)</option>
+              <option value="user">{{ $t('auth.roleUser') || 'Standart Kullanıcı (Onay Gerekebilir)' }}</option>
+              <option value="admin">{{ $t('auth.roleAdmin') || 'Sistem Yöneticisi (Admin)' }}</option>
             </select>
           </div>
 
@@ -159,7 +159,7 @@
           </div>
 
           <button type="submit" class="btn-unlock btn-register" :disabled="isLoading">
-            {{ isLoading ? $t('common.loading') : 'Kayıt Talebi Gönder' }}
+            {{ isLoading ? $t('common.loading') : ($t('auth.registerBtn') || 'Kayıt Talebi Gönder') }}
           </button>
         </form>
 
@@ -219,7 +219,7 @@ async function handleLogin() {
     const data = await res.json()
 
     if (!res.ok) {
-      errorMessage.value = data.error || 'Giriş başarısız.'
+      errorMessage.value = data.error || (i18n.global.t('auth.loginFailed') || 'Giriş başarısız.')
       triggerShake()
       return
     }
@@ -251,7 +251,7 @@ async function handleCisoLogin() {
     const data = await res.json()
 
     if (!res.ok) {
-      errorMessage.value = data.error || 'CISO şifresi hatalı.'
+      errorMessage.value = data.error || (i18n.global.t('auth.loginFailed') || 'CISO Girişi başarısız.')
       triggerShake()
       return
     }
@@ -288,12 +288,12 @@ async function handleRegister() {
     const data = await res.json()
 
     if (!res.ok) {
-      errorMessage.value = data.error || 'Kayıt işlemi başarısız.'
+      errorMessage.value = data.error || (i18n.global.t('auth.registerFailed') || 'Kayıt işlemi başarısız.')
       triggerShake()
       return
     }
 
-    successMessage.value = data.message || 'Kayıt talebiniz alındı! Yönetici onayı bekleniyor.'
+    successMessage.value = data.message || (i18n.global.t('auth.registerSuccess') || 'Kayıt talebiniz alındı! Yönetici onayı bekleniyor.')
     setTimeout(() => {
       switchTab('login')
     }, 2000)
@@ -377,6 +377,7 @@ async function handleRegister() {
 
 .lock-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   background: #0f172a;
   padding: 0.3rem;

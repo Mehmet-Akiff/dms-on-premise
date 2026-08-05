@@ -466,6 +466,13 @@ font {
   margin: 0;
 }
 
+.main-content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
 .panel {
   background: var(--bg-secondary);
   border: 1px solid var(--border);

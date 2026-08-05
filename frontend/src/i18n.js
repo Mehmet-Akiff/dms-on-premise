@@ -45,7 +45,18 @@ const messages = {
       "cisoLogin": "CISO Girişi",
       "register": "Kayıt Ol",
       "fullName": "Ad Soyad",
-      "email": "E-Posta"
+      "email": "E-Posta",
+      "lockDesc": "Sisteme erişebilmek için giriş yapın veya kayıt olun.",
+      "cisoDesc": "CISO (Güvenlik Yöneticisi) özel erişim modudur. Sistem günlükleri ve güvenlik politikalarını yönetir.",
+      "cisoPassLabel": "CISO Şifresi",
+      "cisoLoginBtn": "CISO Girişi Yap",
+      "roleSelect": "Rol Seçimi",
+      "roleUser": "Standart Kullanıcı (Onay Gerekebilir)",
+      "roleAdmin": "Sistem Yöneticisi (Admin)",
+      "registerBtn": "Kayıt Talebi Gönder",
+      "loginFailed": "Giriş başarısız.",
+      "registerFailed": "Kayıt işlemi başarısız.",
+      "registerSuccess": "Kayıt talebiniz alındı! Yönetici onayı bekleniyor."
     },
     "dashboard": {
       "totalDocs": "Toplam Doküman",
@@ -286,7 +297,18 @@ const messages = {
       "cisoLogin": "CISO Login",
       "register": "Register",
       "fullName": "Full Name",
-      "email": "Email"
+      "email": "Email",
+      "lockDesc": "Log in or register to access the system.",
+      "cisoDesc": "CISO (Chief Information Security Officer) is a special access mode. Manages system logs and security policies.",
+      "cisoPassLabel": "CISO Password",
+      "cisoLoginBtn": "CISO Login",
+      "roleSelect": "Role Selection",
+      "roleUser": "Standard User (May require approval)",
+      "roleAdmin": "System Administrator (Admin)",
+      "registerBtn": "Send Registration Request",
+      "loginFailed": "Login failed.",
+      "registerFailed": "Registration failed.",
+      "registerSuccess": "Registration request received! Pending admin approval."
     },
     "dashboard": {
       "totalDocs": "Total Documents",
