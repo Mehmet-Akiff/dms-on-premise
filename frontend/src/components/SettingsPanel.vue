@@ -108,12 +108,12 @@
               </div>
 
               <div class="form-group">
-                <label>Yeni Şifre</label>
+                <label>{{ $t('settings.newPassword') || 'Yeni Şifre' }}</label>
                 <div class="password-input-wrapper">
                   <input 
                     v-model="profileNewPassword" 
                     :type="isProfileNewPasswordVisible ? 'text' : 'password'" 
-                    placeholder="Yeni şifreniz..." 
+                    :placeholder="$t('settings.newPasswordPlaceholder') || 'Yeni şifreniz...'" 
                     required
                     :style="profileNewPassword ? { borderColor: isProfilePasswordValid ? '#22c55e' : '#ef4444' } : {}"
                   />
@@ -132,12 +132,12 @@
               </div>
 
               <div class="form-group">
-                <label>Yeni Şifre Tekrar</label>
+                <label>{{ $t('settings.newPasswordConfirm') || 'Yeni Şifre Tekrar' }}</label>
                 <div class="password-input-wrapper">
                   <input 
                     v-model="profileNewPasswordConfirm" 
                     :type="isProfileNewPasswordConfirmVisible ? 'text' : 'password'" 
-                    placeholder="Yeni şifrenizi tekrar girin..." 
+                    :placeholder="$t('settings.newPasswordConfirmPlaceholder') || 'Yeni şifrenizi tekrar girin...'" 
                     required
                   />
                   <button 
@@ -151,11 +151,11 @@
               </div>
 
               <div v-if="profileNewPassword && profileNewPasswordConfirm && profileNewPassword !== profileNewPasswordConfirm" class="password-mismatch-banner">
-                ⚠️ Şifreler eşleşmiyor!
+                ⚠️ {{ $t('settings.passwordMismatch') || 'Şifreler eşleşmiyor!' }}
               </div>
 
               <button type="submit" class="btn-settings-save" :disabled="!isProfilePasswordValid || (profileNewPassword !== profileNewPasswordConfirm)">
-                Şifreyi Güncelle
+                {{ $t('settings.updatePasswordBtn') || 'Şifreyi Güncelle' }}
               </button>
             </form>
           </div>
@@ -164,28 +164,28 @@
 
           <!-- Form D: E-posta Adresi Değiştirme (OTP ile) -->
           <div class="sub-profile-section">
-            <h5>E-posta Adresi Değiştirme</h5>
-            <p style="font-size:0.72rem; color:#9ca3af; margin:0 0 0.75rem;">Yeni e-postanıza bir doğrulama kodu gönderilecektir.</p>
+            <h5>{{ $t('settings.emailChangeTitle') || 'E-posta Adresi Değiştirme' }}</h5>
+            <p style="font-size:0.72rem; color:#9ca3af; margin:0 0 0.75rem;">{{ $t('settings.emailChangeDesc') || 'Yeni e-postanıza bir doğrulama kodu gönderilecektir.' }}</p>
             <form @submit.prevent="sendEmailOtp" class="settings-form" v-if="!emailOtpSent">
               <div class="form-group">
-                <input v-model="userEmail" type="email" placeholder="Yeni e-posta adresiniz..." required />
+                <input v-model="userEmail" type="email" :placeholder="$t('settings.newEmailPlaceholder') || 'Yeni e-posta adresiniz...'" required />
               </div>
               <button type="submit" class="btn-settings-save" :disabled="isSendingEmailOtp">
-                {{ isSendingEmailOtp ? 'Kod Gönderiliyor...' : 'Doğrulama Kodu Gönder' }}
+                {{ isSendingEmailOtp ? ($t('settings.sendingCode') || 'Kod Gönderiliyor...') : ($t('settings.sendCodeBtn') || 'Doğrulama Kodu Gönder') }}
               </button>
             </form>
             <div v-if="emailOtpSent" style="background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.85rem; display:flex; flex-direction:column; gap:0.65rem;">
-              <p style="font-size:0.72rem; color:#9ca3af; margin:0;"><strong style="color:#34d399;">{{ userEmail }}</strong> adresine kod gönderildi. 5 dakika geçerlidir.</p>
+              <p style="font-size:0.72rem; color:#9ca3af; margin:0;"><strong style="color:#34d399;">{{ userEmail }}</strong> {{ $t('settings.codeSentDesc') || 'adresine kod gönderildi. 5 dakika geçerlidir.' }}</p>
               <input 
                 v-model="emailOtp" 
                 type="text" 
                 maxlength="6"
-                placeholder="6 Haneli Kod"
+                :placeholder="$t('settings.codePlaceholder') || '6 Haneli Kod'"
                 style="width:140px; height:38px; background:rgba(15,23,42,0.7); border:1.5px solid rgba(255,255,255,0.12); border-radius:6px; text-align:center; color:#fff; font-size:1.1rem; font-weight:700; outline:none; margin:0 auto;"
               />
               <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
-                <button type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:0.35rem 0.75rem; font-size:0.72rem; border-radius:6px; cursor:pointer;" @click="emailOtpSent=false; emailOtp=''; emailOtpTimer=0;">Vazgeç</button>
-                <button type="button" style="background:#10b981; border:none; color:#fff; padding:0.35rem 1rem; font-size:0.72rem; font-weight:700; border-radius:6px; cursor:pointer;" @click="verifyEmailOtp">E-postayı Doğrula & Kaydet</button>
+                <button type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:0.35rem 0.75rem; font-size:0.72rem; border-radius:6px; cursor:pointer;" @click="emailOtpSent=false; emailOtp=''; emailOtpTimer=0;">{{ $t('settings.cancelBtn') || 'Vazgeç' }}</button>
+                <button type="button" style="background:#10b981; border:none; color:#fff; padding:0.35rem 1rem; font-size:0.72rem; font-weight:700; border-radius:6px; cursor:pointer;" @click="verifyEmailOtp">{{ $t('settings.verifyEmailBtn') || 'E-postayı Doğrula & Kaydet' }}</button>
               </div>
             </div>
           </div>
@@ -197,18 +197,18 @@
 
         <!-- 3. KASA KİMLİK & ŞİFRE BİLGİLERİ -->
         <div class="settings-section" v-if="currentUserRole === 'admin'">
-          <h4>🔐 Kasa Yönetici Şifresi</h4>
-          <p class="section-desc">Kasa kilidini açmak için kullanılan yönetici şifresini güncelleyin.</p>
+          <h4>🔐 {{ $t('settings.vaultAdminTitle') || 'Kasa Yönetici Şifresi' }}</h4>
+          <p class="section-desc">{{ $t('settings.vaultAdminDesc') || 'Kasa kilidini açmak için kullanılan yönetici şifresini güncelleyin.' }}</p>
           
-          <form @submit.prevent="askConfirm('Kasa şifrenizi değiştirmek istediğinize emin misiniz?', updateKasaCredentials)" class="settings-form">
+          <form @submit.prevent="askConfirm($t('settings.vaultPasswordConfirm') || 'Kasa şifrenizi değiştirmek istediğinize emin misiniz?', updateKasaCredentials)" class="settings-form">
             
             <div class="form-group">
-              <label>Yeni Şifre</label>
+              <label>{{ $t('settings.newPassword') || 'Yeni Şifre' }}</label>
               <div class="password-input-wrapper">
                 <input 
                   v-model="kasaNewPassword" 
                   :type="isNewPasswordVisible ? 'text' : 'password'" 
-                  placeholder="Yeni şifre..." 
+                  :placeholder="$t('settings.newPasswordPlaceholder2') || 'Yeni şifre...'" 
                   :style="kasaNewPassword ? { borderColor: isKasaPasswordValid ? '#22c55e' : '#ef4444' } : {}"
                 />
                 <button 
@@ -226,12 +226,12 @@
             </div>
 
             <div class="form-group">
-              <label>Yeni Şifre Tekrar</label>
+              <label>{{ $t('settings.newPasswordConfirm') || 'Yeni Şifre Tekrar' }}</label>
               <div class="password-input-wrapper">
                 <input 
                   v-model="kasaNewPasswordConfirm" 
                   :type="isNewPasswordConfirmVisible ? 'text' : 'password'" 
-                  placeholder="Şifreyi tekrar girin..." 
+                  :placeholder="$t('settings.newPasswordConfirmPlaceholder2') || 'Şifreyi tekrar girin...'" 
                 />
                 <button 
                   type="button" 
@@ -244,11 +244,11 @@
             </div>
 
             <div v-if="kasaNewPassword && kasaNewPasswordConfirm && kasaNewPassword !== kasaNewPasswordConfirm" class="password-mismatch-banner">
-              ⚠️ Şifreler eşleşmiyor!
+              ⚠️ {{ $t('settings.passwordMismatch') || 'Şifreler eşleşmiyor!' }}
             </div>
 
             <button type="submit" class="btn-settings-save" :disabled="isSavingCreds || (kasaNewPassword !== kasaNewPasswordConfirm)">
-              {{ isSavingCreds ? 'Kaydediliyor...' : 'Yönetici Şifresini Güncelle' }}
+              {{ isSavingCreds ? ($t('settings.saving') || 'Kaydediliyor...') : ($t('settings.updateVaultPasswordBtn') || 'Yönetici Şifresini Güncelle') }}
             </button>
           </form>
           <hr class="section-divider" />
@@ -256,13 +256,13 @@
 
         <!-- 4. SİSTEM DAĞITIM MODU -->
         <div class="settings-section" v-if="isAdminOrCiso">
-          <h4>🏢 Sistem Dağıtım Modu</h4>
-          <p class="section-desc">Sistemin çalışma modunu belirleyin. Mod değişikliği TÜM yöneticilerin (Admin) ortak onayı sonrasında geçerli olur.</p>
+          <h4>🏢 {{ $t('settings.systemModeTitle') || 'Sistem Dağıtım Modu' }}</h4>
+          <p class="section-desc">{{ $t('settings.systemModeDesc') || 'Sistemin çalışma modunu belirleyin. Mod değişikliği TÜM yöneticilerin (Admin) ortak onayı sonrasında geçerli olur.' }}</p>
           <div class="form-group">
-            <label>Aktif Mod</label>
-            <select v-model="systemMode" class="role-select" @change="askConfirm('Sistem modunu değiştirmek istediğinize emin misiniz?', updateSystemMode)">
-              <option value="single_pc">💻 Tek Bilgisayar (Single PC)</option>
-              <option value="network_sync">🌐 Şirket İçi Ağ (Network/Online Sync)</option>
+            <label>{{ $t('settings.activeModeLabel') || 'Aktif Mod' }}</label>
+            <select v-model="systemMode" class="role-select" @change="askConfirm($t('settings.systemModeConfirm') || 'Sistem modunu değiştirmek istediğinize emin misiniz?', updateSystemMode)">
+              <option value="single_pc">💻 {{ $t('settings.singlePcMode') || 'Tek Bilgisayar (Single PC)' }}</option>
+              <option value="network_sync">🌐 {{ $t('settings.networkMode') || 'Şirket İçi Ağ (Network/Online Sync)' }}</option>
             </select>
           </div>
           <hr class="section-divider" />
@@ -270,14 +270,14 @@
 
         <!-- 5. KULLANICI YÖNETİMİ & DİNAMİK YETKİLENDİRME -->
         <div class="settings-section" v-if="isAdminOrCiso">
-          <h4>👥 Kullanıcı Yönetimi & Dinamik İzinler</h4>
-          <p class="section-desc">Çalışan izinlerini anlık olarak yönetin. CISO izinleri kilitlidir. Yöneticiler kendi yetkilerini düşüremezler.</p>
+          <h4>👥 {{ $t('settings.userManagementTitle') || 'Kullanıcı Yönetimi & Dinamik İzinler' }}</h4>
+          <p class="section-desc">{{ $t('settings.userManagementDesc') || 'Çalışan izinlerini anlık olarak yönetin. CISO izinleri kilitlidir. Yöneticiler kendi yetkilerini düşüremezler.' }}</p>
           
           <div class="users-list-wrapper">
             <div v-for="user in usersList" :key="user.id" class="user-row-card">
               <div class="user-info-brief">
                 <strong>{{ user.fullName }}</strong>
-                <span class="user-meta-sub">@{{ user.username }} ({{ user.email || 'E-posta yok' }})</span>
+                <span class="user-meta-sub">@{{ user.username }} ({{ user.email || $t('settings.noEmail') || 'E-posta yok' }})</span>
                 <!-- Detay Butonu -->
                 <button 
                   v-if="currentUserRole === 'ciso' || currentUserRole === 'admin'" 
@@ -285,7 +285,7 @@
                   type="button"
                   style="margin-top:0.3rem; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a78bfa; padding:0.2rem 0.6rem; font-size:0.65rem; border-radius:4px; cursor:pointer; font-weight:600;"
                 >
-                  🔎 Detay Gör
+                  🔎 {{ $t('settings.viewDetailBtn') || 'Detay Gör' }}
                 </button>
               </div>
 
@@ -295,18 +295,18 @@
                     type="checkbox" 
                     v-model="user.permissions.canRead" 
                     :disabled="user.role === 'ciso' || user.role === 'admin'"
-                    @change="askConfirm('Okuma iznini değiştirmek istiyor musunuz?', () => togglePermission(user, 'canRead'))" 
+                    @change="askConfirm($t('settings.readPermConfirm') || 'Okuma iznini değiştirmek istiyor musunuz?', () => togglePermission(user, 'canRead'))" 
                   />
-                  <span>Oku</span>
+                  <span>{{ $t('settings.permRead') || 'Oku' }}</span>
                 </label>
                 <label class="perm-check-label">
                   <input 
                     type="checkbox" 
                     v-model="user.permissions.canWrite" 
                     :disabled="user.role === 'ciso' || user.role === 'admin'"
-                    @change="askConfirm('Yazma iznini değiştirmek istiyor musunuz?', () => togglePermission(user, 'canWrite'))" 
+                    @change="askConfirm($t('settings.writePermConfirm') || 'Yazma iznini değiştirmek istiyor musunuz?', () => togglePermission(user, 'canWrite'))" 
                   />
-                  <span>Yaz</span>
+                  <span>{{ $t('settings.permWrite') || 'Yaz' }}</span>
                 </label>
                 
                 <!-- Yönetici kendi yetkisini düşüremez (disabled kuralı) -->
@@ -314,11 +314,11 @@
                   v-model="user.role" 
                   class="user-role-select" 
                   :disabled="user.role === 'ciso' || (user.id === currentUserId && user.role === 'admin')"
-                  @change="askConfirm('Kullanıcı rolünü değiştirmek istediğinize emin misiniz?', () => changeRole(user))"
+                  @change="askConfirm($t('settings.roleConfirm') || 'Kullanıcı rolünü değiştirmek istediğinize emin misiniz?', () => changeRole(user))"
                 >
-                  <option value="user">Standart</option>
-                  <option value="admin">Yönetici</option>
-                  <option v-if="user.role === 'ciso'" value="ciso">CISO</option>
+                  <option value="user">{{ $t('settings.roleUser') || 'Standart' }}</option>
+                  <option value="admin">{{ $t('settings.roleAdmin') || 'Yönetici' }}</option>
+                  <option v-if="user.role === 'ciso'" value="ciso">{{ $t('settings.roleCiso') || 'CISO' }}</option>
                 </select>
               </div>
             </div>
@@ -328,32 +328,32 @@
 
         <!-- 6. E-POSTA BİLDİRİM VE ALARM AYARLARI -->
         <div class="settings-section" v-if="isAdminOrCiso">
-          <h4>📧 Yetkisiz Erişim Alarmı</h4>
-          <p class="section-desc">Hatalı şifre denemelerinde gönderilecek alarm limitini ayarlayın. Alarmlar, profilinizde tanımlı doğrulanmış e-postanıza gönderilecektir.</p>
+          <h4>📧 {{ $t('settings.alarmTitle') || 'Yetkisiz Erişim Alarmı' }}</h4>
+          <p class="section-desc">{{ $t('settings.alarmDesc') || 'Hatalı şifre denemelerinde gönderilecek alarm limitini ayarlayın. Alarmlar, profilinizde tanımlı doğrulanmış e-postanıza gönderilecektir.' }}</p>
 
           <div class="form-group" style="margin-bottom:1rem">
-            <label>Hatalı Deneme Limiti (Alarm Eşiği)</label>
+            <label>{{ $t('settings.alarmThresholdLabel') || 'Hatalı Deneme Limiti (Alarm Eşiği)' }}</label>
             <div class="threshold-selector">
               <select v-model="alertThreshold" @change="updateThreshold">
-                <option :value="2">2 Deneme</option>
-                <option :value="3">3 Deneme (Varsayılan)</option>
-                <option :value="5">5 Deneme</option>
-                <option :value="10">10 Deneme</option>
+                <option :value="2">{{ $t('settings.attempt2') || '2 Deneme' }}</option>
+                <option :value="3">{{ $t('settings.attempt3') || '3 Deneme (Varsayılan)' }}</option>
+                <option :value="5">{{ $t('settings.attempt5') || '5 Deneme' }}</option>
+                <option :value="10">{{ $t('settings.attempt10') || '10 Deneme' }}</option>
               </select>
             </div>
           </div>
 
           <div class="verification-status-box status--verified">
             <span class="status-dot"></span>
-            <strong>Alarm E-posta Adresi:</strong>
-            <p class="status-detail" style="margin-top:0.25rem; font-weight:700;">{{ verifiedEmail || 'Sistem Alarm Alıcısı' }}</p>
+            <strong>{{ $t('settings.alarmEmailLabel') || 'Alarm E-posta Adresi:' }}</strong>
+            <p class="status-detail" style="margin-top:0.25rem; font-weight:700;">{{ verifiedEmail || $t('settings.systemAlarmReceiver') || 'Sistem Alarm Alıcısı' }}</p>
           </div>
         </div>
 
         <!-- 6B. ÇİFT ONAY YETKİLENDİRMESİ -->
         <div class="settings-section" v-if="isAdminOrCiso" style="margin-top: 1rem;">
-          <h4>🔐 Çift Onay Yetkilendirmesi</h4>
-          <p class="section-desc">Onay taleplerinin işleme alınması için hem sistem arayüzünden onay verilmesini hem de e-postadaki güvenlik kodunun (OTP) girilmesini zorunlu kılın. (CISO için zorunlu ve kapatılamazdır).</p>
+          <h4>🔐 {{ $t('settings.doubleApprovalTitle') || 'Çift Onay Yetkilendirmesi' }}</h4>
+          <p class="section-desc">{{ $t('settings.doubleApprovalDesc') || 'Onay taleplerinin işleme alınması için hem sistem arayüzünden onay verilmesini hem de e-postadaki güvenlik kodunun (OTP) girilmesini zorunlu kılın. (CISO için zorunlu ve kapatılamazdır).' }}</p>
           
           <div class="double-approval-toggle-box" style="display: flex; align-items: center; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); padding: 0.75rem 1rem; border-radius: 8px; margin-top: 0.75rem; gap: 0.75rem; max-width: 100%;">
             <input 
@@ -365,7 +365,7 @@
               style="width: 18px; height: 18px; accent-color: #8b5cf6; cursor: pointer; flex-shrink: 0;"
             />
             <label for="double-approval-checkbox" style="font-size: 0.82rem; font-weight: 700; color: #fff; cursor: pointer; display: inline; margin: 0; user-select: none;">
-              E-posta + Arayüz Çift Onayı Zorunlu
+              {{ $t('settings.doubleApprovalLabel') || 'E-posta + Arayüz Çift Onayı Zorunlu' }}
             </label>
           </div>
         </div>
@@ -374,28 +374,28 @@
 
         <!-- 7. SMTP GÖNDERİCİ AYARLARI -->
         <div class="settings-section" v-if="currentUserRole === 'ciso'">
-          <h4>📨 SMTP Gönderici Ayarları</h4>
-          <p class="section-desc">Onay ve alarm e-postalarını göndermek için kullanılacak SMTP hesabını doğrulayın.</p>
+          <h4>📨 {{ $t('settings.smtpTitle') || 'SMTP Gönderici Ayarları' }}</h4>
+          <p class="section-desc">{{ $t('settings.smtpDesc') || 'Onay ve alarm e-postalarını göndermek için kullanılacak SMTP hesabını doğrulayın.' }}</p>
           
-          <form @submit.prevent="askConfirm('SMTP gönderici ayarlarını doğrulamak ve kaydetmek istediğinize emin misiniz?', updateSmtpConfig)" class="settings-form">
+          <form @submit.prevent="askConfirm($t('settings.smtpConfirm') || 'SMTP gönderici ayarlarını doğrulamak ve kaydetmek istediğinize emin misiniz?', updateSmtpConfig)" class="settings-form">
             <div class="form-group">
-              <label>Gönderici E-posta (User)</label>
-              <input v-model="smtpUser" type="email" placeholder="orn: dms-bildirim@sirketiniz.com" required />
+              <label>{{ $t('settings.smtpUserLabel') || 'Gönderici E-posta (User)' }}</label>
+              <input v-model="smtpUser" type="email" :placeholder="$t('settings.smtpUserPlaceholder') || 'orn: dms-bildirim@sirketiniz.com'" required />
             </div>
 
             <div class="form-group">
-              <label>SMTP Şifresi (Pass)</label>
+              <label>{{ $t('settings.smtpPassLabel') || 'SMTP Şifresi (Pass)' }}</label>
               <div class="password-input-wrapper">
                 <input 
                   v-model="smtpPass" 
                   :type="isSmtpPassVisible ? 'text' : 'password'" 
-                  placeholder="Şifre..." 
+                  :placeholder="$t('settings.smtpPassPlaceholder') || 'Şifre...'" 
                 />
                 <button 
                   type="button" 
                   class="btn-eye" 
                   @click="isSmtpPassVisible = !isSmtpPassVisible"
-                  title="Şifreyi Göster/Gizle"
+                  :title="$t('settings.togglePassword') || 'Şifreyi Göster/Gizle'"
                 >
                   {{ isSmtpPassVisible ? '🙈' : '👁️' }}
                 </button>
@@ -407,41 +407,41 @@
             </div>
 
             <button type="submit" class="btn-settings-save" :disabled="isSavingSmtp">
-              {{ isSavingSmtp ? 'Göndericiyi Test Et ve Doğrula...' : 'Göndericiyi Test Et ve Doğrula' }}
+              {{ isSavingSmtp ? ($t('settings.testingSmtp') || 'Göndericiyi Test Et ve Doğrula...') : ($t('settings.testSmtpBtn') || 'Göndericiyi Test Et ve Doğrula') }}
             </button>
           </form>
         </div>
 
         <!-- 7B. LOG DOSYASI YÖNETİMİ (Sadece CISO ve Admin) -->
         <div class="settings-section" v-if="isAdminOrCiso">
-          <h4>📁 Log Dosyası Yönetimi</h4>
-          <p class="section-desc">Sistem işlem günlüklerinin yazılacağı fiziksel log dosyasını yapılandırın. Loglar arayüzden sıfırlanamaz, ancak yedek dosyaları yükleyebilirsiniz.</p>
+          <h4>📁 {{ $t('settings.logTitle') || 'Log Dosyası Yönetimi' }}</h4>
+          <p class="section-desc">{{ $t('settings.logDesc') || 'Sistem işlem günlüklerinin yazılacağı fiziksel log dosyasını yapılandırın. Loglar arayüzden sıfırlanamaz, ancak yedek dosyaları yükleyebilirsiniz.' }}</p>
           
           <div class="log-status-card" style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 1rem;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
-                <p style="margin:0; font-size:0.8rem; color:#9ca3af;">Aktif Log Yolu:</p>
+                <p style="margin:0; font-size:0.8rem; color:#9ca3af;">{{ $t('settings.activeLogPath') || 'Aktif Log Yolu:' }}</p>
                 <code style="font-size:0.75rem; color:#34d399; font-weight:700;">{{ logFilePath || '/app/uploads/dms-audit.jsonl' }}</code>
               </div>
               <span :style="{ background: logFileExists ? '#065f46' : '#991b1b', color: logFileExists ? '#34d399' : '#f87171', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: '700' }">
-                {{ logFileExists ? 'BAĞLI' : 'DOSYA BULUNAMADI' }}
+                {{ logFileExists ? ($t('settings.logConnected') || 'BAĞLI') : ($t('settings.logNotFound') || 'DOSYA BULUNAMADI') }}
               </span>
             </div>
             
             <div v-if="!logFileExists" style="margin-top:1rem; border-top:1px dashed rgba(255,255,255,0.08); padding-top:0.75rem;">
-              <p style="font-size:0.72rem; color:#ef4444; margin:0 0 0.5rem 0;">⚠️ Log dosyası disk üzerinde bulunamadı! Yeni bir kayıt dosyası oluşturmak ister misiniz?</p>
-              <button type="button" class="btn-approval btn-approval--approve" @click="askConfirm('Yeni boş bir log dosyası oluşturmak istediğinize emin misiniz?', createLogFile)">
-                Evet, Yeni Dosya Oluştur
+              <p style="font-size:0.72rem; color:#ef4444; margin:0 0 0.5rem 0;">⚠️ {{ $t('settings.logFileMissing') || 'Log dosyası disk üzerinde bulunamadı! Yeni bir kayıt dosyası oluşturmak ister misiniz?' }}</p>
+              <button type="button" class="btn-approval btn-approval--approve" @click="askConfirm($t('settings.createLogConfirm') || 'Yeni boş bir log dosyası oluşturmak istediğinize emin misiniz?', createLogFile)">
+                {{ $t('settings.createLogBtn') || 'Evet, Yeni Dosya Oluştur' }}
               </button>
             </div>
           </div>
 
-          <form @submit.prevent="askConfirm('Belirtilen log dosyasını içe aktarmak ve log yolunu değiştirmek istediğinize emin misiniz?', importLogFile)" class="settings-form">
+          <form @submit.prevent="askConfirm($t('settings.importLogConfirm') || 'Belirtilen log dosyasını içe aktarmak ve log yolunu değiştirmek istediğinize emin misiniz?', importLogFile)" class="settings-form">
             <div class="form-group">
-              <label>Önceki Log Dosya Yolunu Belirt (İçe Aktar)</label>
+              <label>{{ $t('settings.importLogLabel') || 'Önceki Log Dosya Yolunu Belirt (İçe Aktar)' }}</label>
               <div style="display:flex; gap:0.5rem;">
-                <input v-model="importFilePath" type="text" placeholder="Örn: /app/uploads/eski-audit.jsonl" required style="flex:1;" />
-                <button type="submit" class="btn-settings-save" style="margin:0; padding:0.55rem 1rem; white-space:nowrap; font-size:0.75rem;">Dosyayı Yükle</button>
+                <input v-model="importFilePath" type="text" :placeholder="$t('settings.importLogPlaceholder') || 'Örn: /app/uploads/eski-audit.jsonl'" required style="flex:1;" />
+                <button type="submit" class="btn-settings-save" style="margin:0; padding:0.55rem 1rem; white-space:nowrap; font-size:0.75rem;">{{ $t('settings.importLogBtn') || 'Dosyayı Yükle' }}</button>
               </div>
             </div>
           </form>
@@ -449,21 +449,21 @@
         
         <!-- 8. MESAİ SAATLERİ AYARI (Sadece Admin) -->
         <div class="settings-section" v-if="currentUserRole === 'admin'">
-          <h4>🕒 CISO Onay Talebi Mesai Ayarı</h4>
-          <p class="section-desc">CISO onay bekleyen taleplerin 3 iş günü geri sayım takibinde kullanılan günlük mesai saatlerini belirleyin.</p>
-          <form @submit.prevent="askConfirm('Mesai saatlerini kaydetmek istediğinize emin misiniz?', saveWorkingHours)" class="settings-form">
+          <h4>🕒 {{ $t('settings.workingHoursTitle') || 'CISO Onay Talebi Mesai Ayarı' }}</h4>
+          <p class="section-desc">{{ $t('settings.workingHoursDesc') || 'CISO onay bekleyen taleplerin 3 iş günü geri sayım takibinde kullanılan günlük mesai saatlerini belirleyin.' }}</p>
+          <form @submit.prevent="askConfirm($t('settings.workingHoursConfirm') || 'Mesai saatlerini kaydetmek istediğinize emin misiniz?', saveWorkingHours)" class="settings-form">
             <div style="display:flex; gap:0.75rem;">
               <div class="form-group" style="flex:1;">
-                <label>Mesai Başlangıcı</label>
+                <label>{{ $t('settings.workStart') || 'Mesai Başlangıcı' }}</label>
                 <input v-model="workingHoursStart" type="time" required />
               </div>
               <div class="form-group" style="flex:1;">
-                <label>Mesai Bitişi</label>
+                <label>{{ $t('settings.workEnd') || 'Mesai Bitişi' }}</label>
                 <input v-model="workingHoursEnd" type="time" required />
               </div>
             </div>
             <button type="submit" class="btn-settings-save" style="margin-top:0.5rem;">
-              Saat Ayarlarını Kaydet
+              {{ $t('settings.saveWorkingHoursBtn') || 'Saat Ayarlarını Kaydet' }}
             </button>
           </form>
         </div>
@@ -474,16 +474,16 @@
   <!-- Global Onay Modalı (Tüm İşlemler İçin) -->
   <div v-if="isGlobalConfirmOpen" class="global-confirm-overlay" @click.self="cancelGlobalConfirm">
     <div class="global-confirm-card">
-      <h4>⚠️ İşlemi Onayla</h4>
+      <h4>⚠️ {{ $t('settings.globalConfirmTitle') || 'İşlemi Onayla' }}</h4>
       <p>{{ globalConfirmMessage }}</p>
       <div style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.2rem;">
-        <button class="btn-approval btn-approval--reject" @click="cancelGlobalConfirm">Vazgeç</button>
+        <button class="btn-approval btn-approval--reject" @click="cancelGlobalConfirm">{{ $t('settings.cancelBtn') || 'Vazgeç' }}</button>
         <button 
           class="btn-approval btn-approval--approve" 
           :disabled="globalConfirmTimer > 0"
           @click="executeGlobalConfirm"
         >
-          {{ globalConfirmTimer > 0 ? `Evet (${globalConfirmTimer}s)` : 'Evet, Devam Et' }}
+          {{ globalConfirmTimer > 0 ? ($t('settings.yesTimer', { timer: globalConfirmTimer }) || `Evet (${globalConfirmTimer}s)`) : ($t('settings.yesContinue') || 'Evet, Devam Et') }}
         </button>
       </div>
     </div>
@@ -494,27 +494,27 @@
     <div style="background:#111827; border:1px solid rgba(99,102,241,0.3); border-radius:14px; width:100%; max-width:680px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 25px 50px rgba(0,0,0,0.7);">
       <div style="display:flex; justify-content:space-between; align-items:center; padding:1.25rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.08);">
         <div>
-          <h4 style="margin:0; color:#a78bfa; font-size:1rem;">{{ cisoDetailUser?.fullName }} Kullanıcı Detayı</h4>
-          <p style="margin:0.2rem 0 0; font-size:0.75rem; color:#6b7280;">@{{ cisoDetailUser?.username }} &bull; {{ cisoDetailUser?.email || 'E-posta yok' }}</p>
+          <h4 style="margin:0; color:#a78bfa; font-size:1rem;">{{ cisoDetailUser?.fullName }} {{ $t('settings.userDetailTitle') || 'Kullanıcı Detayı' }}</h4>
+          <p style="margin:0.2rem 0 0; font-size:0.75rem; color:#6b7280;">@{{ cisoDetailUser?.username }} &bull; {{ cisoDetailUser?.email || $t('settings.noEmail') || 'E-posta yok' }}</p>
         </div>
-        <button @click="cisoDetailModalOpen = false" style="background:transparent; border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:0.3rem 0.75rem; border-radius:6px; cursor:pointer;">✕ Kapat</button>
+        <button @click="cisoDetailModalOpen = false" style="background:transparent; border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:0.3rem 0.75rem; border-radius:6px; cursor:pointer;">✕ {{ $t('settings.closeBtn') || 'Kapat' }}</button>
       </div>
       <div style="padding:1.25rem 1.5rem; overflow-y:auto; display:flex; flex-direction:column; gap:0.75rem;">
         <!-- Kullanıcı Bilgi Kartı -->
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:8px; padding:1rem; display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
-          <div><span style="font-size:0.68rem; color:#6b7280;">Ad Soyad</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:#fff;">{{ cisoDetailUser?.fullName }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">Kullanıcı Adı</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:#fff;">@{{ cisoDetailUser?.username }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">E-posta</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#34d399;">{{ cisoDetailUser?.email || '—' }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">Rol</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#a78bfa; font-weight:700;">{{ getRoleLabel(cisoDetailUser?.role) }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">Durum</span><p style="margin:0.1rem 0 0; font-size:0.82rem;" :style="{ color: cisoDetailUser?.status === 'active' ? '#34d399' : '#f87171' }">{{ cisoDetailUser?.status === 'active' ? 'Aktif' : 'Pasif' }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">Kayıt Tarihi</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#9ca3af;">{{ cisoDetailUser?.createdAt ? new Date(cisoDetailUser.createdAt).toLocaleDateString('tr-TR') : '—' }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblFullName') || 'Ad Soyad' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:#fff;">{{ cisoDetailUser?.fullName }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblUsername') || 'Kullanıcı Adı' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:#fff;">@{{ cisoDetailUser?.username }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblEmail') || 'E-posta' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#34d399;">{{ cisoDetailUser?.email || '—' }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblRole') || 'Rol' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#a78bfa; font-weight:700;">{{ getRoleLabel(cisoDetailUser?.role) }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblStatus') || 'Durum' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem;" :style="{ color: cisoDetailUser?.status === 'active' ? '#34d399' : '#f87171' }">{{ cisoDetailUser?.status === 'active' ? ($t('settings.statusActive') || 'Aktif') : ($t('settings.statusPassive') || 'Pasif') }}</p></div>
+          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblRegDate') || 'Kayıt Tarihi' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#9ca3af;">{{ cisoDetailUser?.createdAt ? new Date(cisoDetailUser.createdAt).toLocaleDateString('tr-TR') : '—' }}</p></div>
         </div>
         
         <!-- İşlem Logları -->
         <div v-if="currentUserRole === 'ciso'">
-          <h5 style="margin:0 0 0.5rem; font-size:0.78rem; color:#9ca3af; font-weight:600;">SON 50 İŞLEM</h5>
-          <div v-if="isLoadingCisoDetail" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">Yükleniyor...</div>
-          <div v-else-if="cisoDetailLogs.length === 0" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">Bu kullanıcıya ait kayıtlı işlem bulunamadı.</div>
+          <h5 style="margin:0 0 0.5rem; font-size:0.78rem; color:#9ca3af; font-weight:600;">{{ $t('settings.last50Actions') || 'SON 50 İŞLEM' }}</h5>
+          <div v-if="isLoadingCisoDetail" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">{{ $t('settings.loading') || 'Yükleniyor...' }}</div>
+          <div v-else-if="cisoDetailLogs.length === 0" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">{{ $t('settings.noActionLogs') || 'Bu kullanıcıya ait kayıtlı işlem bulunamadı.' }}</div>
           <div v-else style="display:flex; flex-direction:column; gap:0.35rem; max-height:280px; overflow-y:auto; padding-right:0.5rem;">
             <div 
               v-for="log in cisoDetailLogs" 
@@ -531,7 +531,7 @@
           </div>
         </div>
         <div v-else style="background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.15); border-radius:8px; padding:0.85rem; text-align:center; color:#f87171; font-size:0.75rem;">
-          ⚠️ Kullanıcının detaylı işlem geçmişi (Audit Logs) sadece CISO yetkisindedir.
+          ⚠️ {{ $t('settings.auditLogCisoOnly') || 'Kullanıcının detaylı işlem geçmişi (Audit Logs) sadece CISO yetkisindedir.' }}
         </div>
       </div>
     </div>

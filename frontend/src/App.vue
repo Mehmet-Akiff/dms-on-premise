@@ -55,7 +55,7 @@
       <div v-if="hasDuplicateEmailWarning" class="email-collision-alert">
         <span class="alert-icon">⚠️</span>
         <div class="alert-text">
-          <strong>KRİTİK GÜVENLİK UYARISI:</strong> E-posta adresiniz sistemdeki başka bir hesapla çakışıyor! Lütfen güvenlik nedeniyle e-posta adresinizi <strong>Kasa Ayarları</strong>'ndan acilen güncelleyin veya sistem yöneticinizle görüşün.
+          <strong>{{ $t('nav.emailCollisionWarning') || 'KRİTİK GÜVENLİK UYARISI:' }}</strong> {{ $t('nav.emailCollisionMsg') || 'E-posta adresiniz sistemdeki başka bir hesapla çakışıyor! Lütfen güvenlik nedeniyle e-posta adresinizi Kasa Ayarları\'ndan acilen güncelleyin veya sistem yöneticinizle görüşün.' }}
         </div>
       </div>
 
@@ -92,8 +92,8 @@
       <div v-if="isAuditLogOpen" class="audit-log-modal-overlay" @click.self="isAuditLogOpen = false">
         <div class="audit-log-modal-content">
           <div class="modal-close-header">
-            <h3>📜 Sistem Günlükleri (CISO Yetkili Alanı)</h3>
-            <button class="btn-close-modal" @click="isAuditLogOpen = false">✖ Kapat</button>
+            <h3>📜 {{ $t('nav.auditLogsTitle') || 'Sistem Günlükleri (CISO Yetkili Alanı)' }}</h3>
+            <button class="btn-close-modal" @click="isAuditLogOpen = false">✖ {{ $t('common.close') || 'Kapat' }}</button>
           </div>
           <div class="modal-body-scroll">
             <AuditLog />
@@ -105,8 +105,8 @@
       <div v-if="isNotificationsOpen" class="audit-log-modal-overlay" @click.self="isNotificationsOpen = false">
         <div class="audit-log-modal-content" style="max-width: 650px;">
           <div class="modal-close-header">
-            <h3>🔔 Bildirimler ve Onay Talepleri</h3>
-            <button class="btn-close-modal" @click="isNotificationsOpen = false">✖ Kapat</button>
+            <h3>🔔 {{ $t('nav.notificationsTitle') || 'Bildirimler ve Onay Talepleri' }}</h3>
+            <button class="btn-close-modal" @click="isNotificationsOpen = false">✖ {{ $t('common.close') || 'Kapat' }}</button>
           </div>
           <div class="modal-body-scroll" style="padding: 1.25rem;">
             <NotificationsPanel 
@@ -122,8 +122,8 @@
       <div v-if="isUsersModalOpen" class="audit-log-modal-overlay" @click.self="isUsersModalOpen = false">
         <div class="audit-log-modal-content" style="max-width: 800px;">
           <div class="modal-close-header">
-            <h3>👥 Sistem Kullanıcıları & Oturum Bilgileri</h3>
-            <button class="btn-close-modal" @click="isUsersModalOpen = false">✖ Kapat</button>
+            <h3>👥 {{ $t('nav.usersTitle') || 'Sistem Kullanıcıları & Oturum Bilgileri' }}</h3>
+            <button class="btn-close-modal" @click="isUsersModalOpen = false">✖ {{ $t('common.close') || 'Kapat' }}</button>
           </div>
           <div class="modal-body-scroll" style="padding: 1.25rem;">
             <UsersPanel :userRole="currentUserRole" />
@@ -134,16 +134,16 @@
       <!-- Çıkış Onay Modalı -->
       <div v-if="isLogoutConfirmOpen" class="logout-confirm-overlay" @click.self="isLogoutConfirmOpen = false">
         <div class="logout-confirm-card">
-          <h4>🚪 Güvenli Çıkış Onayı</h4>
-          <p>Sistemi kilitlemek ve oturumu sonlandırmak istediğinizden emin misiniz?</p>
+          <h4>🚪 {{ $t('nav.logoutConfirmTitle') || 'Güvenli Çıkış Onayı' }}</h4>
+          <p>{{ $t('nav.logoutConfirmMsg') || 'Sistemi kilitlemek ve oturumu sonlandırmak istediğinizden emin misiniz?' }}</p>
           <div class="confirm-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.2rem;">
-            <button class="btn-confirm-cancel" @click="isLogoutConfirmOpen = false">Vazgeç</button>
+            <button class="btn-confirm-cancel" @click="isLogoutConfirmOpen = false">{{ $t('common.cancel') || 'Vazgeç' }}</button>
             <button 
               class="btn-confirm-logout" 
               :disabled="logoutConfirmTimer > 0"
               @click="confirmLockKasa"
             >
-              {{ logoutConfirmTimer > 0 ? `Evet, Çıkış Yap (${logoutConfirmTimer}s)` : 'Evet, Çıkış Yap' }}
+              {{ logoutConfirmTimer > 0 ? `${$t('nav.confirmLogout') || 'Evet, Çıkış Yap'} (${logoutConfirmTimer}s)` : ($t('nav.confirmLogout') || 'Evet, Çıkış Yap') }}
             </button>
           </div>
         </div>
@@ -151,7 +151,7 @@
 
       <!-- Footer -->
       <footer class="dms-footer">
-        <p>&copy; 2026 DMS On-Premise — Tüm veriler yerel sunucuda işlenmektedir.</p>
+        <p>{{ $t('nav.footerText') || '© 2026 DMS On-Premise — Tüm veriler yerel sunucuda işlenmektedir.' }}</p>
       </footer>
 
       <!-- Ayarlar Paneli (Drawer) -->
