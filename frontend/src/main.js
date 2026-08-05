@@ -4,6 +4,26 @@ import Toast from 'vue-toastification'
 import 'vue-toastification/dist/index.css'
 import i18n from './i18n'
 
+// Google Translate Defensive Node Patch for Vue 3
+if (typeof Node !== 'undefined' && Node.prototype) {
+  const originalRemoveChild = Node.prototype.removeChild;
+  Node.prototype.removeChild = function (child) {
+    if (child && child.parentNode !== this) {
+      if (console) console.warn('Cannot remove child, parent mismatch', child, this);
+      return child;
+    }
+    return originalRemoveChild.apply(this, arguments);
+  };
+  const originalInsertBefore = Node.prototype.insertBefore;
+  Node.prototype.insertBefore = function (newNode, referenceNode) {
+    if (referenceNode && referenceNode.parentNode !== this) {
+      if (console) console.warn('Cannot insert child, parent mismatch', referenceNode, this);
+      return newNode;
+    }
+    return originalInsertBefore.apply(this, arguments);
+  };
+}
+
 // LocalStorage Ezici (Güvenlik Modları İçin)
 const originalGetItem = localStorage.getItem.bind(localStorage);
 const originalSetItem = localStorage.setItem.bind(localStorage);
