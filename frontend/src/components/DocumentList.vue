@@ -81,9 +81,9 @@
 
     <!-- Toplu İşlem Barı -->
     <div v-if="selectedIds.length > 0 && isAdmin" class="bulk-action-bar">
-      <span class="bulk-count">{{ selectedIds.length }} belge seçildi</span>
+      <span class="bulk-count">{{ selectedIds.length }} {{ $t('docMeta.docsSelected') || 'belge seçildi' }}</span>
       <button class="action-btn action-btn--danger bulk-delete-btn" @click="triggerBulkDelete">
-        🗑️ Seçilenleri Sil
+        🗑️ {{ $t('docMeta.deleteSelected') || 'Seçilenleri Sil' }}
       </button>
     </div>
 
@@ -115,7 +115,7 @@
                 <span class="doc-icon">{{ getFileIcon(doc.mimeType || doc.mime_type) }}</span>
                 <span class="doc-name-text">{{ doc.originalName || doc.original_name }}</span>
                 <span v-if="isSearchMode && doc.matchLocation" class="match-badge" :class="'match--' + doc.matchLocation">
-                  {{ doc.matchLocation === 'filename' ? '📌 Adında' : '📄 İçerikte' }}
+                  {{ doc.matchLocation === 'filename' ? ('📌 ' + ($t('docMeta.inFilename') || 'Adında')) : ('📄 ' + ($t('docMeta.inContent') || 'İçerikte')) }}
                 </span>
                 <!-- Belge Etiketleri (Rozetler) -->
                 <div v-if="doc.tags && doc.tags.length > 0" class="doc-tags-list" style="margin-top: 0.35rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
@@ -137,7 +137,7 @@
               </td>
               <td>
                 <span class="sensitivity-badge" :class="'sens--' + (doc.sensitivity || 'public')">
-                  {{ doc.sensitivity === 'high' ? '🔴 En Hassas' : doc.sensitivity === 'medium' ? '🟡 Orta' : '🟢 Açık' }}
+                  {{ getSensitivityLabel(doc.sensitivity) }}
                 </span>
               </td>
               <td>
@@ -589,6 +589,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useToast } from 'vue-toastification'
+import { useI18n } from 'vue-i18n'
 import DocumentEditor from './DocumentEditor.vue'
 
 const toast = useToast()
@@ -1323,19 +1324,27 @@ function getFileIcon(mimeType) {
   return '📄'
 }
 
+const { t, locale } = useI18n()
+
 function getTypeLabel(mimeType) {
   if (mimeType === 'application/pdf') return 'PDF'
   if (mimeType === 'image/png') return 'PNG'
   if (mimeType === 'image/jpeg') return 'JPG'
-  return 'Diğer'
+  return t('docMeta.otherType') || 'Diğer'
+}
+
+function getSensitivityLabel(sensitivity) {
+  if (sensitivity === 'high') return '🔴 ' + (t('docMeta.sensHigh') || 'En Hassas')
+  if (sensitivity === 'medium') return '🟡 ' + (t('docMeta.sensMedium') || 'Orta')
+  return '🟢 ' + (t('docMeta.sensPublic') || 'Açık')
 }
 
 function getStatusLabel(status) {
   const labels = {
-    PENDING: 'Beklemede',
-    PROCESSING: 'İşleniyor',
-    COMPLETED: 'Tamamlandı',
-    FAILED: 'Başarısız',
+    PENDING: t('docMeta.statusPending') || 'Beklemede',
+    PROCESSING: t('docMeta.statusProcessing') || 'İşleniyor',
+    COMPLETED: t('docMeta.statusCompleted') || 'Tamamlandı',
+    FAILED: t('docMeta.statusFailed') || 'Başarısız',
   }
   return labels[status] || status
 }
@@ -1343,7 +1352,8 @@ function getStatusLabel(status) {
 function formatDate(dateStr) {
   if (!dateStr) return '—'
   const d = new Date(dateStr)
-  return d.toLocaleDateString('tr-TR', {
+  const loc = locale.value === 'tr' ? 'tr-TR' : locale.value === 'de' ? 'de-DE' : locale.value === 'fr' ? 'fr-FR' : locale.value === 'ar' ? 'ar-SA' : locale.value === 'ru' ? 'ru-RU' : locale.value === 'es' ? 'es-ES' : 'en-US'
+  return d.toLocaleDateString(loc, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -1360,7 +1370,7 @@ function getCleanCategoryClass(cat) {
 }
 
 function getCleanCategoryLabel(cat) {
-  if (!cat || cat === 'uncategorized' || cat === 'undefined' || cat === 'Diger') return 'Diğer';
+  if (!cat || cat === 'uncategorized' || cat === 'undefined' || cat === 'Diger') return t('docMeta.otherCategory') || 'Diğer';
   return cat;
 }
 

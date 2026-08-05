@@ -222,6 +222,21 @@ const messages = {
       "last50Actions": "SON 50 İŞLEM",
       "noActionLogs": "Bu kullanıcıya ait kayıtlı işlem bulunamadı.",
       "auditLogCisoOnly": "Kullanıcının detaylı işlem geçmişi (Audit Logs) sadece CISO yetkisindedir."
+    },
+    "docMeta": {
+      "statusPending": "Beklemede",
+      "statusProcessing": "İşleniyor",
+      "statusCompleted": "Tamamlandı",
+      "statusFailed": "Başarısız",
+      "sensHigh": "En Hassas",
+      "sensMedium": "Orta",
+      "sensPublic": "Açık",
+      "otherType": "Diğer",
+      "otherCategory": "Diğer",
+      "inFilename": "Adında",
+      "inContent": "İçerikte",
+      "docsSelected": "belge seçildi",
+      "deleteSelected": "Seçilenleri Sil"
     }
   },
   "en": {
@@ -446,6 +461,21 @@ const messages = {
       "last50Actions": "LAST 50 ACTIONS",
       "noActionLogs": "No logged actions found for this user.",
       "auditLogCisoOnly": "Detailed audit logs for the user are restricted to CISO only."
+    },
+    "docMeta": {
+      "statusPending": "Pending",
+      "statusProcessing": "Processing",
+      "statusCompleted": "Completed",
+      "statusFailed": "Failed",
+      "sensHigh": "Highly Sensitive",
+      "sensMedium": "Medium",
+      "sensPublic": "Public",
+      "otherType": "Other",
+      "otherCategory": "Other",
+      "inFilename": "In Filename",
+      "inContent": "In Content",
+      "docsSelected": "documents selected",
+      "deleteSelected": "Delete Selected"
     }
   },
   "de": {
