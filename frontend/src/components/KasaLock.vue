@@ -319,6 +319,7 @@ async function handleRegister() {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
+  overflow-y: auto;
 }
 
 .kasa-lock-card {
@@ -329,6 +330,8 @@ async function handleRegister() {
   padding: 2.2rem;
   width: 100%;
   max-width: 440px;
+  max-height: 88vh;
+  overflow-y: auto;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
   position: relative;
 }

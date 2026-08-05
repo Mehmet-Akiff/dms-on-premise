@@ -8,7 +8,7 @@
           <p class="editor-subtitle">OCR metnini düzenleyerek kaydet butonuna bakın.</p>
         </div>
       </div>
-      <button class="btn-reset-format" @click="resetFormatting" title="Tüm metnin renk ve arka plan biçimlendirmesini temizler.">
+      <button class="btn-reset-format" @click="resetFormatting" :title="$t('editor.resetFormatTitle')">
         🧹 Renkleri & Biçimi Temizle
       </button>
     </div>

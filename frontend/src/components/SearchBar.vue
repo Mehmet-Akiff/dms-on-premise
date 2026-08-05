@@ -7,7 +7,7 @@
         class="ai-toggle-btn" 
         :class="{ 'active': isAISearch }"
         @click="toggleAISearch"
-        title="Yapay Zeka Destekli Doğal Dil Aramasını Aç/Kapat"
+        :title="$t('search.aiToggleTitle')"
       >
         <svg class="ai-sparkle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
@@ -23,10 +23,10 @@
           v-model="query"
           type="text"
           class="search-input"
-          :placeholder="isAISearch ? 'Örn: bana mehmet beyin son faturalarını getir...' : ($t('search.placeholder') || 'Doküman adı veya içeriğinde ara...')"
+          :placeholder="isAISearch ? ($t('search.aiPlaceholder') || 'Örn: bana mehmet beyin son faturalarını getir...') : ($t('search.placeholder') || 'Doküman adı veya içeriğinde ara...')"
           @keydown.enter="search"
         />
-        <button v-if="query.length > 0" class="search-clear-btn" @click="clearSearch" title="Temizle">
+        <button v-if="query.length > 0" class="search-clear-btn" @click="clearSearch" :title="$t('common.clear')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>

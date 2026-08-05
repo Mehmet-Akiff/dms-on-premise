@@ -157,7 +157,7 @@
                     v-if="isAdmin"
                     class="action-btn action-btn--success" 
                     @click="restoreDocument(doc)"
-                    title="Belgeyi Çöp Kutusundan Kurtar"
+                    :title="$t('list.restoreDoc')"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="23 4 23 10 17 10"></polyline>
@@ -168,7 +168,7 @@
                     v-if="isAdmin"
                     class="action-btn action-btn--danger" 
                     @click="triggerDelete(doc)"
-                    title="Belgeyi Kalıcı Olarak Sil"
+                    :title="$t('list.deleteDoc')"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="3 6 5 6 21 6"></polyline>
@@ -183,7 +183,7 @@
                     v-if="doc.status === 'COMPLETED'"
                     class="action-btn"
                     @click="openDetail(doc)"
-                    title="OCR Metnini Görüntüle"
+                    :title="$t('list.viewOcr')"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -198,7 +198,7 @@
                     v-if="doc.status !== 'PROCESSING' && isAdmin"
                     class="action-btn action-btn--danger" 
                     @click="triggerDelete(doc)"
-                    title="Çöp Kutusuna Gönder"
+                    :title="$t('list.moveToTrash')"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="3 6 5 6 21 6"></polyline>
@@ -366,7 +366,7 @@
               <!-- Orijinal Belgeyi İndir Butonu -->
               <button 
                 class="action-link-btn shadow-btn" 
-                title="Orijinal Belgeyi Bilgisayara İndir"
+                :title="$t('list.downloadOriginal')"
                 @click="downloadFile(selectedDoc)"
               >
                 📥 İndir
@@ -376,7 +376,7 @@
               <button 
                 v-if="detailData?.metadata?.extracted_text || detailData?.metadata?.extractedText"
                 class="action-link-btn shadow-btn accent-btn" 
-                title="OCR Raporunu Word (.doc) Olarak İndir"
+                :title="$t('list.downloadWord')"
                 @click="downloadExport(selectedDoc)"
               >
                 📝 Raporu İndir (.doc)
@@ -451,7 +451,9 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
                     </svg>
-                    Çıkarılan Tam Metin (OCR)
+                    {{ $t('list.extractedOcrText') || 'Çıkarılan Tam Metin (OCR)' }}
+                    <span v-if="isTranslatingOcr" style="font-size: 0.7rem; color: #a78bfa; margin-left: 0.5rem;">🌐 {{ $t('common.loading') }}...</span>
+                    <span v-else-if="translatedOcrContent" style="font-size: 0.68rem; color: #34d399; background: rgba(52, 211, 153, 0.1); padding: 0.15rem 0.45rem; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.25); margin-left: 0.5rem;">🌐 {{ $t('list.autoTranslated') || 'Otomatik Çevrildi' }}</span>
                   </span>
                   
                   <div class="ocr-header-actions" style="display:flex; align-items:center; gap:0.75rem">
@@ -459,7 +461,7 @@
                       class="action-link-btn" 
                       style="border: 1px solid var(--border); background: rgba(139, 92, 246, 0.08); font-size: 0.75rem; padding: 0.35rem 0.65rem;"
                       @click="isEditing = true"
-                      title="Metni Düzenle"
+                      :title="$t('list.editContent')"
                     >
                       ✏️ Metin Düzenle
                     </button>
@@ -476,8 +478,8 @@
                       />
                       <div class="doc-search-nav" v-if="matchCount > 0">
                         <span class="doc-search-count">{{ activeMatchIndex + 1 }} / {{ matchCount }}</span>
-                        <button class="doc-nav-btn" @click="prevMatch" title="Önceki">▲</button>
-                        <button class="doc-nav-btn" @click="nextMatch" title="Sonraki">▼</button>
+                        <button class="doc-nav-btn" @click="prevMatch" :title="$t('list.prevMatch')">▲</button>
+                        <button class="doc-nav-btn" @click="nextMatch" :title="$t('list.nextMatch')">▼</button>
                       </div>
                     </div>
                   </div>
@@ -488,7 +490,7 @@
                   <div v-for="line in parsedLines" :key="line.index" class="ocr-line-row">
                     <div class="ocr-line-main-group">
                       <div class="ocr-line-text" v-html="line.html"></div>
-                      <button class="btn-comment-trigger" @click="toggleCommentInput(line.index)" title="Bu satıra yorum ekle">
+                      <button class="btn-comment-trigger" @click="toggleCommentInput(line.index)" :title="$t('list.addComment')">
                         💬
                       </button>
                     </div>
@@ -641,11 +643,11 @@ function clearTagFilter() {
 }
 
 
-// AI Özeti bulucu
 const aiSummary = computed(() => {
+  if (translatedAiSummary.value) return translatedAiSummary.value;
   const jobs = detailData.value?.jobs || [];
   const completedJob = jobs.find(j => j.jobStatus === 'COMPLETED' && j.resultSummary);
-  return completedJob ? completedJob.resultSummary : 'Bu doküman için AI özeti bulunmamaktadır.';
+  return completedJob ? completedJob.resultSummary : ($t('list.noAiSummary') || 'Bu doküman için AI özeti bulunmamaktadır.');
 })
 
 // Sistemdeki mevcut tüm benzersiz etiketler
@@ -1096,12 +1098,12 @@ function prevMatch() {
 }
 
 function updateHighlightHtml() {
-  const text = detailData.value?.metadata?.extracted_text || detailData.value?.metadata?.extractedText || '';
+  const text = translatedOcrContent.value || detailData.value?.metadata?.extracted_text || detailData.value?.metadata?.extractedText || detailData.value?.content || '';
   highlightedOcrHtml.value = getHighlightedHtml(text, docSearchQuery.value);
   updateActiveMatch();
 }
 
-watch([docSearchQuery, detailData], () => {
+watch([docSearchQuery, detailData, translatedOcrContent], () => {
   updateHighlightHtml();
 });
 
@@ -1220,11 +1222,63 @@ async function deleteComment(commentId) {
   }
 }
 
+const translatedOcrContent = ref('')
+const translatedAiSummary = ref('')
+const isTranslatingOcr = ref(false)
+
+async function translateOcrAndSummary(rawText, rawSummary, targetLang) {
+  if (!targetLang || targetLang === 'tr') return
+  isTranslatingOcr.value = true
+  try {
+    if (rawText) {
+      const chunks = rawText.match(/[\s\S]{1,1500}/g) || [rawText]
+      let fullTrans = ''
+      for (const chunk of chunks) {
+        const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'q=' + encodeURIComponent(chunk)
+        })
+        const data = await res.json()
+        if (data && data[0]) {
+          data[0].forEach(part => {
+            if (part[0]) fullTrans += part[0]
+          })
+        }
+      }
+      translatedOcrContent.value = fullTrans
+    }
+
+    if (rawSummary) {
+      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'q=' + encodeURIComponent(rawSummary)
+      })
+      const data = await res.json()
+      let sumTrans = ''
+      if (data && data[0]) {
+        data[0].forEach(part => {
+          if (part[0]) sumTrans += part[0]
+        })
+      }
+      translatedAiSummary.value = sumTrans
+    }
+  } catch (err) {
+    console.error('OCR translation error:', err)
+  } finally {
+    isTranslatingOcr.value = false
+    updateHighlightHtml()
+  }
+}
+
 async function openDetail(doc) {
   selectedDoc.value = doc
   isLoadingDetail.value = true
   detailData.value = null
   isEditing.value = false
+  translatedOcrContent.value = ''
+  translatedAiSummary.value = ''
   docSearchQuery.value = searchQuery.value || '' // Arama sorgusuyla başlat
   activeMatchIndex.value = 0
 
@@ -1240,6 +1294,16 @@ async function openDetail(doc) {
     if (response.ok) {
       const data = await response.json()
       detailData.value = data.document || data
+
+      const currentLang = localStorage.getItem('dms_locale') || 'tr'
+      if (currentLang !== 'tr') {
+        const text = detailData.value?.metadata?.extracted_text || detailData.value?.metadata?.extractedText || detailData.value?.content || ''
+        const jobs = detailData.value?.jobs || [];
+        const completedJob = jobs.find(j => j.jobStatus === 'COMPLETED' && j.resultSummary);
+        const summary = completedJob ? completedJob.resultSummary : '';
+        
+        translateOcrAndSummary(text, summary, currentLang)
+      }
     }
   } catch (error) {
     console.error('[DocumentList] Detay yükleme hatası:', error)
@@ -1256,6 +1320,9 @@ function closeDetail() {
   matchCount.value = 0
   activeMatchIndex.value = 0
   highlightedOcrHtml.value = ''
+  translatedOcrContent.value = ''
+  translatedAiSummary.value = ''
+  isTranslatingOcr.value = false
 }
 
 function handleEditorSave(updatedDoc) {

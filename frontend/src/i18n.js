@@ -100,6 +100,7 @@ const messages = {
     "search": {
       "aiMode": "AI Arama",
       "standardMode": "Standart",
+      "aiToggleTitle": "Yapay Zeka Destekli Doğal Dil Aramasını Aç/Kapat",
       "placeholder": "Doküman adı veya içeriğinde ara...",
       "smartSearch": "Akıllı",
       "mode": "ARAMA MODU",
@@ -124,7 +125,30 @@ const messages = {
       "docsCount": "doküman",
       "activeTagFilter": "Aktif Etiket Filtresi:",
       "clearFilter": "Filtreyi Temizle",
-      "tags": "Etiketler:"
+      "tags": "Etiketler:",
+      "pollingActive": "Otomatik güncelleme aktif",
+      "filterByTag": "Bu etikete göre filtrele",
+      "restoreDoc": "Belgeyi Çöp Kutusundan Kurtar",
+      "deleteDoc": "Belgeyi Kalıcı Olarak Sil",
+      "viewOcr": "OCR Metnini Görüntüle",
+      "moveToTrash": "Çöp Kutusuna Gönder",
+      "downloadOriginal": "Orijinal Belgeyi Bilgisayara İndir",
+      "downloadWord": "OCR Raporunu Word (.doc) Olarak İndir",
+      "editContent": "Metni Düzenle",
+      "prevMatch": "Önceki",
+      "nextMatch": "Sonraki",
+      "addComment": "Bu satıra yorum ekle",
+      "deleteComment": "Yorumu sil",
+      "autoTranslated": "Otomatik Çevrildi",
+      "noAiSummary": "Bu doküman için AI özeti bulunmamaktadır."
+    },
+    "audit": {
+      "downloadCsv": "CSV Olarak İndir",
+      "downloadJson": "JSON Olarak İndir",
+      "clearFilters": "Filtreleri Temizle"
+    },
+    "editor": {
+      "resetFormatTitle": "Tüm metnin renk ve arka plan biçimlendirmesini temizler."
     },
     "table": {
       "filename": "DOSYA ADI",
@@ -368,6 +392,7 @@ const messages = {
     "search": {
       "aiMode": "AI Search",
       "standardMode": "Standard",
+      "aiToggleTitle": "Toggle AI-Powered Natural Language Search",
       "placeholder": "Search document name or content...",
       "smartSearch": "Smart",
       "mode": "SEARCH MODE",
@@ -392,7 +417,30 @@ const messages = {
       "docsCount": "documents",
       "activeTagFilter": "Active Tag Filter:",
       "clearFilter": "Clear Filter",
-      "tags": "Tags:"
+      "tags": "Tags:",
+      "pollingActive": "Automatic update active",
+      "filterByTag": "Filter by this tag",
+      "restoreDoc": "Restore document from trash",
+      "deleteDoc": "Permanently delete document",
+      "viewOcr": "View OCR Text",
+      "moveToTrash": "Move to Trash",
+      "downloadOriginal": "Download original document to computer",
+      "downloadWord": "Download OCR Report as Word (.doc)",
+      "editContent": "Edit Text",
+      "prevMatch": "Previous",
+      "nextMatch": "Next",
+      "addComment": "Add comment to this line",
+      "deleteComment": "Delete comment",
+      "autoTranslated": "Auto-Translated",
+      "noAiSummary": "No AI summary available for this document."
+    },
+    "audit": {
+      "downloadCsv": "Download as CSV",
+      "downloadJson": "Download as JSON",
+      "clearFilters": "Clear Filters"
+    },
+    "editor": {
+      "resetFormatTitle": "Clears all text color and background formatting."
     },
     "table": {
       "filename": "FILENAME",

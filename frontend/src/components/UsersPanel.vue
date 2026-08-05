@@ -516,6 +516,8 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   z-index: 15000;
+  padding: 1.5rem;
+  overflow-y: auto;
 }
 
 .detail-modal-card {

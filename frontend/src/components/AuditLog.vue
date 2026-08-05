@@ -16,8 +16,8 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:0.5rem;">
-        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: #34d399;" @click="exportLogs('csv')" title="CSV Olarak İndir">📥 CSV İndir</button>
-        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: #34d399;" @click="exportLogs('json')" title="JSON Olarak İndir">📥 JSON İndir</button>
+        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: #34d399;" @click="exportLogs('csv')" :title="$t('audit.downloadCsv')">📥 CSV İndir</button>
+        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: #34d399;" @click="exportLogs('json')" :title="$t('audit.downloadJson')">📥 JSON İndir</button>
         <span class="audit-badge" v-if="totalCount > 0">{{ totalCount }} kayıt</span>
       </div>
     </div>
@@ -54,7 +54,7 @@
         <label class="filter-label">Bitiş</label>
         <input type="date" v-model="filterEndDate" @change="fetchLogs(1)" class="filter-input" style="height:32px;" />
       </div>
-      <button class="filter-clear-btn" style="height:32px; align-self:flex-end;" @click="clearFilters" title="Filtreleri Temizle">
+      <button class="filter-clear-btn" style="height:32px; align-self:flex-end;" @click="clearFilters" :title="$t('audit.clearFilters')">
         🧹 Filtreleri Temizle
       </button>
     </div>
