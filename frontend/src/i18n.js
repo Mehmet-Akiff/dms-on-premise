@@ -94,6 +94,28 @@ const messages = {
       "type": "TÜR",
       "status": "DURUM",
       "date": "TARİH"
+    },
+    "settings": {
+      "title": "Kasa & Sistem Ayarları",
+      "securityPrefs": "Güvenlik & Oturum Tercihleri",
+      "securityDesc": "Cihaz hatırlama ve sayfayı yenilediğinizde kilitlenme tercihinizi belirleyin.",
+      "sessionMode": "Oturum Güvenlik Modu",
+      "modeAlways": "Cihazı Hatırla (Oturum kalıcıdır, F5 atınca kilitlenmez)",
+      "modeSession": "Sekme Kapanınca Kilitle (Tarayıcı sekmesi kapanınca kilitlenir)",
+      "modeNever": "Sayfa Yenilendiğinde Kilitle (Sayfa yenilendiğinde/F5 atıldığında kilitlenir)",
+      "profileUpdate": "Profil Bilgilerini Güncelle",
+      "profileDesc": "Profil bilgilerinizi bölümler halinde güncelleyebilirsiniz. Yönetici adı ve kullanıcı adı değişikliği güvenlik nedeniyle CISO onayı gerektirir.",
+      "nameChangeTitle": "Ad Soyad Değişikliği (Onay Gerekir)",
+      "namePlaceholder": "Örn: Mehmet Akif Ürey",
+      "nameChangeBtn": "Ad Soyad Güncelleme Talebi Gönder",
+      "usernameChangeTitle": "Kullanıcı Adı Değişikliği (Doğrudan Güncellenir)",
+      "usernameConfirm": "Kullanıcı adını güncellemek istediğinize emin misiniz?",
+      "usernamePlaceholder": "Kullanıcı adı...",
+      "usernameChangeBtn": "Kullanıcı Adını Güncelle",
+      "passwordChangeTitle": "Şifre Değişikliği (Doğrudan Güncellenir)",
+      "passwordConfirm": "Şifrenizi güncellemek istediğinize emin misiniz?",
+      "currentPassword": "Mevcut Şifre",
+      "currentPasswordPlaceholder": "Mevcut şifreniz..."
     }
   },
   "en": {
@@ -190,6 +212,28 @@ const messages = {
       "type": "TYPE",
       "status": "STATUS",
       "date": "DATE"
+    },
+    "settings": {
+      "title": "Vault & System Settings",
+      "securityPrefs": "Security & Session Preferences",
+      "securityDesc": "Determine your device remembering and lock preference when refreshing the page.",
+      "sessionMode": "Session Security Mode",
+      "modeAlways": "Remember Device (Session is permanent, won't lock on F5)",
+      "modeSession": "Lock on Tab Close (Locks when browser tab is closed)",
+      "modeNever": "Lock on Page Refresh (Locks when page is refreshed/F5)",
+      "profileUpdate": "Update Profile Information",
+      "profileDesc": "You can update your profile information in sections. Changing admin name and username requires CISO approval for security reasons.",
+      "nameChangeTitle": "Name & Surname Change (Requires Approval)",
+      "namePlaceholder": "e.g., Mehmet Akif Urey",
+      "nameChangeBtn": "Send Name Update Request",
+      "usernameChangeTitle": "Username Change (Updates Directly)",
+      "usernameConfirm": "Are you sure you want to update your username?",
+      "usernamePlaceholder": "Username...",
+      "usernameChangeBtn": "Update Username",
+      "passwordChangeTitle": "Password Change (Updates Directly)",
+      "passwordConfirm": "Are you sure you want to update your password?",
+      "currentPassword": "Current Password",
+      "currentPasswordPlaceholder": "Your current password..."
     }
   },
   "de": {
