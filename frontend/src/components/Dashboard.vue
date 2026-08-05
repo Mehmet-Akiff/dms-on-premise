@@ -192,6 +192,7 @@ onMounted(() => {
   backdrop-filter: blur(12px);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
+  min-width: 0;
 }
 
 .stat-card:hover {
@@ -227,6 +228,8 @@ onMounted(() => {
   flex-direction: column;
   gap: 0.15rem;
   z-index: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .stat-value {
@@ -238,11 +241,14 @@ onMounted(() => {
 }
 
 .stat-label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 500;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Glow Efektleri */

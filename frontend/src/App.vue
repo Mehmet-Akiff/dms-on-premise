@@ -462,15 +462,9 @@ font {
   gap: 1.25rem;
   padding: 1.25rem 1.5rem;
   width: 100%;
-  max-width: 100%;
+  max-width: 100vw;
   margin: 0;
-}
-
-.main-content {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  margin: 0;
+  overflow-x: hidden;
 }
 
 .panel {
@@ -481,6 +475,9 @@ font {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .panel-title {

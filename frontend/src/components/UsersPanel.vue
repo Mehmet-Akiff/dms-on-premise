@@ -1,16 +1,16 @@
 <template>
   <div class="users-panel">
     <div class="users-header">
-      <h3>👥 Sistem Kullanıcıları & Oturum Bilgileri</h3>
+      <h3>👥 {{ $t('users.panelTitle') || 'Sistem Kullanıcıları & Oturum Bilgileri' }}</h3>
       <p class="panel-desc">
-        Sistemde kayıtlı olan tüm kullanıcıların durumunu ve son aktiflik zamanlarını izleyin.
+        {{ $t('users.panelDesc') || 'Sistemde kayıtlı olan tüm kullanıcıların durumunu ve son aktiflik zamanlarını izleyin.' }}
       </p>
     </div>
 
     <!-- Yükleniyor -->
     <div v-if="isLoading" class="loading-state">
       <span class="spinner-sm"></span>
-      <p>Kullanıcılar yükleniyor...</p>
+      <p>{{ $t('common.loading') }}</p>
     </div>
 
     <!-- Kullanıcı Tablosu -->
@@ -18,12 +18,12 @@
       <table class="users-table">
         <thead>
           <tr>
-            <th>Kullanıcı</th>
-            <th>Rol</th>
-            <th>Durum</th>
-            <th>Çevrimiçi Durumu</th>
-            <th>Son Çevrimiçi</th>
-            <th v-if="userRole === 'admin' || userRole === 'ciso'" style="text-align: center;">İşlem</th>
+            <th>{{ $t('users.thUser') || 'Kullanıcı' }}</th>
+            <th>{{ $t('users.thRole') || 'Rol' }}</th>
+            <th>{{ $t('users.thStatus') || 'Durum' }}</th>
+            <th>{{ $t('users.thOnlineStatus') || 'Çevrimiçi Durumu' }}</th>
+            <th>{{ $t('users.thLastSeen') || 'Son Çevrimiçi' }}</th>
+            <th v-if="userRole === 'admin' || userRole === 'ciso'" style="text-align: center;">{{ $t('users.thAction') || 'İşlem' }}</th>
           </tr>
         </thead>
         <tbody>
@@ -42,16 +42,16 @@
             </td>
             <td>
               <span class="status-badge" :class="'status--' + user.status">
-                {{ user.status === 'active' ? 'Aktif' : 'Onay Bekliyor' }}
+                {{ user.status === 'active' ? ($t('users.statusActive') || 'Aktif') : ($t('users.statusPending') || 'Onay Bekliyor') }}
               </span>
             </td>
             <td>
               <span v-if="isOnline(user.lastActive)" class="online-tag">
                 <span class="online-dot"></span>
-                Çevrimiçi
+                {{ $t('users.online') || 'Çevrimiçi' }}
               </span>
               <span v-else class="offline-tag">
-                Çevrimdışı
+                {{ $t('users.offline') || 'Çevrimdışı' }}
               </span>
             </td>
             <td class="last-seen-cell">
@@ -63,21 +63,21 @@
                   v-if="userRole === 'ciso'"
                   class="btn-detail" 
                   @click="openUserDetail(user)"
-                  title="Detaylı Audit Log geçmişini gör"
+                  :title="$t('users.btnDetail')"
                   style="padding: 0.25rem 0.6rem; font-size: 0.68rem;"
                 >
-                  🔎 Detay Gör
+                  🔎 {{ $t('users.btnDetail') || 'Detay Gör' }}
                 </button>
                 <button 
                   v-if="userRole === 'admin' && user.role !== 'ciso' && user.id !== currentUserId"
                   class="btn-delete-user" 
                   @click="deleteUser(user)"
-                  title="Kullanıcıyı Sil (Ortak Onaya Gider)"
+                  :title="$t('common.delete')"
                   style="padding: 0.25rem 0.6rem; font-size: 0.68rem; background: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); color: #fff; border-radius: 6px; cursor: pointer; font-weight: 700; transition: all 0.2s;"
                   onmouseover="this.style.background='#dc2626'"
                   onmouseout="this.style.background='#ef4444'"
                 >
-                  🗑 Sil
+                  🗑 {{ $t('common.delete') || 'Sil' }}
                 </button>
               </div>
             </td>
@@ -91,7 +91,7 @@
       <div class="detail-modal-card">
         <div class="modal-header">
           <div>
-            <h4>{{ selectedUser?.fullName }} Kullanıcı Detayı</h4>
+            <h4>{{ selectedUser?.fullName }} {{ $t('users.userDetailTitle') || 'Kullanıcı Detayı' }}</h4>
             <p>@{{ selectedUser?.username }} &bull; {{ selectedUser?.email }}</p>
           </div>
           <button @click="userDetailModalOpen = false" class="btn-close">✕</button>
@@ -101,30 +101,30 @@
           <!-- Temel Bilgiler -->
           <div class="detail-info-grid">
             <div class="info-item">
-              <span class="info-label">Rol</span>
+              <span class="info-label">{{ $t('users.thRole') || 'Rol' }}</span>
               <span class="info-val role-text">{{ getRoleLabel(selectedUser?.role) }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">Hesap Durumu</span>
+              <span class="info-label">{{ $t('users.accountStatus') || 'Hesap Durumu' }}</span>
               <span class="info-val" :class="'status--' + selectedUser?.status">
-                {{ selectedUser?.status === 'active' ? 'Aktif' : 'Onay Bekliyor' }}
+                {{ selectedUser?.status === 'active' ? ($t('users.statusActive') || 'Aktif') : ($t('users.statusPending') || 'Onay Bekliyor') }}
               </span>
             </div>
             <div class="info-item">
-              <span class="info-label">Kayıt Tarihi</span>
+              <span class="info-label">{{ $t('users.createdAt') || 'Kayıt Tarihi' }}</span>
               <span class="info-val">{{ formatDate(selectedUser?.createdAt) }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">Son Çevrimiçi</span>
+              <span class="info-label">{{ $t('users.thLastSeen') || 'Son Çevrimiçi' }}</span>
               <span class="info-val">{{ formatLastSeen(selectedUser?.lastActive) }}</span>
             </div>
           </div>
 
           <!-- Audit Logları -->
           <div class="detail-logs-section">
-            <h5>📋 SON 50 İŞLEM GEÇMİŞİ</h5>
+            <h5>📋 {{ $t('users.actionHistory') || 'SON 50 İŞLEM GEÇMİŞİ' }}</h5>
             <div v-if="isLoadingLogs" class="logs-loading">
-              <span class="spinner-xs"></span> Yükleniyor...
+              <span class="spinner-xs"></span> {{ $t('common.loading') }}
             </div>
             <div v-else-if="userLogs.length === 0" class="logs-empty">
               Bu kullanıcıya ait işlem geçmişi bulunmamaktadır.
