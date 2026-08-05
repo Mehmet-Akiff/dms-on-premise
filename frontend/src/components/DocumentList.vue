@@ -1696,7 +1696,8 @@ async function filterFromDashboard(type) {
 
 .doc-table td {
   padding: 0.75rem 1.25rem;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .doc-name {
@@ -1705,8 +1706,9 @@ async function filterFromDashboard(type) {
   gap: 0.5rem;
   font-weight: 500;
   color: var(--text-primary);
-  max-width: 380px;
-  overflow: hidden;
+  min-width: 250px;
+  max-width: 100%;
+  flex-wrap: wrap;
 }
 
 .doc-name-text {
