@@ -71,6 +71,8 @@ const messages = {
       "submitBtn": "Dokümanı Yükle ve İşle"
     },
     "search": {
+      "aiMode": "AI Arama",
+      "standardMode": "Standart",
       "placeholder": "Doküman adı veya içeriğinde ara...",
       "smartSearch": "Akıllı",
       "mode": "ARAMA MODU",
@@ -310,6 +312,8 @@ const messages = {
       "submitBtn": "Upload and Process Document"
     },
     "search": {
+      "aiMode": "AI Search",
+      "standardMode": "Standard",
       "placeholder": "Search document name or content...",
       "smartSearch": "Smart",
       "mode": "SEARCH MODE",
@@ -538,6 +542,8 @@ const messages = {
       "submitBtn": "Dokument hochladen"
     },
     "search": {
+      "aiMode": "KI-Suche",
+      "standardMode": "Standard",
       "placeholder": "Dokumentname oder Inhalt suchen...",
       "smartSearch": "Intelligent",
       "mode": "SUCHMODUS",
@@ -633,6 +639,8 @@ const messages = {
       "submitBtn": "Télécharger"
     },
     "search": {
+      "aiMode": "Recherche IA",
+      "standardMode": "Standard",
       "placeholder": "Rechercher un nom ou contenu...",
       "smartSearch": "Intelligent",
       "mode": "MODE RECHERCHE",
@@ -831,6 +839,8 @@ const messages = {
       "submitBtn": "تحميل"
     },
     "search": {
+      "aiMode": "ИИ Поиск",
+      "standardMode": "Стандарт",
       "placeholder": "بحث عن مستند...",
       "smartSearch": "ذكي",
       "mode": "وضع البحث",

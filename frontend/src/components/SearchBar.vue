@@ -12,7 +12,7 @@
         <svg class="ai-sparkle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
         </svg>
-        <span>AI Arama</span>
+        {{ isAISearch ? ($t('search.aiMode') || 'AI Arama') : ($t('search.standardMode') || 'Standart') }}
       </button>
 
       <div class="search-input-group" :class="{ 'ai-focus': isAISearch }">
@@ -84,9 +84,9 @@
       <div class="filter-item">
         <label class="filter-label">{{ $t('search.mode') || 'Arama Modu' }}</label>
         <select v-model="searchMode" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
-          <option value="fuzzy">🔮 {{ $t('search.smartSearch') || 'Akıllı' }} — Yazım hatalarını tolere eder, en esnek</option>
-          <option value="broad">🔍 Geniş — Kelimenin kökünü veya parçasını arar</option>
-          <option value="exact">🎯 Katı — Birebir yazdığın gibi arar</option>
+          <option value="fuzzy">🧠 {{ $t('search.modeFuzzy') || 'Akıllı - Yazım hatalarını tolere eder, en esnek' }}</option>
+          <option value="broad">🌐 {{ $t('search.modeBroad') || 'Geniş - Kelimenin kökünü veya parçasını arar' }}</option>
+          <option value="exact">🎯 {{ $t('search.modeExact') || 'Katı - Birebir yazdığın gibi arar' }}</option>
         </select>
       </div>
 

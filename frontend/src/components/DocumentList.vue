@@ -1696,8 +1696,7 @@ async function filterFromDashboard(type) {
 
 .doc-table td {
   padding: 0.75rem 1.25rem;
-  white-space: normal;
-  word-break: break-word;
+  white-space: nowrap;
 }
 
 .doc-name {
