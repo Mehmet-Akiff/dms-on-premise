@@ -6,7 +6,7 @@
       <div class="drawer-header">
         <div class="header-title">
           <span>⚙️</span>
-          <h3>Kasa & Sistem Ayarları</h3>
+          <h3>{{ $t('settings.title') || 'Kasa & Sistem Ayarları' }}</h3>
         </div>
         <button class="btn-close-drawer" @click="closeDrawer">✕</button>
       </div>
@@ -35,14 +35,14 @@
 
         <!-- 0B. GÜVENLİK & OTURUM TERCİHLERİ -->
         <div class="settings-section">
-          <h4>🔒 Güvenlik & Oturum Tercihleri</h4>
-          <p class="section-desc">Cihaz hatırlama ve sayfayı yenilediğinizde kilitlenme tercihinizi belirleyin.</p>
+          <h4>🔒 {{ $t('settings.securityPrefs') || 'Güvenlik & Oturum Tercihleri' }}</h4>
+          <p class="section-desc">{{ $t('settings.securityDesc') || 'Cihaz hatırlama ve sayfayı yenilediğinizde kilitlenme tercihinizi belirleyin.' }}</p>
           <div class="form-group" style="margin-top: 0.5rem;">
-            <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Oturum Güvenlik Modu</label>
+            <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">{{ $t('settings.sessionMode') || 'Oturum Güvenlik Modu' }}</label>
             <select v-model="rememberDevice" @change="saveRememberDevice" style="width: 100%; padding: 0.55rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 0.78rem; outline: none; cursor: pointer; margin-top: 0.25rem;">
-              <option value="always">🔓 Cihazı Hatırla (Oturum kalıcıdır, F5 atınca kilitlenmez)</option>
-              <option value="session">⏱ Sekme Kapanınca Kilitle (Tarayıcı sekmesi kapanınca kilitlenir)</option>
-              <option value="never">🔒 Sayfa Yenilendiğinde Kilitle (Sayfa yenilendiğinde/F5 atıldığında kilitlenir)</option>
+              <option value="always">🔓 {{ $t('settings.modeAlways') || 'Cihazı Hatırla (Oturum kalıcıdır, F5 atınca kilitlenmez)' }}</option>
+              <option value="session">⏱ {{ $t('settings.modeSession') || 'Sekme Kapanınca Kilitle' }}</option>
+              <option value="never">🔒 {{ $t('settings.modeNever') || 'Sayfa Yenilendiğinde Kilitle' }}</option>
             </select>
           </div>
         </div>
@@ -51,18 +51,18 @@
 
         <!-- 1. PROFİL GÜNCELLEME (Bölümlenmiş Ayrı Formlar) -->
         <div class="settings-section">
-          <h4>👤 Profil Bilgilerini Güncelle</h4>
-          <p class="section-desc">Profil bilgilerinizi bölümler halinde güncelleyebilirsiniz. Yönetici adı ve kullanıcı adı değişikliği güvenlik nedeniyle CISO onayı gerektirir.</p>
+          <h4>👤 {{ $t('settings.profileUpdate') || 'Profil Bilgilerini Güncelle' }}</h4>
+          <p class="section-desc">{{ $t('settings.profileDesc') || 'Profil bilgilerinizi bölümler halinde güncelleyebilirsiniz. Yönetici adı ve kullanıcı adı değişikliği güvenlik nedeniyle CISO onayı gerektirir.' }}</p>
 
           <!-- Form A: Ad Soyad Değiştirme -->
           <div class="sub-profile-section">
-            <h5>Ad Soyad Değişikliği (Onay Gerekir)</h5>
+            <h5>{{ $t('settings.nameChangeTitle') || 'Ad Soyad Değişikliği (Onay Gerekir)' }}</h5>
             <form @submit.prevent="updateUserFullName" class="settings-form">
               <div class="form-group">
-                <input v-model="userFullName" type="text" placeholder="Örn: Mehmet Akif Ürey" required />
+                <input v-model="userFullName" type="text" :placeholder="$t('settings.namePlaceholder') || 'Örn: Mehmet Akif Ürey'" required />
               </div>
               <button type="submit" class="btn-settings-save">
-                Ad Soyad Güncelleme Talebi Gönder
+                {{ $t('settings.nameChangeBtn') || 'Ad Soyad Güncelleme Talebi Gönder' }}
               </button>
             </form>
           </div>
@@ -71,13 +71,13 @@
 
           <!-- Form B: Kullanıcı Adı Değiştirme -->
           <div class="sub-profile-section">
-            <h5>Kullanıcı Adı Değişikliği (Doğrudan Güncellenir)</h5>
-            <form @submit.prevent="askConfirm('Kullanıcı adını güncellemek istediğinize emin misiniz?', updateUserUsername)" class="settings-form">
+            <h5>{{ $t('settings.usernameChangeTitle') || 'Kullanıcı Adı Değişikliği (Doğrudan Güncellenir)' }}</h5>
+            <form @submit.prevent="askConfirm($t('settings.usernameConfirm') || 'Kullanıcı adını güncellemek istediğinize emin misiniz?', updateUserUsername)" class="settings-form">
               <div class="form-group">
-                <input v-model="userUsername" type="text" placeholder="Kullanıcı adı..." required />
+                <input v-model="userUsername" type="text" :placeholder="$t('settings.usernamePlaceholder') || 'Kullanıcı adı...'" required />
               </div>
               <button type="submit" class="btn-settings-save">
-                Kullanıcı Adını Güncelle
+                {{ $t('settings.usernameChangeBtn') || 'Kullanıcı Adını Güncelle' }}
               </button>
             </form>
           </div>
@@ -86,15 +86,15 @@
 
           <!-- Form C: Şifre Değiştirme (Doğrudan) -->
           <div class="sub-profile-section">
-            <h5>Şifre Değişikliği (Doğrudan Güncellenir)</h5>
-            <form @submit.prevent="askConfirm('Şifrenizi güncellemek istediğinize emin misiniz?', updateUserPassword)" class="settings-form">
+            <h5>{{ $t('settings.passwordChangeTitle') || 'Şifre Değişikliği (Doğrudan Güncellenir)' }}</h5>
+            <form @submit.prevent="askConfirm($t('settings.passwordConfirm') || 'Şifrenizi güncellemek istediğinize emin misiniz?', updateUserPassword)" class="settings-form">
               <div class="form-group">
-                <label>Mevcut Şifre</label>
+                <label>{{ $t('settings.currentPassword') || 'Mevcut Şifre' }}</label>
                 <div class="password-input-wrapper">
                   <input 
                     v-model="profileOldPassword" 
                     :type="isProfileOldPasswordVisible ? 'text' : 'password'" 
-                    placeholder="Mevcut şifreniz..." 
+                    :placeholder="$t('settings.currentPasswordPlaceholder') || 'Mevcut şifreniz...'" 
                     required
                   />
                   <button 

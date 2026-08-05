@@ -195,13 +195,16 @@ const messages = {
   "de": {
     "nav": {
       "title": "DMS On-Premise",
+      "subtitle": "KI-gestütztes Dokumentenmanagementsystem",
       "dashboard": "Dashboard",
       "users": "Benutzer",
       "documents": "Dokumente",
+      "notifications": "Benachrichtigungen",
       "settings": "Einstellungen",
       "logout": "Abmelden",
       "login": "Anmelden",
-      "kasaLock": "Tresorsperre"
+      "kasaLock": "Tresorsperre",
+      "systemActive": "System Aktiv"
     },
     "common": {
       "save": "Speichern",
@@ -239,19 +242,64 @@ const messages = {
       "maxLimit": "Max. 50 MB",
       "uploading": "Wird hochgeladen...",
       "sending": "Datei wird an den Server gesendet",
-      "privacyNotice": "Alle Dateien werden sicher auf dem lokalen Server verarbeitet."
+      "privacyNotice": "Alle Dateien werden sicher auf dem lokalen Server verarbeitet.",
+      "tagsLabel": "Tags (mit Enter hinzufügen)",
+      "tagsPlaceholder": "Tag hinzufügen...",
+      "sensitivityLabel": "Dokumentensensibilität",
+      "sensitivityPublic": "🟢 Öffentlich",
+      "sensitivityMedium": "🟡 Mittel",
+      "sensitivityHigh": "🔴 Hoch",
+      "submitBtn": "Dokument hochladen"
+    },
+    "search": {
+      "placeholder": "Dokumentname oder Inhalt suchen...",
+      "smartSearch": "Intelligent",
+      "mode": "SUCHMODUS",
+      "category": "KATEGORIE",
+      "fileType": "DATEITYP",
+      "status": "STATUS",
+      "sort": "SORTIERUNG",
+      "allCategories": "Alle Kategorien",
+      "allFiles": "Alle Dateien",
+      "allStatus": "Alle",
+      "sortByRelevance": "Nach Relevanz",
+      "searchBtn": "Suchen"
+    },
+    "list": {
+      "trashTitle": "Papierkorb (Gelöschte Dokumente)",
+      "searchResults": "Suchergebnisse",
+      "recentDocs": "Kürzlich hochgeladene Dokumente",
+      "backToDocs": "Zurück zu Dokumenten",
+      "trash": "Papierkorb",
+      "live": "Live",
+      "results": "ergebnisse",
+      "docsCount": "dokumente",
+      "activeTagFilter": "Aktiver Tag-Filter:",
+      "clearFilter": "Filter löschen",
+      "tags": "Tags:"
+    },
+    "table": {
+      "filename": "DATEINAME",
+      "category": "KATEGORIE",
+      "sensitivity": "SENSIBILITÄT",
+      "type": "TYP",
+      "status": "STATUS",
+      "date": "DATUM"
     }
   },
   "fr": {
     "nav": {
       "title": "DMS On-Premise",
+      "subtitle": "Système de gestion de documents intelligent",
       "dashboard": "Tableau de bord",
       "users": "Utilisateurs",
       "documents": "Documents",
+      "notifications": "Notifications",
       "settings": "Paramètres",
       "logout": "Déconnexion",
       "login": "Connexion",
-      "kasaLock": "Verrou"
+      "kasaLock": "Verrouillage",
+      "systemActive": "Système Actif"
     },
     "common": {
       "save": "Enregistrer",
@@ -266,30 +314,72 @@ const messages = {
       "warning": "Avertissement"
     },
     "auth": {
-      "loginTitle": "DMS Connexion",
+      "loginTitle": "Connexion DMS",
       "username": "Nom d'utilisateur",
       "password": "Mot de passe",
       "loginBtn": "Se connecter",
-      "cisoLogin": "CISO Connexion",
+      "cisoLogin": "Connexion CISO",
       "register": "S'inscrire",
       "fullName": "Nom complet",
       "email": "E-mail"
     },
     "dashboard": {
-      "totalDocs": "Total Documents",
+      "totalDocs": "Documents totaux",
       "last24h": "Dernières 24h",
       "last7d": "7 derniers jours",
       "trash": "Corbeille",
       "categoryDist": "Répartition par catégorie"
     },
     "upload": {
-      "title": "Téléverser un document",
-      "dragDrop": "Glissez et déposez vos fichiers ici",
-      "orClick": "ou cliquez pour sélectionner un fichier",
+      "title": "Télécharger un document",
+      "dragDrop": "Faites glisser vos fichiers ici",
+      "orClick": "ou cliquez pour sélectionner",
       "maxLimit": "Max. 50 Mo",
-      "uploading": "Téléversement...",
-      "sending": "Envoi du fichier au serveur",
-      "privacyNotice": "Tous les fichiers sont traités en toute sécurité sur le serveur local."
+      "uploading": "Téléchargement...",
+      "sending": "Envoi au serveur",
+      "privacyNotice": "Tous les fichiers sont traités en toute sécurité.",
+      "tagsLabel": "Tags",
+      "tagsPlaceholder": "Ajouter un tag...",
+      "sensitivityLabel": "Sensibilité",
+      "sensitivityPublic": "🟢 Public",
+      "sensitivityMedium": "🟡 Moyen",
+      "sensitivityHigh": "🔴 Élevé",
+      "submitBtn": "Télécharger"
+    },
+    "search": {
+      "placeholder": "Rechercher un nom ou contenu...",
+      "smartSearch": "Intelligent",
+      "mode": "MODE RECHERCHE",
+      "category": "CATÉGORIE",
+      "fileType": "TYPE DE FICHIER",
+      "status": "STATUT",
+      "sort": "TRIER",
+      "allCategories": "Toutes Catégories",
+      "allFiles": "Tous Fichiers",
+      "allStatus": "Tous",
+      "sortByRelevance": "Par pertinence",
+      "searchBtn": "Rechercher"
+    },
+    "list": {
+      "trashTitle": "Corbeille",
+      "searchResults": "Résultats",
+      "recentDocs": "Récents",
+      "backToDocs": "Retour",
+      "trash": "Corbeille",
+      "live": "En direct",
+      "results": "résultats",
+      "docsCount": "documents",
+      "activeTagFilter": "Tag Actif:",
+      "clearFilter": "Effacer",
+      "tags": "Tags:"
+    },
+    "table": {
+      "filename": "NOM DU FICHIER",
+      "category": "CATÉGORIE",
+      "sensitivity": "SENSIBILITÉ",
+      "type": "TYPE",
+      "status": "STATUT",
+      "date": "DATE"
     }
   },
   "es": {
@@ -345,13 +435,16 @@ const messages = {
   "ru": {
     "nav": {
       "title": "DMS On-Premise",
-      "dashboard": "Панель управления",
+      "subtitle": "Интеллектуальная система управления документами",
+      "dashboard": "Панель",
       "users": "Пользователи",
       "documents": "Документы",
+      "notifications": "Уведомления",
       "settings": "Настройки",
       "logout": "Выйти",
       "login": "Войти",
-      "kasaLock": "Замок"
+      "kasaLock": "Блокировка",
+      "systemActive": "Система Активна"
     },
     "common": {
       "save": "Сохранить",
@@ -361,7 +454,7 @@ const messages = {
       "add": "Добавить",
       "search": "Поиск...",
       "loading": "Загрузка...",
-      "success": "Успешно",
+      "success": "Успех",
       "error": "Ошибка",
       "warning": "Предупреждение"
     },
@@ -377,8 +470,8 @@ const messages = {
     },
     "dashboard": {
       "totalDocs": "Всего документов",
-      "last24h": "За 24 часа",
-      "last7d": "За 7 дней",
+      "last24h": "Последние 24ч",
+      "last7d": "Последние 7 дней",
       "trash": "Корзина",
       "categoryDist": "Распределение по категориям"
     },
@@ -395,13 +488,16 @@ const messages = {
   "ar": {
     "nav": {
       "title": "DMS On-Premise",
+      "subtitle": "نظام إدارة المستندات الذكي",
       "dashboard": "لوحة التحكم",
       "users": "المستخدمون",
       "documents": "المستندات",
+      "notifications": "إشعارات",
       "settings": "الإعدادات",
       "logout": "تسجيل الخروج",
       "login": "تسجيل الدخول",
-      "kasaLock": "قفل الخزنة"
+      "kasaLock": "قفل الخزنة",
+      "systemActive": "النظام نشط"
     },
     "common": {
       "save": "حفظ",
@@ -439,7 +535,49 @@ const messages = {
       "maxLimit": "الحد الأقصى 50 ميغابايت",
       "uploading": "جاري التحميل...",
       "sending": "جاري إرسال الملف إلى الخادم",
-      "privacyNotice": "يتم معالجة جميع الملفات بأمان على الخادم المحلي."
+      "privacyNotice": "يتم معالجة جميع الملفات بأمان.",
+      "tagsLabel": "الكلمات الدالة",
+      "tagsPlaceholder": "إضافة...",
+      "sensitivityLabel": "حساسية",
+      "sensitivityPublic": "🟢 عام",
+      "sensitivityMedium": "🟡 متوسط",
+      "sensitivityHigh": "🔴 عالي",
+      "submitBtn": "تحميل"
+    },
+    "search": {
+      "placeholder": "بحث عن مستند...",
+      "smartSearch": "ذكي",
+      "mode": "وضع البحث",
+      "category": "فئة",
+      "fileType": "نوع الملف",
+      "status": "حالة",
+      "sort": "فرز",
+      "allCategories": "جميع الفئات",
+      "allFiles": "جميع الملفات",
+      "allStatus": "الكل",
+      "sortByRelevance": "حسب الصلة",
+      "searchBtn": "بحث"
+    },
+    "list": {
+      "trashTitle": "سلة المهملات",
+      "searchResults": "نتائج البحث",
+      "recentDocs": "المستندات الأخيرة",
+      "backToDocs": "عودة",
+      "trash": "سلة المهملات",
+      "live": "مباشر",
+      "results": "نتائج",
+      "docsCount": "مستندات",
+      "activeTagFilter": "فلتر:",
+      "clearFilter": "مسح",
+      "tags": "علامات:"
+    },
+    "table": {
+      "filename": "اسم الملف",
+      "category": "فئة",
+      "sensitivity": "حساسية",
+      "type": "نوع",
+      "status": "حالة",
+      "date": "تاريخ"
     }
   }
 };
@@ -450,7 +588,7 @@ const i18n = createI18n({
   legacy: false,
   globalInjection: true,
   locale: savedLocale,
-  fallbackLocale: 'tr',
+  fallbackLocale: 'en',
   messages,
 });
 
