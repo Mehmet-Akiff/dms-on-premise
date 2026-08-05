@@ -1,7 +1,14 @@
 <template>
   <Transition name="slide-up">
     <div v-if="isLocked" class="kasa-lock-overlay">
+      
+      <!-- Sağ Üst Dil Seçim Menüsü (Kartın dışına alındı, kaymayı önler) -->
+      <div class="kasa-top-bar" style="position: absolute; top: 1.5rem; right: 2rem;">
+        <NativeLangSelector />
+      </div>
+
       <div class="kasa-lock-card" :class="{ 'shake-anim': shouldShake }">
+
         <!-- Logo ve Başlık -->
         <div class="lock-header">
           <div class="lock-icon-wrapper">
@@ -10,7 +17,7 @@
               <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
           </div>
-          <h2>{{ $t('auth.loginTitle') || 'DMS GÜVENLİK DUVARI' }}</h2>
+          <h2>{{ $t('auth.loginTitle') }}</h2>
           <p class="lock-desc">Sisteme erişebilmek için giriş yapın veya kayıt olun.</p>
         </div>
 
@@ -22,7 +29,7 @@
             :class="{ active: activeTab === 'login' }"
             @click="switchTab('login')"
           >
-            👤 {{ $t('nav.login') || 'Giriş Yap' }}
+            👤 {{ $t('nav.login') }}
           </button>
           <button 
             type="button" 
@@ -38,358 +45,149 @@
             :class="{ active: activeTab === 'register' }"
             @click="switchTab('register')"
           >
-            📝 Kayıt Ol
+            📝 {{ $t('auth.register') }}
           </button>
         </div>
 
-        <!-- 1. GİRİŞ YAP FORMU -->
+        <!-- 1. STANDART GİRİŞ FORMU -->
         <form v-if="activeTab === 'login'" @submit.prevent="handleLogin" class="lock-form">
-          <div class="input-group">
-            <label>{{ $t('auth.username') || 'Kullanıcı Adı' }}</label>
+          <div class="form-group">
+            <label>{{ $t('auth.username') }}</label>
             <input 
-              v-model="loginUsername" 
+              v-model="username" 
               type="text" 
-              placeholder="kullanıcı adı..." 
-              required 
-              :disabled="isLoading"
+              placeholder="kullanici_adi" 
+              required
+              autocomplete="username"
+            />
+          </div>
+          <div class="form-group">
+            <label>{{ $t('auth.password') }}</label>
+            <input 
+              v-model="password" 
+              type="password" 
+              placeholder="••••••••" 
+              required
+              autocomplete="current-password"
             />
           </div>
 
-          <div class="input-group">
-            <label>{{ $t('auth.password') || 'Şifre' }}</label>
-            <div class="password-input-wrapper">
-              <input 
-                v-model="loginPassword" 
-                :type="isLoginPassVisible ? 'text' : 'password'" 
-                placeholder="••••••••" 
-                required
-                :disabled="isLoading"
-              />
-              <button 
-                type="button" 
-                class="btn-eye" 
-                @mousedown="isLoginPassVisible = true" 
-                @mouseup="isLoginPassVisible = false"
-                @mouseleave="isLoginPassVisible = false"
-                @touchstart="isLoginPassVisible = true" 
-                @touchend="isLoginPassVisible = false"
-                title="Şifreyi görmek için basılı tutun"
-              >
-                👁️
-              </button>
-            </div>
+          <div v-if="errorMessage" class="error-msg">
+            ⚠️ {{ errorMessage }}
           </div>
-
-          <div style="text-align: right; margin-top: -0.5rem; margin-bottom: 1rem;">
-            <button type="button" @click="openForgotPassword" style="background: transparent; border: none; color: #a78bfa; font-size: 0.72rem; font-weight: 700; cursor: pointer; text-decoration: underline;">
-              Şifremi Unuttum?
-            </button>
-          </div>
-
-          <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
 
           <button type="submit" class="btn-unlock" :disabled="isLoading">
-            <span v-if="isLoading" class="spinner-xs"></span>
-            {{ isLoading ? 'Giriş Yapılıyor...' : ($t('auth.loginBtn') || 'Giriş Yap') }}
+            {{ isLoading ? $t('common.loading') : $t('auth.loginBtn') }}
           </button>
         </form>
 
-        <!-- 2. CISO GİRİŞİ FORMU -->
-        <form v-if="activeTab === 'ciso'" @submit.prevent="handleCisoLogin" class="lock-form">
-          <div class="input-group">
-            <label>CISO Kullanıcı Adı</label>
+        <!-- 2. CISO HIZLI GİRİŞ FORMU -->
+        <form v-else-if="activeTab === 'ciso'" @submit.prevent="handleCisoLogin" class="lock-form">
+          <div class="ciso-info-banner">
+            🛡️ CISO (Güvenlik Yöneticisi) özel erişim modudur. Sistem günlükleri ve güvenlik politikalarını yönetir.
+          </div>
+          <div class="form-group">
+            <label>CISO {{ $t('auth.password') }}</label>
             <input 
-              v-model="cisoUsername" 
-              type="text" 
-              placeholder="ciso..." 
-              required 
-              :disabled="isLoading"
+              v-model="cisoPassword" 
+              type="password" 
+              placeholder="CISO Şifresi" 
+              required
             />
           </div>
 
-          <div class="input-group">
-            <label>CISO Güvenlik Şifresi</label>
-            <div class="password-input-wrapper">
-              <input 
-                v-model="cisoPassword" 
-                :type="isCisoPassVisible ? 'text' : 'password'" 
-                placeholder="••••••••" 
-                required
-                :disabled="isLoading"
-              />
-              <button 
-                type="button" 
-                class="btn-eye" 
-                @mousedown="isCisoPassVisible = true" 
-                @mouseup="isCisoPassVisible = false"
-                @mouseleave="isCisoPassVisible = false"
-                @touchstart="isCisoPassVisible = true" 
-                @touchend="isCisoPassVisible = false"
-                title="Şifreyi görmek için basılı tutun"
-              >
-                👁️
-              </button>
-            </div>
+          <div v-if="errorMessage" class="error-msg">
+            ⚠️ {{ errorMessage }}
           </div>
 
-          <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
-
-          <button type="submit" class="btn-unlock btn-unlock--ciso" :disabled="isLoading">
-            <span v-if="isLoading" class="spinner-xs"></span>
-            {{ isLoading ? 'Doğrulanıyor...' : 'CISO Girişi Yap' }}
+          <button type="submit" class="btn-unlock btn-ciso" :disabled="isLoading">
+            {{ isLoading ? $t('common.loading') : 'CISO Girişi Yap' }}
           </button>
         </form>
 
-        <!-- 3. KAYIT OL FORMU (E-posta OTP Doğrulamalı) -->
-        <form v-if="activeTab === 'register'" @submit.prevent="handleRegister" class="lock-form">
-          <div class="input-group">
-            <label>Gerçek Ad Soyad</label>
-            <input 
-              v-model="regFullName" 
-              type="text" 
-              placeholder="Örn: Mehmet Akif Ürey" 
-              required 
-              :disabled="isLoading"
-            />
-          </div>
-
-          <div class="input-group">
-            <label>Kullanıcı Adı</label>
+        <!-- 3. KAYIT OL FORMU -->
+        <form v-else-if="activeTab === 'register'" @submit.prevent="handleRegister" class="lock-form">
+          <div class="form-group">
+            <label>{{ $t('auth.username') }}</label>
             <input 
               v-model="regUsername" 
               type="text" 
-              placeholder="Örn: akif_urey" 
-              required 
-              :disabled="isLoading"
+              placeholder="yeni_kullanici" 
+              required
             />
           </div>
-
-          <div class="input-group">
-            <label>E-posta Adresi</label>
-            <div class="email-input-group" style="display:flex; gap:0.5rem">
-              <input 
-                v-model="regEmail" 
-                type="email" 
-                placeholder="Örn: guvenlik@sirketiniz.com" 
-                required 
-                :disabled="isLoading || isRegEmailVerified"
-              />
-              <button 
-                type="button" 
-                class="btn-send-code" 
-                style="padding: 0.55rem 0.85rem; font-size: 0.75rem; border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 6px; background: rgba(139, 92, 246, 0.08); color: #a78bfa; font-weight: 600; cursor: pointer; white-space: nowrap;"
-                :disabled="isLoading || isRegSendingCode || isRegEmailVerified || regTimer > 0" 
-                @click="sendRegVerificationCode"
-              >
-                {{ isRegSendingCode ? '...' : (isRegEmailVerified ? '✓ Doğrulandı' : (regTimer > 0 ? `Yeniden Gönder (${formatTime(regTimer)})` : 'Kod Gönder')) }}
-              </button>
-            </div>
-          </div>
-
-          <!-- Kayıt OTP Giriş Alanı -->
-          <div v-if="isRegVerifying && !isRegEmailVerified" class="otp-verification-section" style="background: rgba(139, 92, 246, 0.03); border: 1px dashed rgba(139, 92, 246, 0.25); border-radius: 8px; padding: 0.85rem; margin-top:0.25rem; display: flex; flex-direction: column; gap: 0.75rem;">
-            <p style="font-size: 0.7rem; color: #9ca3af; line-height: 1.4; margin: 0;">E-posta adresinize gönderilen 6 haneli doğrulama kodunu girin.</p>
-            <div class="otp-input-container" style="display: flex; gap: 0.4rem; justify-content: space-between;">
-              <input 
-                v-for="(digit, idx) in regOtpDigits" 
-                :key="idx"
-                :id="'reg-otp-' + idx"
-                v-model="regOtpDigits[idx]"
-                type="text"
-                maxLength="1"
-                style="width: 36px; height: 36px; background: rgba(15, 23, 42, 0.7); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 6px; text-align: center; color: #fff; font-size: 1.1rem; font-weight: 700; outline: none;"
-                @input="handleRegOtpInput($event, idx)"
-                @keydown.delete="handleRegOtpDelete($event, idx)"
-              />
-            </div>
-            <div v-if="regOtpError" style="color: #f87171; font-size: 0.72rem; text-align: center;">{{ regOtpError }}</div>
-            <div style="display:flex; justify-content:flex-end; gap:0.5rem">
-              <button type="button" style="background: transparent; border: 1px solid rgba(255, 255, 255, 0.1); color: #9ca3af; padding: 0.35rem 0.75rem; font-size: 0.72rem; border-radius: 6px; cursor: pointer;" @click="isRegVerifying = false">Vazgeç</button>
-              <button type="button" style="background: #8b5cf6; border: none; color: #fff; padding: 0.35rem 1rem; font-size: 0.72rem; font-weight: 700; border-radius: 6px; cursor: pointer;" @click="verifyRegCode">Doğrula</button>
-            </div>
-          </div>
-
-          <div class="input-group">
-            <label>Şifre</label>
-            <div class="password-input-wrapper">
-              <input 
-                v-model="regPassword" 
-                :type="isRegPassVisible ? 'text' : 'password'" 
-                placeholder="Şifre belirleyin..." 
-                required
-                :disabled="isLoading"
-                :style="regPassword ? { borderColor: isRegPasswordValid ? '#22c55e' : '#ef4444' } : {}"
-              />
-              <button 
-                type="button" 
-                class="btn-eye" 
-                @mousedown="isRegPassVisible = true" 
-                @mouseup="isRegPassVisible = false"
-                @mouseleave="isRegPassVisible = false"
-                @touchstart="isRegPassVisible = true" 
-                @touchend="isRegPassVisible = false"
-                title="Şifreyi görmek için basılı tutun"
-              >
-                👁️
-              </button>
-            </div>
-            <!-- Dinamik Şifre Gereksinimleri -->
-            <div v-if="regPassword && regPasswordErrors.length > 0" class="password-requirements" style="font-size:0.68rem; color:#f87171; margin-top:0.25rem; display:flex; flex-direction:column; gap:0.15rem;">
-              <span v-for="err in regPasswordErrors" :key="err">⚠️ {{ err }}</span>
-            </div>
-          </div>
-
-          <div class="input-group">
-            <label>Şifre İpucu (Password Hint)</label>
+          <div class="form-group">
+            <label>{{ $t('auth.fullName') }}</label>
             <input 
-              v-model="regPasswordHint" 
+              v-model="regFullName" 
               type="text" 
-              placeholder="Şifrenizi hatırlatacak ipucu..." 
-              :disabled="isLoading"
+              placeholder="Ahmet Yılmaz" 
+              required
             />
           </div>
-
-          <div class="input-group">
-            <label>Talep Edilen Rol</label>
-            <select v-model="regRole" class="role-select" required :disabled="isLoading">
-              <option value="user">Standart Kullanıcı (Oturum)</option>
-              <option value="admin">Yönetici (Admin)</option>
+          <div class="form-group">
+            <label>{{ $t('auth.email') }}</label>
+            <input 
+              v-model="regEmail" 
+              type="email" 
+              placeholder="ornek@dms.com" 
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label>{{ $t('auth.password') }}</label>
+            <input 
+              v-model="regPassword" 
+              type="password" 
+              placeholder="••••••••" 
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label>Rol Seçimi</label>
+            <select v-model="regRole" class="form-select">
+              <option value="user">Standart Kullanıcı (Onay Gerekebilir)</option>
+              <option value="admin">Sistem Yöneticisi (Admin)</option>
             </select>
           </div>
 
-          <div v-if="successMessage" class="success-banner">{{ successMessage }}</div>
-          <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+          <div v-if="errorMessage" class="error-msg">
+            ⚠️ {{ errorMessage }}
+          </div>
+          <div v-if="successMessage" class="success-msg">
+            ✅ {{ successMessage }}
+          </div>
 
-          <button type="submit" class="btn-unlock btn-unlock--register" :disabled="isLoading || !isRegEmailVerified || !isRegPasswordValid">
-            <span v-if="isLoading" class="spinner-xs"></span>
-            {{ isLoading ? 'İstek Gönderiliyor...' : (isRegEmailVerified ? (isRegPasswordValid ? 'Kayıt Başvurusu Yap' : 'Lütfen Şifre Kurallarını Sağlayın') : 'Lütfen Önce Mail Doğrulayın') }}
+          <button type="submit" class="btn-unlock btn-register" :disabled="isLoading">
+            {{ isLoading ? $t('common.loading') : 'Kayıt Talebi Gönder' }}
           </button>
         </form>
 
-      </div>
-
-      <!-- Şifremi Unuttum Modalı -->
-      <div v-if="isForgotModalOpen" class="forgot-modal-overlay" @click.self="isForgotModalOpen = false">
-        <div class="forgot-modal-card">
-          <div class="forgot-header">
-            <h4>🔑 Şifremi Unuttum</h4>
-            <button type="button" @click="isForgotModalOpen = false" class="btn-close-forgot">✕</button>
-          </div>
-
-          <div class="forgot-body">
-            <div class="input-group">
-              <label>Kayıtlı E-posta Adresiniz</label>
-              <input 
-                v-model="forgotEmail" 
-                type="email" 
-                placeholder="guvenlik@sirketiniz.com"
-                required
-                style="width:100%; box-sizing:border-box;"
-              />
-            </div>
-
-            <div v-if="forgotHint" class="hint-display-box">
-              <strong>💡 Şifre İpucunuz:</strong>
-              <p>{{ forgotHint }}</p>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem;">
-              <button type="button" class="btn-forgot-action" @click="getForgotPasswordHint" :disabled="isForgotLoading">
-                {{ isForgotLoading ? 'Sorgulanıyor...' : '💡 Şifre İpucunu Göster' }}
-              </button>
-              <button type="button" class="btn-forgot-action btn-forgot-action--email" @click="sendForgotPasswordEmail" :disabled="isForgotLoading">
-                {{ isForgotLoading ? 'Gönderiliyor...' : '📧 E-posta ile Sıfırlama Linki Gönder' }}
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </Transition>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
+import NativeLangSelector from './NativeLangSelector.vue'
 
 const isLocked = ref(true)
 const activeTab = ref('login')
-const isLoading = ref(false)
-const shouldShake = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
-
-// Login Form Fields
-const loginUsername = ref('')
-const loginPassword = ref('')
-const isLoginPassVisible = ref(false)
-
-// CISO Form Fields
-const cisoUsername = ref('ciso')
+const username = ref('admin')
+const password = ref('')
 const cisoPassword = ref('')
-const isCisoPassVisible = ref(false)
 
-// Register Form Fields
-const regFullName = ref('')
 const regUsername = ref('')
+const regFullName = ref('')
 const regEmail = ref('')
 const regPassword = ref('')
 const regRole = ref('user')
-const isRegPassVisible = ref(false)
-const regPasswordHint = ref('')
 
-// Şifremi Unuttum Modalı State'leri
-const isForgotModalOpen = ref(false)
-const forgotEmail = ref('')
-const forgotHint = ref('')
-const isForgotLoading = ref(false)
-
-// Dinamik Şifre Validasyonu
-const regPasswordErrors = computed(() => {
-  const p = regPassword.value || '';
-  const errors = [];
-  if (p.length < 8) {
-    errors.push('En az 8 karakter olmalı');
-  }
-  if (!/[a-zA-Z]/.test(p)) {
-    errors.push('En az bir harf içermeli');
-  }
-  if (!/[0-9]/.test(p)) {
-    errors.push('En az bir rakam içermeli');
-  }
-  return errors;
-})
-
-const isRegPasswordValid = computed(() => {
-  return regPassword.value && regPasswordErrors.value.length === 0;
-})
-
-// Kayıt Mail OTP Kontrolleri
-const isRegEmailVerified = ref(false)
-const isRegSendingCode = ref(false)
-const isRegVerifying = ref(false)
-const regOtpDigits = ref(['', '', '', '', '', ''])
-const regOtpError = ref('')
-
-const regTimer = ref(0)
-let regInterval = null
-
-function formatTime(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-function startRegTimer() {
-  if (regInterval) clearInterval(regInterval);
-  regTimer.value = 300;
-  regInterval = setInterval(() => {
-    if (regTimer.value > 0) {
-      regTimer.value--;
-    } else {
-      clearInterval(regInterval);
-    }
-  }, 1000);
-}
+const isLoading = ref(false)
+const errorMessage = ref('')
+const successMessage = ref('')
+const shouldShake = ref(false)
 
 function switchTab(tab) {
   activeTab.value = tab
@@ -397,304 +195,113 @@ function switchTab(tab) {
   successMessage.value = ''
 }
 
-function triggerFormShake() {
+function triggerShake() {
   shouldShake.value = true
-  setTimeout(() => { shouldShake.value = false }, 500)
+  setTimeout(() => {
+    shouldShake.value = false
+  }, 600)
 }
 
-// 1. Genel Giriş İşlemi
 async function handleLogin() {
   isLoading.value = true
   errorMessage.value = ''
-  successMessage.value = ''
 
   try {
-    const response = await fetch('/api/auth/login', {
+    const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: loginUsername.value,
-        password: loginPassword.value,
-        isCiso: false
+        username: username.value,
+        password: password.value
       })
     })
 
-    const data = await response.json()
+    const data = await res.json()
 
-    if (response.ok) {
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('kasa_token', data.token);
-      isLocked.value = false;
-      window.dispatchEvent(new Event('kasa-unlocked'))
-    } else {
-      triggerFormShake()
-      errorMessage.value = data.error || 'Giriş yapılamadı.'
+    if (!res.ok) {
+      errorMessage.value = data.error || 'Giriş başarısız.'
+      triggerShake()
+      return
     }
-  } catch (error) {
-    errorMessage.value = 'Sunucuyla bağlantı kurulamadı.'
+
+    localStorage.setItem('token', data.token)
+    isLocked.value = false
+    window.location.reload()
+  } catch (err) {
+    errorMessage.value = 'Sunucuya bağlanılamadı.'
+    triggerShake()
   } finally {
     isLoading.value = false
   }
 }
 
-// 2. CISO Giriş İşlemi
 async function handleCisoLogin() {
   isLoading.value = true
   errorMessage.value = ''
-  successMessage.value = ''
 
   try {
-    const response = await fetch('/api/auth/login', {
+    const res = await fetch('/api/auth/ciso-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: cisoUsername.value,
-        password: cisoPassword.value,
-        isCiso: true
+        password: cisoPassword.value
       })
     })
 
-    const data = await response.json()
+    const data = await res.json()
 
-    if (response.ok) {
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('kasa_token', data.token);
-      isLocked.value = false;
-      window.dispatchEvent(new Event('kasa-unlocked'))
-    } else {
-      triggerFormShake()
-      errorMessage.value = data.error || 'CISO şifresi geçersiz.'
+    if (!res.ok) {
+      errorMessage.value = data.error || 'CISO şifresi hatalı.'
+      triggerShake()
+      return
     }
-  } catch (error) {
-    errorMessage.value = 'Sunucuyla bağlantı kurulamadı.'
+
+    localStorage.setItem('token', data.token)
+    isLocked.value = false
+    window.location.reload()
+  } catch (err) {
+    errorMessage.value = 'Sunucuya bağlanılamadı.'
+    triggerShake()
   } finally {
     isLoading.value = false
   }
 }
 
-// Kayıt OTP Mail Gönderimi
-async function sendRegVerificationCode() {
-  if (!regEmail.value) {
-    errorMessage.value = 'Lütfen geçerli bir e-posta adresi yazın.'
-    return
-  }
-  isRegSendingCode.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
-  regOtpError.value = ''
-
-  try {
-    const response = await fetch('/api/auth/register-send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: regEmail.value, role: regRole.value })
-    })
-
-    const data = await response.json()
-
-    if (response.ok) {
-      isRegVerifying.value = true
-      regOtpDigits.value = ['', '', '', '', '', '']
-      successMessage.value = 'Doğrulama kodu gönderildi.'
-      startRegTimer()
-    } else {
-      errorMessage.value = data.error || data.message || 'Kod gönderilemedi.'
-    }
-  } catch (err) {
-    errorMessage.value = 'Sunucu bağlantı hatası.'
-  } finally {
-    isRegSendingCode.value = false
-  }
-}
-
-// Kayıt OTP Doğrulama
-async function verifyRegCode() {
-  const code = regOtpDigits.value.join('')
-  if (code.length !== 6) {
-    regOtpError.value = 'Lütfen 6 haneli kodu eksiksiz girin.'
-    return
-  }
-  regOtpError.value = ''
-
-  try {
-    const response = await fetch('/api/auth/register-verify-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: regEmail.value, code })
-    })
-
-    if (response.ok) {
-      isRegEmailVerified.value = true
-      isRegVerifying.value = false
-      if (regInterval) clearInterval(regInterval);
-      regTimer.value = 0;
-      successMessage.value = 'E-posta doğrulama başarılı! Artık kayıt başvurusunu tamamlayabilirsiniz.'
-    } else {
-      const data = await response.json()
-      regOtpError.value = data.error || 'Doğrulama kodu geçersiz.'
-    }
-  } catch (err) {
-    regOtpError.value = 'Doğrulama hatası.'
-  }
-}
-
-function handleRegOtpInput(event, index) {
-  const value = event.target.value
-  if (!/^[0-9]$/.test(value)) {
-    regOtpDigits.value[index] = ''
-    return
-  }
-  if (index < 5 && value) {
-    const nextInput = document.getElementById(`reg-otp-${index + 1}`)
-    if (nextInput) nextInput.focus()
-  }
-}
-
-function handleRegOtpDelete(event, index) {
-  if (index > 0 && !regOtpDigits.value[index]) {
-    regOtpDigits.value[index - 1] = ''
-    const prevInput = document.getElementById(`reg-otp-${index - 1}`)
-    if (prevInput) prevInput.focus()
-  }
-}
-
-// 3. Kullanıcı Kayıt Başvurusu
 async function handleRegister() {
-  if (!isRegPasswordValid.value) {
-    errorMessage.value = 'Şifreniz kurallara uygun değil.'
-    return
-  }
-
   isLoading.value = true
   errorMessage.value = ''
   successMessage.value = ''
 
   try {
-    const response = await fetch('/api/auth/register', {
+    const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        fullName: regFullName.value,
         username: regUsername.value,
+        fullName: regFullName.value,
         email: regEmail.value,
         password: regPassword.value,
-        role: regRole.value,
-        passwordHint: regPasswordHint.value
+        role: regRole.value
       })
     })
 
-    const data = await response.json()
+    const data = await res.json()
 
-    if (response.ok) {
-      successMessage.value = data.message || 'Kayıt talebi başarıyla iletildi.'
-      // Temizle
-      regFullName.value = ''
-      regUsername.value = ''
-      regEmail.value = ''
-      regPassword.value = ''
-      regPasswordHint.value = ''
-      isRegEmailVerified.value = false
-    } else {
+    if (!res.ok) {
       errorMessage.value = data.error || 'Kayıt işlemi başarısız.'
+      triggerShake()
+      return
     }
-  } catch (error) {
-    errorMessage.value = 'Sunucuyla bağlantı kurulamadı.'
+
+    successMessage.value = data.message || 'Kayıt talebiniz alındı! Yönetici onayı bekleniyor.'
+    setTimeout(() => {
+      switchTab('login')
+    }, 2000)
+  } catch (err) {
+    errorMessage.value = 'Sunucuya bağlanılamadı.'
+    triggerShake()
   } finally {
     isLoading.value = false
-  }
-}
-
-async function handleLockEvent() {
-  const token = localStorage.getItem('token');
-  if (token) {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-    } catch (e) {
-      console.warn('Logout log could not be synced:', e.message);
-    }
-  }
-  localStorage.removeItem('token');
-  localStorage.removeItem('kasa_token');
-  isLocked.value = true;
-  loginUsername.value = '';
-  loginPassword.value = '';
-  cisoPassword.value = '';
-  isRegEmailVerified.value = false;
-  isRegVerifying.value = false;
-}
-
-onMounted(() => {
-  window.addEventListener('kasa-lock', handleLockEvent);
-  const token = localStorage.getItem('token');
-  if (token) {
-    isLocked.value = false;
-  }
-})
-
-onUnmounted(() => {
-  window.removeEventListener('kasa-lock', handleLockEvent);
-  if (regInterval) clearInterval(regInterval);
-})
-
-function openForgotPassword() {
-  forgotEmail.value = ''
-  forgotHint.value = ''
-  isForgotModalOpen.value = true
-}
-
-async function getForgotPasswordHint() {
-  if (!forgotEmail.value) {
-    forgotHint.value = 'Lütfen önce e-posta adresinizi girin.'
-    return
-  }
-  isForgotLoading.value = true
-  forgotHint.value = ''
-  try {
-    const response = await fetch('/api/auth/forgot-password-hint', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: forgotEmail.value })
-    })
-    const data = await response.json()
-    if (response.ok) {
-      forgotHint.value = data.hint
-    } else {
-      forgotHint.value = data.error || 'İpucu sorgulanırken bir hata oluştu.'
-    }
-  } catch (err) {
-    forgotHint.value = 'Bağlantı hatası oluştu.'
-  } finally {
-    isForgotLoading.value = false
-  }
-}
-
-async function sendForgotPasswordEmail() {
-  if (!forgotEmail.value) {
-    forgotHint.value = 'Lütfen önce e-posta adresinizi girin.'
-    return
-  }
-  isForgotLoading.value = true
-  try {
-    const response = await fetch('/api/auth/forgot-password-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: forgotEmail.value })
-    })
-    const data = await response.json()
-    if (response.ok) {
-      isForgotModalOpen.value = false
-      successMessage.value = data.message || 'Sıfırlama e-postası başarıyla gönderildi.'
-      errorMessage.value = ''
-    } else {
-      forgotHint.value = data.error || 'Sıfırlama e-postası gönderilemedi.'
-    }
-  } catch (err) {
-    forgotHint.value = 'Bağlantı hatası oluştu.'
-  } finally {
-    isForgotLoading.value = false
   }
 }
 </script>
@@ -706,59 +313,48 @@ async function sendForgotPasswordEmail() {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(circle at center, #0b0f19 0%, #030712 100%);
+  background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+  z-index: 9999;
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 99999;
-  overflow-y: auto;
-  padding: 2rem 0;
+  justify-content: center;
+  padding: 1.5rem;
 }
 
 .kasa-lock-card {
-  background: rgba(17, 24, 39, 0.85);
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: 16px;
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  border-radius: 20px;
+  padding: 2.2rem;
   width: 100%;
-  max-width: 420px;
-  padding: 2.5rem;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 40px rgba(139, 92, 246, 0.1);
-  backdrop-filter: blur(20px);
-  max-height: 90vh;
-  overflow-y: auto;
+  max-width: 440px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  position: relative;
 }
 
-.kasa-lock-card::-webkit-scrollbar {
-  width: 6px;
-}
-.kasa-lock-card::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 8px;
-}
-.kasa-lock-card::-webkit-scrollbar-thumb {
-  background: rgba(139, 92, 246, 0.3);
-  border-radius: 8px;
-}
-.kasa-lock-card::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 92, 246, 0.5);
+.kasa-top-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
 }
 
 .lock-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .lock-icon-wrapper {
-  background: rgba(139, 92, 246, 0.1);
-  border: 1.5px solid rgba(139, 92, 246, 0.3);
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+  border: 1px solid rgba(168, 85, 247, 0.3);
   border-radius: 50%;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   margin: 0 auto 1rem auto;
-  color: #a78bfa;
+  color: #a855f7;
 }
 
 .lock-svg {
@@ -767,272 +363,152 @@ async function sendForgotPasswordEmail() {
 }
 
 .lock-header h2 {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: 1px;
+  color: #f8fafc;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem 0;
 }
 
 .lock-desc {
-  font-size: 0.8rem;
-  color: #9ca3af;
-  margin-top: 0.35rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  margin: 0;
 }
 
 .lock-tabs {
   display: flex;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 0.25rem;
-  margin-bottom: 1.75rem;
+  gap: 0.5rem;
+  background: #0f172a;
+  padding: 0.3rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .tab-btn {
   flex: 1;
   background: transparent;
   border: none;
-  color: #9ca3af;
-  font-size: 0.78rem;
-  font-weight: 700;
-  padding: 0.5rem;
-  border-radius: 6px;
+  color: #94a3b8;
+  padding: 0.55rem 0.4rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.tab-btn:hover {
-  color: #fff;
-}
-
 .tab-btn.active {
-  background: #8b5cf6;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
   color: #fff;
-  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.25);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .lock-form {
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
+  gap: 1rem;
 }
 
-.input-group {
+.form-group {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
 
-.input-group label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #9ca3af;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.form-group label {
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
-.input-group input, .role-select {
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 0.7rem 1rem;
+.form-group input, .form-select {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #fff;
-  font-size: 0.85rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
   outline: none;
-  width: 100%;
+  transition: all 0.2s ease;
 }
 
-.input-group input:focus, .role-select:focus {
-  border-color: #8b5cf6;
-  background: rgba(15, 23, 42, 0.9);
+.form-group input:focus, .form-select:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.15);
 }
 
-.password-input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.password-input-wrapper input {
-  padding-right: 2.75rem !important;
-}
-
-.btn-eye {
-  position: absolute;
-  right: 12px;
-  background: transparent;
-  border: none;
-  color: #a78bfa;
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 4px;
-  opacity: 0.65;
-  user-select: none;
-}
-
-.btn-eye:hover {
-  opacity: 1;
-}
-
-.error-banner {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #f87171;
+.ciso-info-banner {
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  color: #d8b4fe;
+  padding: 0.75rem;
+  border-radius: 10px;
   font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.error-msg {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
   padding: 0.65rem 0.85rem;
   border-radius: 8px;
-  text-align: center;
+  font-size: 0.82rem;
 }
 
-.success-banner {
-  background: rgba(34, 197, 94, 0.08);
-  border: 1px solid rgba(34, 197, 94, 0.25);
-  color: #4ade80;
-  font-size: 0.78rem;
+.success-msg {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #86efac;
   padding: 0.65rem 0.85rem;
   border-radius: 8px;
-  text-align: center;
+  font-size: 0.82rem;
 }
 
 .btn-unlock {
-  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+  background: linear-gradient(135deg, #6366f1, #a855f7);
   color: #fff;
   border: none;
-  padding: 0.75rem;
-  font-size: 0.85rem;
-  font-weight: 800;
-  border-radius: 8px;
+  padding: 0.8rem;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.2);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
+  transition: all 0.2s ease;
+  margin-top: 0.5rem;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
 }
 
-.btn-unlock:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.35);
+.btn-unlock:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
 }
 
-.btn-unlock:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.btn-ciso {
+  background: linear-gradient(135deg, #a855f7, #ec4899);
 }
 
-.btn-unlock--ciso {
-  background: linear-gradient(135deg, #10b981, #059669);
-  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
-}
-
-.btn-unlock--ciso:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+.btn-register {
+  background: linear-gradient(135deg, #10b981, #06b6d4);
 }
 
 .shake-anim {
-  animation: shake 0.4s ease-in-out;
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-6px); }
-  40%, 80% { transform: translateX(6px); }
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
 }
 
 .slide-up-enter-active, .slide-up-leave-active {
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+  transition: all 0.3s ease;
 }
 .slide-up-enter-from, .slide-up-leave-to {
-  transform: translateY(30px);
   opacity: 0;
-}
-/* Şifremi Unuttum Modalı Stilleri */
-.forgot-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(3, 7, 18, 0.75);
-  backdrop-filter: blur(6px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 15000;
-}
-.forgot-modal-card {
-  background: #111827;
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  border-radius: 14px;
-  width: 100%;
-  max-width: 380px;
-  padding: 1.5rem;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7);
-}
-.forgot-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding-bottom: 0.75rem;
-}
-.forgot-header h4 {
-  margin: 0;
-  color: #a78bfa;
-  font-size: 1.05rem;
-}
-.btn-close-forgot {
-  background: transparent;
-  border: none;
-  color: #9ca3af;
-  font-size: 1rem;
-  cursor: pointer;
-}
-.forgot-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-.hint-display-box {
-  background: rgba(139, 92, 246, 0.06);
-  border: 1px dashed rgba(139, 92, 246, 0.25);
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  text-align: left;
-  font-size: 0.8rem;
-}
-.hint-display-box strong {
-  color: #a78bfa;
-  display: block;
-  margin-bottom: 0.25rem;
-}
-.hint-display-box p {
-  margin: 0;
-  color: #fff;
-  font-weight: 500;
-}
-.btn-forgot-action {
-  background: rgba(139, 92, 246, 0.12);
-  border: 1px solid rgba(139, 92, 246, 0.25);
-  color: #a78bfa;
-  padding: 0.65rem;
-  font-weight: 700;
-  font-size: 0.8rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-forgot-action:hover {
-  background: #8b5cf6;
-  color: #fff;
-}
-.btn-forgot-action--email {
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.25);
-  color: #cbd5e1;
-}
-.btn-forgot-action--email:hover {
-  background: #6366f1;
-  color: #fff;
+  transform: translateY(20px);
 }
 </style>

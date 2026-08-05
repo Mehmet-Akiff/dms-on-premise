@@ -8,7 +8,7 @@
           <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
           <polyline points="10 9 9 9 8 9"/>
         </svg>
-        {{ isTrashView ? 'Çöp Kutusu (Silinen Belgeler)' : isSearchMode ? 'Arama Sonuçları' : 'Son Yüklenen Dokümanlar' }}
+        {{ isTrashView ? ($t('list.trashTitle') || 'Çöp Kutusu (Silinen Belgeler)') : isSearchMode ? ($t('list.searchResults') || 'Arama Sonuçları') : ($t('list.recentDocs') || 'Son Yüklenen Dokümanlar') }}
       </h2>
       <div class="doc-header-actions">
         <!-- Çöp Kutusu Butonu -->
@@ -16,7 +16,7 @@
           class="trash-toggle-btn" 
           :class="{ 'trash-active': isTrashView }" 
           @click="toggleTrashView"
-          :title="isTrashView ? 'Normal Belgeleri Göster' : 'Çöp Kutusunu Göster'"
+          :title="isTrashView ? ($t('list.backToDocs') || 'Normal Belgeleri Göster') : ($t('list.trash') || 'Çöp Kutusunu Göster')"
         >
           <svg class="trash-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"></polyline>
@@ -24,47 +24,40 @@
             <line x1="10" y1="11" x2="10" y2="17"></line>
             <line x1="14" y1="11" x2="14" y2="17"></line>
           </svg>
-          <span>{{ isTrashView ? 'Belgelere Dön' : 'Çöp Kutusu' }}</span>
+          <span>{{ isTrashView ? ($t('list.backToDocs') || 'Belgelere Dön') : ($t('list.trash') || 'Çöp Kutusu') }}</span>
         </button>
 
         <span v-if="isPolling && !isSearchMode && !isTrashView" class="polling-indicator" title="Otomatik güncelleme aktif">
           <span class="polling-dot"></span>
-          Canlı
+          {{ $t('list.live') || 'Canlı' }}
         </span>
         <span v-if="isSearchMode && !isTrashView" class="search-badge">
-          "<strong>{{ searchQuery }}</strong>" için {{ documents.length }} sonuç
+          "<strong>{{ searchQuery }}</strong>" {{ $t('list.results') || 'için sonuç' }} ({{ documents.length }})
         </span>
-        <span v-else class="doc-count">{{ documents.length }} doküman</span>
+        <span v-else class="doc-count">{{ documents.length }} {{ $t('list.docsCount') || 'doküman' }}</span>
       </div>
     </div>
 
     <!-- Aktif Etiket Filtresi -->
     <div v-if="activeTagFilter" class="tag-filter-bar" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1rem; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; margin: 0.75rem 0; font-size: 0.82rem;">
-      <span style="color: var(--text-secondary);">Aktif Etiket Filtresi:</span>
+      <span style="color: var(--text-secondary);">{{ $t('list.activeTagFilter') || 'Aktif Etiket Filtresi:' }}</span>
       <span style="font-weight: 700; background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #a78bfa; padding: 0.15rem 0.5rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.3rem;">
         🏷️ {{ activeTagFilter }}
         <button type="button" @click="clearTagFilter" style="background: transparent; border: none; color: #f87171; font-weight: 700; cursor: pointer; font-size: 0.78rem; padding: 0 0.1rem;">✕</button>
       </span>
       <button @click="clearTagFilter" style="margin-left: auto; background: transparent; border: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.72rem; cursor: pointer;">
-        Filtreyi Temizle
+        {{ $t('list.clearFilter') || 'Filtreyi Temizle' }}
       </button>
     </div>
 
     <!-- Hızlı Etiket Filtresi Şeridi -->
     <div v-if="allAvailableTags.length > 0" class="available-tags-wrapper" style="margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; background: rgba(30, 41, 59, 0.4); padding: 0.6rem 0.85rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
-      <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">🏷️ Etiketler:</span>
+      <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">🏷️ {{ $t('list.tags') || 'Etiketler:' }}</span>
       <span 
         v-for="tag in allAvailableTags" 
         :key="tag"
         @click="filterByTag(tag)"
         :style="{
-          fontSize: '0.68rem',
-          fontWeight: '700',
-          background: activeTagFilter === tag ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.03)',
-          border: activeTagFilter === tag ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,0.08)',
-          color: activeTagFilter === tag ? '#a78bfa' : 'var(--text-secondary)',
-          padding: '0.15rem 0.45rem',
-          borderRadius: '4px',
           cursor: 'pointer',
           transition: 'all 0.2s'
         }"
@@ -83,7 +76,7 @@
     <!-- Yükleniyor -->
     <div v-if="isLoading && documents.length === 0" class="doc-loading">
       <div class="spinner-sm"></div>
-      <p>Dokümanlar yükleniyor...</p>
+      <p>{{ $t('common.loading') || 'Dokümanlar yükleniyor...' }}</p>
     </div>
 
     <!-- Toplu İşlem Barı -->
@@ -102,12 +95,12 @@
             <th style="width: 40px; text-align: center;">
               <input type="checkbox" :checked="isAllSelected" @change="toggleSelectAll" />
             </th>
-            <th>Dosya Adı</th>
-            <th>Kategori</th>
-            <th>Hassasiyet</th>
-            <th>Tür</th>
-            <th>Durum</th>
-            <th>Tarih</th>
+            <th>{{ $t('table.filename') || 'Dosya Adı' }}</th>
+            <th>{{ $t('table.category') || 'Kategori' }}</th>
+            <th>{{ $t('table.sensitivity') || 'Hassasiyet' }}</th>
+            <th>{{ $t('table.type') || 'Tür' }}</th>
+            <th>{{ $t('table.status') || 'Durum' }}</th>
+            <th>{{ $t('table.date') || 'Tarih' }}</th>
             <th></th>
           </tr>
         </thead>

@@ -5,6 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="DMS On-Premise - Yerel Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi" />
     <title>DMS - Doküman Yönetim Sistemi</title>
+    
+    <style>
+      /* Tarayıcı Otomatik Çeviri Eklentilerinin Fontu ve Temayı Bozmasını Engelleme */
+      html, body, #app, #dms-app, * {
+        font-family: 'Inter', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+      }
+
+      /* Google Translate Override Sınıfları (Temayı Korumak İçin) */
+      body {
+        top: 0 !important;
+      }
+      .skiptranslate, .goog-te-banner-frame, #goog-gt-tt {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        height: 0 !important;
+      }
+      font {
+        font-family: inherit !important;
+        background-color: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+      }
+      /* Hover Tooltip Kapatma */
+      .VIpgJd-Zvi9od-ORHb-OEVmcd {
+        display: none !important;
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

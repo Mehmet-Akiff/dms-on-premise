@@ -23,7 +23,7 @@
           v-model="query"
           type="text"
           class="search-input"
-          :placeholder="isAISearch ? 'Örn: bana mehmet beyin son faturalarını getir...' : 'Doküman adı veya içeriğinde ara...'"
+          :placeholder="isAISearch ? 'Örn: bana mehmet beyin son faturalarını getir...' : ($t('search.placeholder') || 'Doküman adı veya içeriğinde ara...')"
           @keydown.enter="search"
         />
         <button v-if="query.length > 0" class="search-clear-btn" @click="clearSearch" title="Temizle">
@@ -37,7 +37,7 @@
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
         <div v-else class="search-spinner" :class="{ 'ai-spinner': isAISearch }"></div>
-        {{ isSearching ? 'Aranıyor...' : 'Ara' }}
+        {{ isSearching ? ($t('common.loading') || 'Aranıyor...') : ($t('search.searchBtn') || 'Ara') }}
       </button>
     </div>
 
@@ -82,18 +82,18 @@
     <!-- Alt Satır: Filtre Dropdown'ları (AI arama modunda devre dışı bırakılır) -->
     <div class="filter-row" :class="{ 'disabled-row': isAISearch }">
       <div class="filter-item">
-        <label class="filter-label">Arama Modu</label>
+        <label class="filter-label">{{ $t('search.mode') || 'Arama Modu' }}</label>
         <select v-model="searchMode" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
-          <option value="fuzzy">🔮 Akıllı — Yazım hatalarını tolere eder, en esnek</option>
+          <option value="fuzzy">🔮 {{ $t('search.smartSearch') || 'Akıllı' }} — Yazım hatalarını tolere eder, en esnek</option>
           <option value="broad">🔍 Geniş — Kelimenin kökünü veya parçasını arar</option>
-          <option value="exact">🎯 Katı — Birebir yazdığın gibi arar (büyük/küçük harf duyarlı)</option>
+          <option value="exact">🎯 Katı — Birebir yazdığın gibi arar</option>
         </select>
       </div>
 
       <div class="filter-item filter-item--sm">
-        <label class="filter-label">Kategori</label>
+        <label class="filter-label">{{ $t('search.category') || 'Kategori' }}</label>
         <select v-model="categoryFilter" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
-          <option value="all">📁 Tüm Kategoriler</option>
+          <option value="all">📁 {{ $t('search.allCategories') || 'Tüm Kategoriler' }}</option>
           <option value="Fatura">🧾 Fatura</option>
           <option value="Bordro">💵 Bordro</option>
           <option value="Sozlesme">📝 Sözleşme</option>
@@ -104,18 +104,18 @@
       </div>
 
       <div class="filter-item filter-item--sm">
-        <label class="filter-label">Dosya Türü</label>
+        <label class="filter-label">{{ $t('search.fileType') || 'Dosya Türü' }}</label>
         <select v-model="fileType" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
-          <option value="all">📁 Tüm Dosyalar</option>
+          <option value="all">📁 {{ $t('search.allFiles') || 'Tüm Dosyalar' }}</option>
           <option value="pdf">📕 Sadece PDF</option>
           <option value="image">🖼️ Resim (JPG, PNG)</option>
         </select>
       </div>
 
       <div class="filter-item filter-item--sm">
-        <label class="filter-label">Durum</label>
+        <label class="filter-label">{{ $t('search.status') || 'Durum' }}</label>
         <select v-model="statusFilter" class="filter-select" @change="onFilterChange">
-          <option value="all">Tümü</option>
+          <option value="all">{{ $t('search.allStatus') || 'Tümü' }}</option>
           <option value="completed">✅ Tamamlanan</option>
           <option value="pending">⏳ Bekleyen</option>
           <option value="failed">❌ Başarısız</option>
@@ -123,9 +123,9 @@
       </div>
 
       <div class="filter-item filter-item--sm">
-        <label class="filter-label">Sıralama</label>
+        <label class="filter-label">{{ $t('search.sort') || 'Sıralama' }}</label>
         <select v-model="sortOrder" class="filter-select" @change="onFilterChange">
-          <option value="relevance">⭐ Alaka Düzeyine Göre</option>
+          <option value="relevance">⭐ {{ $t('search.sortByRelevance') || 'Alaka Düzeyine Göre' }}</option>
           <option value="newest">📅 En Yeni Önce</option>
           <option value="oldest">📅 En Eski Önce</option>
           <option value="name_asc">🔤 A → Z</option>

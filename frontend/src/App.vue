@@ -8,11 +8,11 @@
       <header class="dms-header">
         <div class="header-inner">
           <div class="logo">
-            <span class="logo-icon">📄</span>
+            <span class="logo-icon">🔒</span>
             <h1>DMS</h1>
             <span class="badge">On-Premise</span>
           </div>
-          <p class="subtitle">Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi</p>
+          <p class="subtitle">{{ $t('nav.subtitle') || 'Yapay Zeka Destekli Akıllı Doküman Yönetim Sistemi' }}</p>
         </div>
         <div class="header-actions" style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
           <!-- Rol ve İsim Gösterimi -->
@@ -23,30 +23,30 @@
             <span class="header-username" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.05); padding: 0.25rem 0.6rem; border-radius: 6px;">{{ formatFullName(currentUserFullName) }}</span>
           </div>
 
-          <button class="btn-settings-toggle" @click="toggleLanguage" title="Dil Değiştir / Change Language">
-            🌍 {{ locale === 'tr' ? 'EN' : 'TR' }}
+          <!-- Arama Destekli Dünya Dilleri Menüsü -->
+          <NativeLangSelector />
+
+          <button v-if="isCiso" class="btn-audit-toggle" @click="isAuditLogOpen = true" :title="$t('nav.auditLogs')">
+            📜 {{ $t('nav.auditLogs') }}
           </button>
-          <button v-if="isCiso" class="btn-audit-toggle" @click="isAuditLogOpen = true" title="Sistem Günlükleri">
-            📋 {{ $t('nav.documents') === 'Documents' ? 'Audit Logs' : 'Sistem Günlükleri' }}
-          </button>
-          <button class="btn-settings-toggle" @click="isNotificationsOpen = true" title="Bildirimler & Onay Talepleri" style="position:relative;">
-            🔔 {{ $t('nav.documents') === 'Documents' ? 'Notifications' : 'Bildirimler' }}
+          <button class="btn-settings-toggle" @click="isNotificationsOpen = true" :title="$t('nav.notifications')" style="position:relative;">
+            🔔 {{ $t('nav.notifications') }}
             <span v-if="pendingApprovalsCount > 0" class="notif-badge" style="position:absolute; top:-5px; right:-5px; background:#ef4444; color:#fff; font-size:0.65rem; font-weight:800; padding:0.15rem 0.35rem; border-radius:999px; border:2px solid var(--bg-secondary); min-width:18px; text-align:center; box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);">
               {{ pendingApprovalsCount }}
             </span>
           </button>
-          <button v-if="currentUserRole === 'admin' || currentUserRole === 'ciso'" class="btn-settings-toggle" @click="isUsersModalOpen = true" title="Kullanıcı Listesi & Çevrimiçi Takip">
+          <button v-if="currentUserRole === 'admin' || currentUserRole === 'ciso'" class="btn-settings-toggle" @click="isUsersModalOpen = true" :title="$t('nav.users')">
             👥 {{ $t('nav.users') }}
           </button>
-          <button class="btn-settings-toggle" @click="isSettingsOpen = true" title="Kasa Ayarları">
+          <button class="btn-settings-toggle" @click="isSettingsOpen = true" :title="$t('nav.settings')">
             ⚙️ {{ $t('nav.settings') }}
           </button>
-          <button class="btn-lock-toggle" @click="promptLockKasa" title="Güvenli Çıkış (Sistemi Kilitle)">
-            🔒 {{ $t('nav.logout') }}
+          <button class="btn-lock-toggle" @click="promptLockKasa" :title="$t('nav.logout')">
+            🚪 {{ $t('nav.logout') }}
           </button>
           <div class="header-status">
             <span class="status-indicator status-indicator--online"></span>
-            <span class="status-text">Sistem Aktif</span>
+            <span class="status-text">{{ $t('nav.systemActive') }}</span>
           </div>
         </div>
       </header>
@@ -69,14 +69,14 @@
               <polyline points="17 8 12 3 7 8"/>
               <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
-            Doküman Yükle
+            {{ $t('upload.title') || 'Doküman Yükle' }}
           </h3>
           <FileUpload @uploaded="onDocumentUploaded" />
           <div class="panel-hint">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            Tüm dosyalar yerel sunucuda güvenle işlenir. Veri dışarı çıkmaz.
+            {{ $t('upload.privacyNotice') || 'Tüm dosyalar yerel sunucuda güvenle işlenir. Veri dışarı çıkmaz.' }}
           </div>
         </section>
 
@@ -92,8 +92,8 @@
       <div v-if="isAuditLogOpen" class="audit-log-modal-overlay" @click.self="isAuditLogOpen = false">
         <div class="audit-log-modal-content">
           <div class="modal-close-header">
-            <h3>📋 Sistem Günlükleri (CISO Yetkili Alanı)</h3>
-            <button class="btn-close-modal" @click="isAuditLogOpen = false">✕ Kapat</button>
+            <h3>📜 Sistem Günlükleri (CISO Yetkili Alanı)</h3>
+            <button class="btn-close-modal" @click="isAuditLogOpen = false">✖ Kapat</button>
           </div>
           <div class="modal-body-scroll">
             <AuditLog />
@@ -106,7 +106,7 @@
         <div class="audit-log-modal-content" style="max-width: 650px;">
           <div class="modal-close-header">
             <h3>🔔 Bildirimler ve Onay Talepleri</h3>
-            <button class="btn-close-modal" @click="isNotificationsOpen = false">✕ Kapat</button>
+            <button class="btn-close-modal" @click="isNotificationsOpen = false">✖ Kapat</button>
           </div>
           <div class="modal-body-scroll" style="padding: 1.25rem;">
             <NotificationsPanel 
@@ -123,7 +123,7 @@
         <div class="audit-log-modal-content" style="max-width: 800px;">
           <div class="modal-close-header">
             <h3>👥 Sistem Kullanıcıları & Oturum Bilgileri</h3>
-            <button class="btn-close-modal" @click="isUsersModalOpen = false">✕ Kapat</button>
+            <button class="btn-close-modal" @click="isUsersModalOpen = false">✖ Kapat</button>
           </div>
           <div class="modal-body-scroll" style="padding: 1.25rem;">
             <UsersPanel :userRole="currentUserRole" />
@@ -134,7 +134,7 @@
       <!-- Çıkış Onay Modalı -->
       <div v-if="isLogoutConfirmOpen" class="logout-confirm-overlay" @click.self="isLogoutConfirmOpen = false">
         <div class="logout-confirm-card">
-          <h4>🔒 Güvenli Çıkış Onayı</h4>
+          <h4>🚪 Güvenli Çıkış Onayı</h4>
           <p>Sistemi kilitlemek ve oturumu sonlandırmak istediğinizden emin misiniz?</p>
           <div class="confirm-actions" style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.2rem;">
             <button class="btn-confirm-cancel" @click="isLogoutConfirmOpen = false">Vazgeç</button>
@@ -172,6 +172,7 @@ import NotificationsPanel from './components/NotificationsPanel.vue'
 import UsersPanel from './components/UsersPanel.vue'
 import Dashboard from './components/Dashboard.vue'
 import AuditLog from './components/AuditLog.vue'
+import NativeLangSelector from './components/NativeLangSelector.vue'
 
 const documentListRef = ref(null)
 const dashboardRef = ref(null)
@@ -181,13 +182,7 @@ const isUsersModalOpen = ref(false)
 const isNotificationsOpen = ref(false)
 const isKasaLocked = ref(true)
 
-const { t, locale } = useI18n()
-
-function toggleLanguage() {
-  const newLocale = locale.value === 'tr' ? 'en' : 'tr';
-  locale.value = newLocale;
-  localStorage.setItem('dms_locale', newLocale);
-}
+const { locale } = useI18n()
 
 function formatFullName(name) {
   if (!name) return '';
@@ -219,13 +214,10 @@ async function fetchPendingApprovalsCount() {
       const list = data.approvals || []
       const activePending = list.filter(req => {
         if (req.status !== 'pending') return false
-        // Okunmuş/Görülmüş mü?
         if (seen.includes(req.id)) return false
-        // Kendi isteği mi?
         const isOwn = req.targetId === currentUserId.value || req.requestData?.requesterId === currentUserId.value
         if (isOwn) return false
         
-        // Onay yetkisi var mı?
         if (req.type === 'STANDARD_USER_CREATION' || req.type === 'ADMIN_CREATION') {
           return currentUserRole.value === 'admin'
         }
@@ -249,7 +241,7 @@ function onStatClick(type) {
 
 function getRoleLabel(role) {
   if (role === 'ciso') return '🛡️ CISO'
-  if (role === 'admin') return locale.value === 'tr' ? '🔑 Yönetici' : '🔑 Admin'
+  if (role === 'admin') return locale.value === 'tr' ? '👑 Yönetici' : '👑 Admin'
   return locale.value === 'tr' ? '👤 Standart' : '👤 Standard'
 }
 
@@ -267,13 +259,12 @@ function updateUserInfo() {
   try {
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const payload = JSON.parse(window.atob(base64));
+    const payload = JSON.parse(decodeURIComponent(escape(window.atob(base64))));
     currentUserRole.value = payload.role || '';
     currentUserFullName.value = payload.fullName || payload.username || '';
     currentUserId.value = payload.id || '';
     hasDuplicateEmailWarning.value = !!payload.hasDuplicateEmail;
     
-    // Bekleyen onayları getir
     fetchPendingApprovalsCount()
   } catch (e) {
     currentUserRole.value = '';
@@ -323,18 +314,9 @@ onUnmounted(() => {
   if (logoutTimerInterval) clearInterval(logoutTimerInterval);
 })
 
-// Admin rol kontrolü (Reaktif)
-const isAdmin = computed(() => {
-  return currentUserRole.value === 'admin' || currentUserRole.value === 'ciso';
-})
-
-// CISO rol kontrolü (Reaktif)
-const isCiso = computed(() => {
-  return currentUserRole.value === 'ciso';
-})
+const isCiso = computed(() => currentUserRole.value === 'ciso')
 
 function onDocumentUploaded() {
-  // Yükleme başarılı olduğunda doküman listesini ve dashboard'u yenile
   documentListRef.value?.refresh()
   dashboardRef.value?.refresh()
 }
@@ -348,9 +330,7 @@ function onSearchClear() {
 }
 
 function onSearchLoading(isLoading) {
-  if (isLoading) {
-    documentListRef.value?.setLoading(true)
-  }
+  // search loading
 }
 </script>
 
@@ -369,6 +349,10 @@ function onSearchLoading(isLoading) {
   --border: #334155;
   --radius: 12px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  --accent-primary: #8b5cf6;
+  --accent-secondary: #3b82f6;
+  --danger: #ef4444;
+  --success: #22c55e;
 }
 
 * {
@@ -378,7 +362,6 @@ function onSearchLoading(isLoading) {
 }
 
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
@@ -386,28 +369,30 @@ body {
   overflow-x: hidden;
 }
 
-/* ============================================================
-   UYGULAMA LAYOUT
-   ============================================================ */
-#dms-app {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  padding: 1.5rem 2rem;
-  max-width: 1280px;
-  margin: 0 auto;
+/* Font Koruması ve Otomatik Çeviri Engelleyici */
+html, body, #dms-app, #app, * {
+  font-family: 'Inter', 'Outfit', system-ui, -apple-system, sans-serif !important;
 }
 
-/* ============================================================
-   HEADER
-   ============================================================ */
-.dms-header {
+font {
+  font-family: inherit !important;
+  background: transparent !important;
+  color: inherit !important;
+}
+
+#dms-app {
+  min-height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
+  flex-direction: column;
+}
+
+.dms-header {
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
+  padding: 1.25rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .header-inner {
@@ -419,45 +404,42 @@ body {
 .logo {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
 }
 
 .logo-icon {
-  font-size: 1.8rem;
+  font-size: 1.5rem;
 }
 
 .logo h1 {
-  font-size: 1.8rem;
+  font-size: 1.5rem;
   font-weight: 800;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-}
-
-.badge {
-  background: var(--accent-glow);
-  color: var(--accent);
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.65rem;
-  font-weight: 600;
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  margin: 0;
 }
 
 .subtitle {
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .header-status {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--bg-card);
-  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.4rem 0.8rem;
   border-radius: 999px;
   border: 1px solid var(--border);
 }
@@ -470,57 +452,38 @@ body {
 
 .status-indicator--online {
   background: #22c55e;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
-  animation: pulse-glow 2s infinite ease-in-out;
+  box-shadow: 0 0 10px #22c55e;
 }
 
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
-  50% { box-shadow: 0 0 16px rgba(34, 197, 94, 0.8); }
-}
-
-.status-text {
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: #22c55e;
-}
-
-/* ============================================================
-   ANA İÇERİK (2 Sütun Grid)
-   ============================================================ */
 .dms-main {
-  display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 1.5rem;
   flex: 1;
-  align-items: start;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
 }
 
-.panel--upload {
+.panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-}
-
-.panel--list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-width: 0;
+  gap: 1.25rem;
 }
 
 .panel-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
   color: var(--text-primary);
-}
-
-.panel-title svg {
-  color: var(--accent);
-  opacity: 0.8;
 }
 
 .panel-hint {
@@ -538,9 +501,6 @@ body {
   flex-shrink: 0;
 }
 
-/* ============================================================
-   FOOTER
-   ============================================================ */
 .dms-footer {
   margin-top: 2rem;
   padding-top: 1.5rem;
@@ -554,9 +514,6 @@ body {
   opacity: 0.55;
 }
 
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
 @media (max-width: 900px) {
   .dms-main {
     grid-template-columns: 1fr;
@@ -632,7 +589,6 @@ body {
   transform: translateY(-1px);
 }
 
-/* Modallar */
 .audit-log-modal-overlay {
   position: fixed;
   top: 0;
@@ -756,7 +712,6 @@ body {
   cursor: not-allowed;
 }
 
-/* Rol Rozeti Stilleri */
 .role-badge {
   font-size: 0.72rem;
   font-weight: 700;
@@ -781,9 +736,6 @@ body {
   color: #34d399;
 }
 
-/* =============================
-   FADE-IN SAYFA ANİMASYONU
-   ============================= */
 #dms-app.app-unlocked {
   animation: dms-fade-in 0.4s ease both;
 }
@@ -792,9 +744,6 @@ body {
   to   { opacity: 1; }
 }
 
-/* =============================
-   DMS TOAST BİLDİRİMLERİ STİLLERİ
-   ============================= */
 :root {
   --toastification-container-top: 1rem;
   --toastification-container-right: 1rem;
@@ -814,7 +763,6 @@ body {
   max-width: 380px !important;
 }
 
-/* Toast Tip Renkleri */
 .Vue-Toastification__toast--success.dms-toast {
   background: rgba(5, 46, 22, 0.95) !important;
   border-color: rgba(34, 197, 94, 0.3) !important;
@@ -839,7 +787,6 @@ body {
   background: rgba(255, 255, 255, 0.2) !important;
   height: 2px !important;
 }
-/* E-posta Çakışma Alarmı Stilleri */
 .email-collision-alert {
   background: rgba(239, 68, 68, 0.12);
   border: 1.5px solid rgba(239, 68, 68, 0.4);

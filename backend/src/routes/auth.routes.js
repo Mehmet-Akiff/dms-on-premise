@@ -886,24 +886,24 @@ router.put('/profile', verifyToken, async (req, res) => {
         const transporter = getMailTransporter(settings.smtpConfig);
         const fromUser = settings.smtpConfig?.auth?.user || 'security@dms.com';
         await transporter.sendMail({
-          from: '"DMS Security" <' + fromUser + '>',
+          from: `"DMS Security" <${fromUser}>`,
           to: targetEmail,
-          subject: 'DMS - Ad Soyad De�i�ikli�i Onay Talebi',
-          text: 'Kullan�c� ' + user.username + ' (' + user.role + ') ger�ek ismini "' + fullName + '" yapmak istiyor.
+          subject: 'DMS - Ad Soyad Değişikliği Onay Talebi',
+          text: `Kullanıcı ${user.username} (${user.role}) gerçek ismini "${fullName}" yapmak istiyor.
 
-L�tfen a�a��daki 6 haneli g�venlik kodunu DMS Bildirim panelindeki ilgili alana girerek onaylay�n:
+Lütfen aşağıdaki 6 haneli güvenlik kodunu DMS Bildirim panelindeki ilgili alana girerek onaylayın:
 
-G�venlik Kodu: ' + token
+Güvenlik Kodu: ${token}`
         });
       } catch (mailErr) {
-        console.warn('Onay maili g�nderilemedi:', mailErr.message);
+        console.warn('Onay maili gönderilemedi:', mailErr.message);
       }
 
-      console.log('
-[NAME_CHANGE ONAY G�VENL�K KODU] G�venlik Kodu: ' + token + '
-');
+      console.log(`
+[NAME_CHANGE ONAY GÜVENLİK KODU] Güvenlik Kodu: ${token}
+`);
       return res.status(202).json({ 
-        message: '�sim de�i�ikli�i talebi al�nd�. E-posta onay kodu veya onay paneli bekleniyor.',
+        message: 'İsim değişikliği talebi alındı. E-posta onay kodu veya onay paneli bekleniyor.',
         pendingApproval: true,
         token
       });

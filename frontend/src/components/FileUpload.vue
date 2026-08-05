@@ -23,8 +23,8 @@
       <!-- Yükleme Animasyonu -->
       <div class="upload-content" v-if="isUploading">
         <div class="spinner"></div>
-        <p class="upload-title">Yükleniyor...</p>
-        <p class="upload-subtitle">Dosya sunucuya gönderiliyor</p>
+        <p class="upload-title">{{ $t('upload.uploading') }}</p>
+        <p class="upload-subtitle">{{ $t('upload.sending') }}</p>
       </div>
 
       <!-- Varsayılan Alan -->
@@ -36,14 +36,14 @@
             <line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
         </div>
-        <p class="upload-title">Dosyalarınızı buraya sürükleyin</p>
-        <p class="upload-subtitle">veya <span class="upload-link">dosya seçmek için tıklayın</span></p>
+        <p class="upload-title">{{ $t('upload.dragDrop') || 'Dosyalarınızı buraya sürükleyin' }}</p>
+        <p class="upload-subtitle">{{ $t('upload.orClick') || 'veya dosya seçmek için tıklayın' }}</p>
         <div class="upload-formats">
           <span class="format-badge">PDF</span>
           <span class="format-badge">PNG</span>
           <span class="format-badge">JPG</span>
           <span class="format-sep">•</span>
-          <span class="format-limit">Maks. 50 MB</span>
+          <span class="format-limit">{{ $t('upload.maxLimit') || 'Maks. 50 MB' }}</span>
         </div>
       </div>
 
@@ -69,7 +69,7 @@
 
     <!-- Dosya Etiketleri (Yüklemeden Önce) -->
     <div v-if="selectedFile && !isUploading" class="upload-tags-section" style="margin: 0.5rem 0; text-align: left; display: flex; flex-direction: column; gap: 0.35rem;">
-      <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Etiketler (Enter veya Virgül ile ekleyin)</label>
+      <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">{{ $t('upload.tagsLabel') || 'Etiketler (Enter veya Virgül ile ekleyin)' }}</label>
       <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; align-items: center;">
         <span 
           v-for="(tag, idx) in tags" 
@@ -82,7 +82,7 @@
         <input 
           v-model="tagInput" 
           type="text" 
-          placeholder="Etiket ekleyin..." 
+          :placeholder="$t('upload.tagsPlaceholder') || 'Etiket ekleyin...'" 
           @keydown.enter.prevent="addTag"
           @keydown.comma.prevent="addTag"
           style="flex: 1; border: none; background: transparent; outline: none; color: #fff; font-size: 0.78rem; min-width: 100px; padding: 0.1rem;"
@@ -92,11 +92,11 @@
 
     <!-- Belge Hassasiyet Seviyesi -->
     <div v-if="selectedFile && !isUploading" class="upload-sensitivity-section" style="margin: 0.5rem 0; text-align: left; display: flex; flex-direction: column; gap: 0.35rem;">
-      <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">Belge Hassasiyeti</label>
+      <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">{{ $t('upload.sensitivityLabel') || 'Belge Hassasiyeti' }}</label>
       <select v-model="sensitivity" style="width: 100%; padding: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 0.78rem; outline: none; cursor: pointer;">
-        <option value="public">🟢 Herkese Açık (Standart, Admin, CISO görebilir)</option>
-        <option value="medium">🟡 Orta Hassas (Sadece Admin ve CISO görebilir)</option>
-        <option value="high">🔴 En Hassas (Sadece Admin görebilir)</option>
+        <option value="public">{{ $t('upload.sensitivityPublic') || '🟢 Herkese Açık (Standart, Admin, CISO görebilir)' }}</option>
+        <option value="medium">{{ $t('upload.sensitivityMedium') || '🟡 Orta Hassas (Sadece Admin ve CISO görebilir)' }}</option>
+        <option value="high">{{ $t('upload.sensitivityHigh') || '🔴 En Hassas (Sadece Admin görebilir)' }}</option>
       </select>
     </div>
 
@@ -111,7 +111,7 @@
         <polyline points="17 8 12 3 7 8"/>
         <line x1="12" y1="3" x2="12" y2="15"/>
       </svg>
-      Dokümanı Yükle ve İşle
+      {{ $t('upload.submitBtn') || 'Dokümanı Yükle ve İşle' }}
     </button>
 
     <!-- Toast Mesajları -->
