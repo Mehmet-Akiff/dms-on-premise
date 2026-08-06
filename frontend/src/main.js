@@ -64,6 +64,28 @@ localStorage.removeItem = function(key) {
   originalRemoveItem(key);
 };
 
+// Global Fetch Interceptor for 401 Unauthorized
+const originalFetch = window.fetch;
+window.fetch = async function () {
+  const response = await originalFetch.apply(this, arguments);
+  // Eğer response 401 dönerse ve istek auth dışı bir endpoints'e gitmişse veya token süresi dolmuşsa
+  if (response.status === 401) {
+    const url = typeof arguments[0] === 'string' ? arguments[0] : (arguments[0]?.url || '');
+    // Login isteklerinde sonsuz döngüyü engellemek için url kontrolü eklenebilir,
+    // ancak genellikle login 401 dönse de token zaten yanlıştır veya yoktur.
+    if (!url.includes('/api/auth/login')) {
+      const currentToken = localStorage.getItem('token');
+      if (currentToken) {
+        console.warn('[DMS Interceptor] 401 Unauthorized detected. Token expired or invalid. Auto-logging out.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('kasa_token');
+        window.location.reload(); // Otomatik olarak login sayfasına veya başlangıç ekranına düşmesini sağlar
+      }
+    }
+  }
+  return response;
+};
+
 const app = createApp(App)
 
 app.use(i18n)
