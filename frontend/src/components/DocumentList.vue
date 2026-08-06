@@ -451,9 +451,9 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
                     </svg>
-                    {{ $t('list.extractedOcrText') || 'Çıkarılan Tam Metin (OCR)' }}
-                    <span v-if="isTranslatingOcr" style="font-size: 0.7rem; color: #a78bfa; margin-left: 0.5rem;">🌐 {{ $t('common.loading') }}...</span>
-                    <span v-else-if="translatedOcrContent" style="font-size: 0.68rem; color: #34d399; background: rgba(52, 211, 153, 0.1); padding: 0.15rem 0.45rem; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.25); margin-left: 0.5rem;">🌐 {{ $t('list.autoTranslated') || 'Otomatik Çevrildi' }}</span>
+                    Çıkarılan Tam Metin (OCR)
+                    <span v-if="isTranslatingOcr" style="font-size: 0.7rem; color: #a78bfa; margin-left: 0.5rem;">🌐 Yükleniyor...</span>
+                    <span v-else-if="translatedOcrContent" style="font-size: 0.68rem; color: #34d399; background: rgba(52, 211, 153, 0.1); padding: 0.15rem 0.45rem; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.25); margin-left: 0.5rem;">🌐 Otomatik Çevrildi</span>
                   </span>
                   
                   <div class="ocr-header-actions" style="display:flex; align-items:center; gap:0.75rem">
@@ -644,7 +644,6 @@ function clearTagFilter() {
 
 
 const aiSummary = computed(() => {
-  if (translatedAiSummary.value) return translatedAiSummary.value;
   const jobs = detailData.value?.jobs || [];
   const completedJob = jobs.find(j => j.jobStatus === 'COMPLETED' && j.resultSummary);
   return completedJob ? completedJob.resultSummary : ($t('list.noAiSummary') || 'Bu doküman için AI özeti bulunmamaktadır.');
@@ -1098,12 +1097,12 @@ function prevMatch() {
 }
 
 function updateHighlightHtml() {
-  const text = translatedOcrContent.value || detailData.value?.metadata?.extracted_text || detailData.value?.metadata?.extractedText || detailData.value?.content || '';
+  const text = detailData.value?.metadata?.extracted_text || detailData.value?.metadata?.extractedText || detailData.value?.content || '';
   highlightedOcrHtml.value = getHighlightedHtml(text, docSearchQuery.value);
   updateActiveMatch();
 }
 
-watch([docSearchQuery, detailData, translatedOcrContent], () => {
+watch([docSearchQuery, detailData], () => {
   updateHighlightHtml();
 });
 
@@ -1222,63 +1221,12 @@ async function deleteComment(commentId) {
   }
 }
 
-const translatedOcrContent = ref('')
-const translatedAiSummary = ref('')
-const isTranslatingOcr = ref(false)
-
-async function translateOcrAndSummary(rawText, rawSummary, targetLang) {
-  if (!targetLang || targetLang === 'tr') return
-  isTranslatingOcr.value = true
-  try {
-    if (rawText) {
-      const chunks = rawText.match(/[\s\S]{1,1500}/g) || [rawText]
-      let fullTrans = ''
-      for (const chunk of chunks) {
-        const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'q=' + encodeURIComponent(chunk)
-        })
-        const data = await res.json()
-        if (data && data[0]) {
-          data[0].forEach(part => {
-            if (part[0]) fullTrans += part[0]
-          })
-        }
-      }
-      translatedOcrContent.value = fullTrans
-    }
-
-    if (rawSummary) {
-      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'q=' + encodeURIComponent(rawSummary)
-      })
-      const data = await res.json()
-      let sumTrans = ''
-      if (data && data[0]) {
-        data[0].forEach(part => {
-          if (part[0]) sumTrans += part[0]
-        })
-      }
-      translatedAiSummary.value = sumTrans
-    }
-  } catch (err) {
-    console.error('OCR translation error:', err)
-  } finally {
-    isTranslatingOcr.value = false
-    updateHighlightHtml()
-  }
-}
 
 async function openDetail(doc) {
   selectedDoc.value = doc
   isLoadingDetail.value = true
   detailData.value = null
   isEditing.value = false
-  translatedOcrContent.value = ''
-  translatedAiSummary.value = ''
   docSearchQuery.value = searchQuery.value || '' // Arama sorgusuyla başlat
   activeMatchIndex.value = 0
 
@@ -1296,14 +1244,6 @@ async function openDetail(doc) {
       detailData.value = data.document || data
 
       const currentLang = localStorage.getItem('dms_locale') || 'tr'
-      if (currentLang !== 'tr') {
-        const text = detailData.value?.metadata?.extracted_text || detailData.value?.metadata?.extractedText || detailData.value?.content || ''
-        const jobs = detailData.value?.jobs || [];
-        const completedJob = jobs.find(j => j.jobStatus === 'COMPLETED' && j.resultSummary);
-        const summary = completedJob ? completedJob.resultSummary : '';
-        
-        translateOcrAndSummary(text, summary, currentLang)
-      }
     }
   } catch (error) {
     console.error('[DocumentList] Detay yükleme hatası:', error)
@@ -1320,9 +1260,6 @@ function closeDetail() {
   matchCount.value = 0
   activeMatchIndex.value = 0
   highlightedOcrHtml.value = ''
-  translatedOcrContent.value = ''
-  translatedAiSummary.value = ''
-  isTranslatingOcr.value = false
 }
 
 function handleEditorSave(updatedDoc) {
