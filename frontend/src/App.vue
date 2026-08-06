@@ -26,6 +26,10 @@
           <!-- Arama Destekli Dünya Dilleri Menüsü -->
           <NativeLangSelector />
 
+          <button class="btn-settings-toggle" @click="isChatOpen = true" title="Kurum İçi Mesajlar">
+            💬 Mesajlar
+          </button>
+
           <button v-if="isCiso" class="btn-audit-toggle" @click="isAuditLogOpen = true" :title="$t('nav.auditLogs')">
             📜 {{ $t('nav.auditLogs') }}
           </button>
@@ -156,6 +160,9 @@
 
       <!-- Ayarlar Paneli (Drawer) -->
       <SettingsPanel :isOpen="isSettingsOpen" @close="isSettingsOpen = false" />
+
+      <!-- Sohbet Paneli (Drawer) -->
+      <IntranetChat :isOpen="isChatOpen" @close="isChatOpen = false" />
     </template>
   </div>
 </template>
@@ -173,6 +180,7 @@ import UsersPanel from './components/UsersPanel.vue'
 import Dashboard from './components/Dashboard.vue'
 import AuditLog from './components/AuditLog.vue'
 import NativeLangSelector from './components/NativeLangSelector.vue'
+import IntranetChat from './components/chat/IntranetChat.vue'
 
 const documentListRef = ref(null)
 const dashboardRef = ref(null)
@@ -180,6 +188,7 @@ const isSettingsOpen = ref(false)
 const isAuditLogOpen = ref(false)
 const isUsersModalOpen = ref(false)
 const isNotificationsOpen = ref(false)
+const isChatOpen = ref(false)
 const isKasaLocked = ref(true)
 
 const { locale } = useI18n()

@@ -288,5 +288,8 @@
     "inContent": "In Content",
     "docsSelected": "documents selected",
     "deleteSelected": "Delete Selected"
+  },
+  "chat": {
+    "title": "Intranet Chat"
   }
 }

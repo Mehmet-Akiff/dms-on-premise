@@ -287,5 +287,8 @@
     "inContent": "İçerikte",
     "docsSelected": "belge seçildi",
     "deleteSelected": "Seçilenleri Sil"
+  },
+  "chat": {
+    "title": "Kurum İçi Haberleşme"
   }
 }
