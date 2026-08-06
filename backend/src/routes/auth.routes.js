@@ -1653,9 +1653,63 @@ router.post('/import-log-file', verifyToken, async (req, res) => {
   }
 });
 // ============================================================
+// ŞİFREMI UNUTTUM RATE LIMITER
+// ============================================================
+const forgotPasswordAttempts = new Map();
+
+function checkForgotPasswordRateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  let record = forgotPasswordAttempts.get(ip);
+  
+  if (record && now >= record.nextAllowedTime) {
+     if (record.currentPenaltyMins >= 1440) {
+         record = null;
+         forgotPasswordAttempts.delete(ip);
+     }
+  }
+
+  if (!record) {
+    forgotPasswordAttempts.set(ip, { count: 1, nextAllowedTime: now + 60 * 1000, currentPenaltyMins: 1 });
+    return next();
+  }
+  
+  if (now < record.nextAllowedTime) {
+    const waitMs = record.nextAllowedTime - now;
+    const waitMins = Math.ceil(waitMs / 60000);
+    let timeStr = `${waitMins} dakika`;
+    if (waitMins >= 60) {
+       const h = Math.floor(waitMins / 60);
+       const m = waitMins % 60;
+       timeStr = `${h} saat ${m > 0 ? m + ' dakika' : ''}`.trim();
+    }
+    return res.status(429).json({ error: `Güvenlik nedeniyle geçici olarak engellendiniz. Lütfen ${timeStr} sonra tekrar deneyin.` });
+  }
+  
+  record.count += 1;
+  let nextWaitMins = Math.pow(2, record.count - 1);
+  if (nextWaitMins >= 1440) {
+      nextWaitMins = 1440; 
+  }
+  
+  record.currentPenaltyMins = nextWaitMins;
+  record.nextAllowedTime = now + nextWaitMins * 60 * 1000;
+  return next();
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of forgotPasswordAttempts.entries()) {
+    if (now > record.nextAllowedTime + 24 * 60 * 60 * 1000) {
+      forgotPasswordAttempts.delete(ip);
+    }
+  }
+}, 60 * 60 * 1000);
+
+// ============================================================
 // ŞİFREMI UNUTTUM - IPUCU SORGULAMA
 // ============================================================
-router.post('/forgot-password-hint', async (req, res) => {
+router.post('/forgot-password-hint', checkForgotPasswordRateLimit, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'E-posta adresi gereklidir.' });
   try {
@@ -1674,7 +1728,7 @@ router.post('/forgot-password-hint', async (req, res) => {
 // ============================================================
 // ŞİFREMI UNUTTUM - SIFIRLAMA MAİLİ GÖNDERME
 // ============================================================
-router.post('/forgot-password-email', async (req, res) => {
+router.post('/forgot-password-email', checkForgotPasswordRateLimit, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'E-posta adresi gereklidir.' });
   try {

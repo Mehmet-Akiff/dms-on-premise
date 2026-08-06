@@ -63,17 +63,37 @@
           </div>
           <div class="form-group">
             <label>{{ $t('auth.password') }}</label>
-            <input 
-              v-model="password" 
-              type="password" 
-              placeholder="••••••••" 
-              required
-              autocomplete="current-password"
-            />
+            <div class="password-input-wrapper">
+              <input 
+                v-model="password" 
+                :type="isLoginPassVisible ? 'text' : 'password'" 
+                placeholder="••••••••" 
+                required
+                autocomplete="current-password"
+              />
+              <button 
+                type="button" 
+                class="btn-eye" 
+                @mousedown="isLoginPassVisible = true"
+                @mouseup="isLoginPassVisible = false"
+                @mouseleave="isLoginPassVisible = false"
+                @touchstart="isLoginPassVisible = true"
+                @touchend="isLoginPassVisible = false"
+                title="Şifreyi görmek için basılı tutun"
+              >
+                👁️
+              </button>
+            </div>
           </div>
 
           <div v-if="errorMessage" class="error-msg">
             ⚠️ {{ errorMessage }}
+          </div>
+
+          <div style="text-align: right; margin-top: -0.5rem; margin-bottom: 1rem; width: 100%;">
+            <button type="button" @click="openForgotPassword" style="background: transparent; border: none; color: #a78bfa; font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: underline; white-space: nowrap; text-align: right; max-width: 100%; line-height: 1.4;">
+              <span>{{ $t('auth.forgotPassword') || 'Şifremi Unuttum?' }}</span>
+            </button>
           </div>
 
           <button type="submit" class="btn-unlock" :disabled="isLoading">
@@ -98,12 +118,26 @@
           </div>
           <div class="form-group">
             <label>CISO {{ $t('auth.password') }}</label>
-            <input 
-              v-model="cisoPassword" 
-              type="password" 
-              :placeholder="$t('auth.cisoPasswordPlaceholder')" 
-              required
-            />
+            <div class="password-input-wrapper">
+              <input 
+                v-model="cisoPassword" 
+                :type="isCisoPassVisible ? 'text' : 'password'" 
+                :placeholder="$t('auth.cisoPasswordPlaceholder')" 
+                required
+              />
+              <button 
+                type="button" 
+                class="btn-eye" 
+                @mousedown="isCisoPassVisible = true"
+                @mouseup="isCisoPassVisible = false"
+                @mouseleave="isCisoPassVisible = false"
+                @touchstart="isCisoPassVisible = true"
+                @touchend="isCisoPassVisible = false"
+                title="Şifreyi görmek için basılı tutun"
+              >
+                👁️
+              </button>
+            </div>
           </div>
 
           <div v-if="errorMessage" class="error-msg">
@@ -146,12 +180,26 @@
           </div>
           <div class="form-group">
             <label>{{ $t('auth.password') }}</label>
-            <input 
-              v-model="regPassword" 
-              type="password" 
-              placeholder="••••••••" 
-              required
-            />
+            <div class="password-input-wrapper">
+              <input 
+                v-model="regPassword" 
+                :type="isRegPassVisible ? 'text' : 'password'" 
+                placeholder="••••••••" 
+                required
+              />
+              <button 
+                type="button" 
+                class="btn-eye" 
+                @mousedown="isRegPassVisible = true"
+                @mouseup="isRegPassVisible = false"
+                @mouseleave="isRegPassVisible = false"
+                @touchstart="isRegPassVisible = true"
+                @touchend="isRegPassVisible = false"
+                title="Şifreyi görmek için basılı tutun"
+              >
+                👁️
+              </button>
+            </div>
           </div>
           <div class="form-group">
             <label>{{ $t('auth.roleSelection') }}</label>
@@ -178,6 +226,46 @@
         </form>
 
       </div>
+
+      <!-- Şifremi Unuttum Modalı -->
+      <div v-if="isForgotModalOpen" class="forgot-modal-overlay" @click.self="isForgotModalOpen = false">
+        <div class="forgot-modal-card">
+          <div class="forgot-header">
+            <h4>🔑 {{ $t('auth.forgotPassword') || 'Şifremi Unuttum' }}</h4>
+            <button type="button" @click="isForgotModalOpen = false" class="btn-close-forgot">✕</button>
+          </div>
+
+          <div class="forgot-body">
+            <div class="input-group">
+              <label>{{ $t('auth.registeredEmail') || 'Kayıtlı E-posta Adresiniz' }}</label>
+              <input 
+                v-model="forgotEmail" 
+                type="email" 
+                :placeholder="$t('auth.emailPlaceholder') || 'guvenlik@sirketiniz.com'"
+                required
+                style="width:100%; box-sizing:border-box;"
+              />
+            </div>
+
+            <div v-if="forgotHint" class="hint-display-box">
+              <strong>💡 {{ $t('auth.passwordHint') || 'Şifre İpucunuz:' }}</strong>
+              <p>{{ forgotHint }}</p>
+            </div>
+
+            <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+            <div v-if="successMessage" class="success-banner">{{ successMessage }}</div>
+
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
+              <button type="button" class="btn-forgot-action" @click="getForgotPasswordHint" :disabled="isForgotLoading" style="flex: 1 1 auto; min-width: 120px; white-space: normal; min-height: 2.5rem; line-height: 1.2;">
+                <span>{{ isForgotLoading ? '...' : ($t('auth.getHintBtn') || 'İpucu Göster') }}</span>
+              </button>
+              <button type="button" class="btn-forgot-action btn-forgot-action--email" @click="sendForgotPasswordEmail" :disabled="isForgotLoading" style="flex: 1 1 auto; min-width: 140px; white-space: normal; min-height: 2.5rem; line-height: 1.2;">
+                <span>{{ isForgotLoading ? '...' : ($t('auth.sendResetEmailBtn') || 'Sıfırlama Maili Gönder') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </Transition>
 </template>
@@ -190,20 +278,29 @@ const isLocked = ref(true)
 const activeTab = ref('login')
 const username = ref('admin')
 const password = ref('')
+const isLoginPassVisible = ref(false)
 
 const cisoUsername = ref('ciso')
 const cisoPassword = ref('')
+const isCisoPassVisible = ref(false)
 
 const regUsername = ref('')
 const regFullName = ref('')
 const regEmail = ref('')
 const regPassword = ref('')
 const regRole = ref('user')
+const isRegPassVisible = ref(false)
 
 const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 const shouldShake = ref(false)
+
+// Şifremi Unuttum Modalı State'leri
+const isForgotModalOpen = ref(false)
+const forgotEmail = ref('')
+const forgotHint = ref('')
+const isForgotLoading = ref(false)
 
 function switchTab(tab) {
   activeTab.value = tab
@@ -296,7 +393,7 @@ async function handleRegister() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: regUsername.value,
-        fullName: regFullName.value,
+        full_name: regFullName.value,
         email: regEmail.value,
         password: regPassword.value,
         role: regRole.value
@@ -320,6 +417,66 @@ async function handleRegister() {
     triggerShake()
   } finally {
     isLoading.value = false
+  }
+}
+
+function openForgotPassword() {
+  forgotEmail.value = ''
+  forgotHint.value = ''
+  errorMessage.value = ''
+  successMessage.value = ''
+  isForgotModalOpen.value = true
+}
+
+async function getForgotPasswordHint() {
+  if (!forgotEmail.value) {
+    forgotHint.value = 'Lütfen önce e-posta adresinizi girin.'
+    return
+  }
+  isForgotLoading.value = true
+  forgotHint.value = ''
+  try {
+    const response = await fetch('/api/auth/forgot-password-hint', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: forgotEmail.value })
+    })
+    const data = await response.json()
+    if (response.ok) {
+      forgotHint.value = data.hint
+    } else {
+      forgotHint.value = data.error || 'İpucu sorgulanırken bir hata oluştu.'
+    }
+  } catch (err) {
+    forgotHint.value = 'Bağlantı hatası oluştu.'
+  } finally {
+    isForgotLoading.value = false
+  }
+}
+
+async function sendForgotPasswordEmail() {
+  if (!forgotEmail.value) {
+    forgotHint.value = 'Lütfen önce e-posta adresinizi girin.'
+    return
+  }
+  isForgotLoading.value = true
+  try {
+    const response = await fetch('/api/auth/forgot-password-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: forgotEmail.value })
+    })
+    const data = await response.json()
+    if (response.ok) {
+      successMessage.value = data.message || 'Sıfırlama e-postası başarıyla gönderildi.'
+      errorMessage.value = ''
+    } else {
+      errorMessage.value = data.error || 'Sıfırlama e-postası gönderilemedi.'
+    }
+  } catch (err) {
+    errorMessage.value = 'Bağlantı hatası oluştu.'
+  } finally {
+    isForgotLoading.value = false
   }
 }
 </script>
@@ -499,6 +656,9 @@ async function handleRegister() {
   transition: all 0.2s ease;
   margin-top: 0.5rem;
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.2;
 }
 
 .btn-unlock:hover {
@@ -526,10 +686,131 @@ async function handleRegister() {
 }
 
 .slide-up-enter-active, .slide-up-leave-active {
-  transition: all 0.3s ease;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
 }
 .slide-up-enter-from, .slide-up-leave-to {
+  transform: translateY(30px);
   opacity: 0;
-  transform: translateY(20px);
+}
+
+/* Şifremi Unuttum Modalı Stilleri */
+.forgot-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 7, 18, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 15000;
+}
+.forgot-modal-card {
+  background: #111827;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 380px;
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7);
+}
+.forgot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.75rem;
+}
+.forgot-header h4 {
+  margin: 0;
+  color: #a78bfa;
+  font-size: 1.05rem;
+}
+.btn-close-forgot {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.forgot-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.hint-display-box {
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px dashed rgba(139, 92, 246, 0.25);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.8rem;
+}
+.hint-display-box strong {
+  color: #a78bfa;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+.hint-display-box p {
+  margin: 0;
+  color: #fff;
+  font-weight: 500;
+}
+.btn-forgot-action {
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  color: #a78bfa;
+  padding: 0.65rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-forgot-action:hover {
+  background: #8b5cf6;
+  color: #fff;
+}
+.btn-forgot-action--email {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #cbd5e1;
+}
+.btn-forgot-action--email:hover {
+  background: #6366f1;
+  color: #fff;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  padding-right: 2.75rem !important;
+  width: 100%;
+}
+
+.btn-eye {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: #a78bfa;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.65;
+  user-select: none;
+  z-index: 2;
+}
+
+.btn-eye:hover {
+  opacity: 1;
 }
 </style>

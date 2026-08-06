@@ -100,7 +100,11 @@
                   <button 
                     type="button" 
                     class="btn-eye" 
-                    @click="isProfileOldPasswordVisible = !isProfileOldPasswordVisible"
+                    @mousedown="isProfileOldPasswordVisible = true"
+                    @mouseup="isProfileOldPasswordVisible = false"
+                    @mouseleave="isProfileOldPasswordVisible = false"
+                    @touchstart="isProfileOldPasswordVisible = true"
+                    @touchend="isProfileOldPasswordVisible = false"
                   >
                     {{ isProfileOldPasswordVisible ? '🙈' : '👁️' }}
                   </button>
@@ -120,7 +124,11 @@
                   <button 
                     type="button" 
                     class="btn-eye" 
-                    @click="isProfileNewPasswordVisible = !isProfileNewPasswordVisible"
+                    @mousedown="isProfileNewPasswordVisible = true"
+                    @mouseup="isProfileNewPasswordVisible = false"
+                    @mouseleave="isProfileNewPasswordVisible = false"
+                    @touchstart="isProfileNewPasswordVisible = true"
+                    @touchend="isProfileNewPasswordVisible = false"
                   >
                     {{ isProfileNewPasswordVisible ? '🙈' : '👁️' }}
                   </button>
@@ -143,7 +151,11 @@
                   <button 
                     type="button" 
                     class="btn-eye" 
-                    @click="isProfileNewPasswordConfirmVisible = !isProfileNewPasswordConfirmVisible"
+                    @mousedown="isProfileNewPasswordConfirmVisible = true"
+                    @mouseup="isProfileNewPasswordConfirmVisible = false"
+                    @mouseleave="isProfileNewPasswordConfirmVisible = false"
+                    @touchstart="isProfileNewPasswordConfirmVisible = true"
+                    @touchend="isProfileNewPasswordConfirmVisible = false"
                   >
                     {{ isProfileNewPasswordConfirmVisible ? '🙈' : '👁️' }}
                   </button>
@@ -214,7 +226,11 @@
                 <button 
                   type="button" 
                   class="btn-eye" 
-                  @click="isNewPasswordVisible = !isNewPasswordVisible"
+                  @mousedown="isNewPasswordVisible = true"
+                    @mouseup="isNewPasswordVisible = false"
+                    @mouseleave="isNewPasswordVisible = false"
+                    @touchstart="isNewPasswordVisible = true"
+                    @touchend="isNewPasswordVisible = false"
                 >
                   {{ isNewPasswordVisible ? '🙈' : '👁️' }}
                 </button>
@@ -236,7 +252,11 @@
                 <button 
                   type="button" 
                   class="btn-eye" 
-                  @click="isNewPasswordConfirmVisible = !isNewPasswordConfirmVisible"
+                  @mousedown="isNewPasswordConfirmVisible = true"
+                    @mouseup="isNewPasswordConfirmVisible = false"
+                    @mouseleave="isNewPasswordConfirmVisible = false"
+                    @touchstart="isNewPasswordConfirmVisible = true"
+                    @touchend="isNewPasswordConfirmVisible = false"
                 >
                   {{ isNewPasswordConfirmVisible ? '🙈' : '👁️' }}
                 </button>
@@ -394,7 +414,11 @@
                 <button 
                   type="button" 
                   class="btn-eye" 
-                  @click="isSmtpPassVisible = !isSmtpPassVisible"
+                  @mousedown="isSmtpPassVisible = true"
+                    @mouseup="isSmtpPassVisible = false"
+                    @mouseleave="isSmtpPassVisible = false"
+                    @touchstart="isSmtpPassVisible = true"
+                    @touchend="isSmtpPassVisible = false"
                   :title="$t('settings.togglePassword') || 'Şifreyi Göster/Gizle'"
                 >
                   {{ isSmtpPassVisible ? '🙈' : '👁️' }}
@@ -483,7 +507,7 @@
           :disabled="globalConfirmTimer > 0"
           @click="executeGlobalConfirm"
         >
-          {{ globalConfirmTimer > 0 ? ($t('settings.yesTimer', { timer: globalConfirmTimer }) || `Evet (${globalConfirmTimer}s)`) : ($t('settings.yesContinue') || 'Evet, Devam Et') }}
+          {{ globalConfirmTimer > 0 ? (($t('settings.yes') || 'Evet') + ' (' + globalConfirmTimer + 's)') : ($t('settings.yesContinue') || 'Evet, Devam Et') }}
         </button>
       </div>
     </div>
@@ -709,7 +733,7 @@ const currentUserId = ref('')
 const currentUserEmail = ref('')
 
 // Dinamik Şifre Validasyonları
-const regPasswordErrors = computed(() => {
+const profilePasswordErrors = computed(() => {
   const p = profileNewPassword.value || '';
   const errors = [];
   if (p.length < 8) errors.push('En az 8 karakter olmalı');
@@ -719,7 +743,7 @@ const regPasswordErrors = computed(() => {
 })
 
 const isProfilePasswordValid = computed(() => {
-  return profileNewPassword.value && regPasswordErrors.value.length === 0;
+  return profileNewPassword.value && profilePasswordErrors.value.length === 0;
 })
 
 const kasaPasswordErrors = computed(() => {
@@ -733,10 +757,6 @@ const kasaPasswordErrors = computed(() => {
 
 const isKasaPasswordValid = computed(() => {
   return kasaNewPassword.value && kasaPasswordErrors.value.length === 0;
-})
-
-const profilePasswordErrors = computed(() => {
-  return regPasswordErrors.value;
 })
 
 function updateProfileInfo() {
@@ -1858,22 +1878,26 @@ onMounted(() => {
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
 .password-input-wrapper input {
   padding-right: 2.5rem !important;
+  width: 100%;
 }
 
 .btn-eye {
   position: absolute;
-  right: 8px;
+  right: 12px;
   background: transparent;
   border: none;
   color: #a78bfa;
-  font-size: 0.95rem;
+  font-size: 1rem;
   cursor: pointer;
   padding: 4px;
-  opacity: 0.6;
+  opacity: 0.65;
+  user-select: none;
+  z-index: 2;
 }
 
 .btn-eye:hover {
