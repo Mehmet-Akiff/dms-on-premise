@@ -87,6 +87,16 @@
             {{ $t('auth.cisoInfo') }}
           </div>
           <div class="form-group">
+            <label>CISO {{ $t('auth.username') || 'Kullanıcı Adı' }}</label>
+            <input 
+              v-model="cisoUsername" 
+              type="text" 
+              :placeholder="$t('auth.usernamePlaceholder') || 'ciso'" 
+              required
+              autocomplete="username"
+            />
+          </div>
+          <div class="form-group">
             <label>CISO {{ $t('auth.password') }}</label>
             <input 
               v-model="cisoPassword" 
@@ -151,6 +161,10 @@
             </select>
           </div>
 
+          <div class="security-policy-banner" style="background: rgba(139, 92, 246, 0.1); border-left: 4px solid #8b5cf6; padding: 0.8rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.85rem; color: #c4b5fd;">
+            <strong>ℹ️ Güvenlik Politikası:</strong> Hem Standart hem de Yönetici (Admin) hesap başvuruları, sistem yöneticilerinin onayından geçmeden aktif hale gelmez.
+          </div>
+
           <div v-if="errorMessage" class="error-msg">
             ⚠️ {{ errorMessage }}
           </div>
@@ -176,6 +190,8 @@ const isLocked = ref(true)
 const activeTab = ref('login')
 const username = ref('admin')
 const password = ref('')
+
+const cisoUsername = ref('ciso')
 const cisoPassword = ref('')
 
 const regUsername = ref('')
@@ -240,11 +256,13 @@ async function handleCisoLogin() {
   errorMessage.value = ''
 
   try {
-    const res = await fetch('/api/auth/ciso-login', {
+    const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        password: cisoPassword.value
+        username: cisoUsername.value,
+        password: cisoPassword.value,
+        isCiso: true
       })
     })
 
