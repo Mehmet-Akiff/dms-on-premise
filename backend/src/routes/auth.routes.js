@@ -536,6 +536,20 @@ router.get('/users', verifyToken, async (req, res) => {
 });
 
 // ============================================================
+// GET /api/auth/chat-users — Sohbet için Kullanıcı Listesi (Tüm Kullanıcılar)
+// ============================================================
+router.get('/chat-users', verifyToken, async (req, res) => {
+  try {
+    const users = await User.findAll({
+      attributes: ['id', 'fullName', 'username', 'status'] // Sadece temel bilgiler
+    });
+    res.status(200).json({ users });
+  } catch (error) {
+    res.status(500).json({ error: 'Kullanıcı listesi getirilemedi.' });
+  }
+});
+
+// ============================================================
 // GET /api/auth/users/:id/detail — CISO Kullanıcı Detay & Log Paneli
 // ============================================================
 router.get('/users/:id/detail', verifyToken, async (req, res) => {
