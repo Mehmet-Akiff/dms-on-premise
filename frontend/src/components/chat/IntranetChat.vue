@@ -193,7 +193,10 @@
         </div>
         <div class="modal-body">
           <div v-for="msg in pendingMessages" :key="msg.id" class="pending-item">
-            <div class="pending-time">⏰ {{ formatScheduleDisplay(msg.scheduled_at) }}</div>
+            <div class="pending-item-header">
+              <div class="pending-time">⏰ {{ formatScheduleDisplay(msg.scheduled_at) }}</div>
+              <button class="btn-delete-scheduled" @click="deleteScheduledMessage(msg.id)" title="Sil / İptal Et">🗑️ Sil</button>
+            </div>
             <div class="pending-content">{{ msg.content || (msg.media_type ? `[${msg.media_type} Medyası]` : '') }}</div>
           </div>
           <div v-if="pendingMessages.length === 0" class="no-pending">
@@ -358,7 +361,6 @@ async function startRecording() {
     recordingTime.value = 0
     recordInterval = setInterval(() => recordingTime.value++, 1000)
   } catch (err) {
-    console.error('Mikrofon erişimi reddedildi veya hata:', err)
     alert('Mikrofon erişimine izin vermeniz gerekiyor.')
   }
 }
@@ -420,7 +422,7 @@ async function fetchMessageHistory(targetId) {
       }
     }
   } catch (error) {
-    console.error(`Sohbet geçmişi alınamadı (${targetId}):`, error)
+    // Sessiz hata yakalama — ağ kesintilerinde kullanıcıyı rahatsız etme
   }
 }
 
@@ -437,7 +439,7 @@ async function fetchUsers() {
       }
     }
   } catch (error) {
-    console.error('Kullanıcılar alınamadı', error)
+    // Sessiz hata yakalama
   }
 }
 
@@ -451,7 +453,7 @@ function parseToken() {
     currentUserId.value = payload.id || ''
     currentUserFullName.value = payload.fullName || payload.username || ''
   } catch (e) {
-    console.warn('Token parse error in chat', e)
+    // Token parse hatası — oturum geçersiz olabilir
   }
 }
 
@@ -486,10 +488,11 @@ function initSocket() {
     
     if (!messages.value[chatId]) messages.value[chatId] = []
     
-    // Check if replacing an existing scheduled message that just got delivered
+    // Duplikasyon kontrolü: aynı ID zaten varsa güncelle (zamanlanmış mesaj teslimi)
     const existingIdx = messages.value[chatId].findIndex(m => m.id === data.id)
     if (existingIdx !== -1) {
-      messages.value[chatId][existingIdx] = data
+      // Vue reaktivitesi için splice kullan (index ataması reaktif değil)
+      messages.value[chatId].splice(existingIdx, 1, data)
     } else {
       messages.value[chatId].push(data)
     }
@@ -525,6 +528,27 @@ function aggregateReactions(reactionsArr) {
   return counts
 }
 
+// Zamanlanmış mesaj silme
+async function deleteScheduledMessage(msgId) {
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/chat/scheduled/${msgId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (res.ok) {
+      // Lokal diziden de kaldır
+      const chatId = activeChat.value
+      if (messages.value[chatId]) {
+        const idx = messages.value[chatId].findIndex(m => m.id === msgId)
+        if (idx !== -1) messages.value[chatId].splice(idx, 1)
+      }
+    }
+  } catch (err) {
+    // Sessizce yakala, kullanıcıyı meşgul etme
+  }
+}
+
 async function uploadAndSendMedia(fileObj, filenameOverride = null) {
   const token = localStorage.getItem('token')
   const formData = new FormData()
@@ -543,7 +567,7 @@ async function uploadAndSendMedia(fileObj, filenameOverride = null) {
       }
     }
   } catch (err) {
-    console.error('Medya yükleme hatası:', err)
+    // Medya yükleme hatası sessizce yakalandı
   }
 }
 
@@ -592,21 +616,21 @@ async function executeSend(content, mediaUrl = null, mediaType = null) {
         }
       }
     } catch (error) {
-      console.error('Not gönderilemedi:', error)
+      // Not gönderim hatası sessizce yakalandı
     }
   } else {
     if (!socket.value) return
     socket.value.emit('send_message', msgData, (response) => {
       if (response && response.success && response.data) {
-        if (msgData.receiverId || msgData.scheduledAt) { // Handle scheduled local addition
-          const chatId = msgData.receiverId || 'global'
-          if (!messages.value[chatId]) messages.value[chatId] = []
-          const exists = messages.value[chatId].some(m => m.id === response.data.id)
-          if (!exists) {
-            messages.value[chatId].push(response.data)
-          }
-          scrollToBottom()
+        // Gönderenin kendi mesajını callback'ten lokale ekle
+        // (backend artık broadcast.to kullanıyor, gönderen broadcast almaz)
+        const chatId = msgData.receiverId || msgData.roomId || 'global'
+        if (!messages.value[chatId]) messages.value[chatId] = []
+        const exists = messages.value[chatId].some(m => m.id === response.data.id)
+        if (!exists) {
+          messages.value[chatId].push(response.data)
         }
+        scrollToBottom()
       }
     })
   }
@@ -873,7 +897,14 @@ onUnmounted(() => {
 .modal-header button { background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;}
 .modal-body { padding: 1rem; max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;}
 .pending-item { background: #F0F2F5; padding: 0.8rem; border-radius: 8px; border-left: 4px solid #fb923c;}
-.pending-time { font-size: 0.75rem; color: #667781; font-weight: 600; margin-bottom: 0.3rem;}
+.pending-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; }
+.pending-time { font-size: 0.75rem; color: #667781; font-weight: 600;}
 .pending-content { font-size: 0.9rem; color: #111B21;}
+.btn-delete-scheduled {
+  background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444; font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.5rem;
+  border-radius: 6px; cursor: pointer; transition: all 0.2s;
+}
+.btn-delete-scheduled:hover { background: rgba(239, 68, 68, 0.2); }
 .no-pending { text-align: center; color: #667781; padding: 2rem 0; font-style: italic;}
 </style>

@@ -1,5 +1,6 @@
 const socketIo = require('socket.io');
 const jwt = require('jsonwebtoken');
+const { Op } = require('sequelize');
 const { Message, User } = require('./models');
 const { logAction } = require('./utils/auditLogger');
 const { logCisoAction } = require('./utils/cisoLogger');
@@ -37,7 +38,7 @@ module.exports = {
     // Bağlantı Yönetimi
     // ============================================================
     io.on('connection', (socket) => {
-      console.log(`[SOCKET] Kullanıcı bağlandı: ${socket.user.username} (${socket.id})`);
+
 
       // 1. Kullanıcıyı kendi özel odasına ekle
       socket.join(socket.user.id);
@@ -105,8 +106,8 @@ module.exports = {
 
           // Karşı tarafa veya odaya ilet
           if (roomId === 'global') {
-            // Global odaya broadcast (gönderen dahil herkese)
-            io.to('global').emit('receive_message', populatedMessage);
+            // Global odaya broadcast (gönderen HARİÇ herkese, gönderen callback'ten alır)
+            socket.broadcast.to('global').emit('receive_message', populatedMessage);
           } else if (receiverId) {
             // Birebir mesaj: karşı tarafa ve kendi diğer sekmelerine
             io.to(receiverId).emit('receive_message', populatedMessage);
@@ -126,7 +127,7 @@ module.exports = {
       // 4. Olay: Gruba Katılma
       socket.on('join_room', (roomId) => {
         socket.join(roomId);
-        console.log(`[SOCKET] ${socket.user.username} odaya katıldı: ${roomId}`);
+
       });
 
       // 5. Olay: Mesaja Reaksiyon Ekleme
@@ -169,7 +170,7 @@ module.exports = {
       });
 
       socket.on('disconnect', () => {
-        console.log(`[SOCKET] Kullanıcı ayrıldı: ${socket.user.username} (${socket.id})`);
+
       });
     });
 
@@ -181,7 +182,7 @@ module.exports = {
         const now = new Date();
         const pendingMessages = await Message.findAll({
           where: {
-            scheduled_at: { [require('sequelize').Op.lte]: now },
+            scheduled_at: { [Op.lte]: now },
             is_delivered: false,
           },
           include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'fullName'] }]
@@ -201,7 +202,7 @@ module.exports = {
             io.to(msg.room_id).emit('receive_message', msg);
           }
 
-          console.log(`[SCHEDULER] Zamanlanmış mesaj teslim edildi: ${msg.id}`);
+
         }
       } catch (err) {
         // Sessizce logla, cron'u durdurma

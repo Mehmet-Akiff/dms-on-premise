@@ -213,4 +213,45 @@ router.get('/media/:filename', (req, res) => {
   }
 });
 
+// ============================================================
+// DELETE /api/chat/scheduled/:id — Zamanlanmış mesajı sil/iptal et
+// ============================================================
+router.delete('/scheduled/:id', async (req, res) => {
+  try {
+    const messageId = req.params.id;
+    const currentUserId = req.user.id;
+
+    const msg = await Message.findByPk(messageId);
+    if (!msg) {
+      return res.status(404).json({ error: 'Mesaj bulunamadı.' });
+    }
+
+    // Sadece kendi mesajını silebilir
+    if (msg.sender_id !== currentUserId) {
+      return res.status(403).json({ error: 'Bu mesajı silme yetkiniz yok.' });
+    }
+
+    // Sadece henüz iletilmemiş zamanlanmış mesajlar silinebilir
+    if (msg.is_delivered) {
+      return res.status(400).json({ error: 'Zaten iletilmiş bir mesaj silinemez.' });
+    }
+
+    await msg.destroy();
+
+    logAction(
+      req,
+      'ZAMANLANMIS_MESAJ_SILINDI',
+      null,
+      null,
+      `${req.user.fullName || req.user.username} zamanlanmış mesajı sildi (ID: ${messageId})`
+    );
+
+    res.json({ success: true, message: 'Zamanlanmış mesaj silindi.' });
+  } catch (error) {
+    console.error('[CHAT_API_ERR] Zamanlanmış mesaj silinemedi:', error);
+    res.status(500).json({ error: 'Silme işlemi sırasında sunucu hatası.' });
+  }
+});
+
 module.exports = router;
+
