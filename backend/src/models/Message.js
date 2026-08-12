@@ -39,6 +39,18 @@ const Message = sequelize.define('Message', {
   is_read: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
+  },
+  reactions: {
+    type: DataTypes.JSON,
+    defaultValue: []
+  },
+  media_url: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  media_type: {
+    type: DataTypes.STRING,
+    allowNull: true,
   }
 }, {
   tableName: 'messages',

@@ -48,9 +48,9 @@ module.exports = {
       // 3. Olay: Mesaj Gönderme
       socket.on('send_message', async (data, callback) => {
         try {
-          const { receiverId, roomId, content, scheduledAt } = data;
+          const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType } = data;
           
-          if (!content || (!receiverId && !roomId)) {
+          if (!content && !mediaUrl && (!receiverId && !roomId)) {
             if(callback) callback({ error: 'Eksik parametreler.' });
             return;
           }
@@ -62,8 +62,10 @@ module.exports = {
             sender_id: socket.user.id,
             receiver_id: receiverId || null,
             room_id: roomId || null,
-            content: content,
+            content: content || '',
             type: 'message',
+            media_url: mediaUrl || null,
+            media_type: mediaType || null,
             scheduled_at: isScheduled ? new Date(scheduledAt) : null,
             is_delivered: !isScheduled,
           });
@@ -125,6 +127,45 @@ module.exports = {
       socket.on('join_room', (roomId) => {
         socket.join(roomId);
         console.log(`[SOCKET] ${socket.user.username} odaya katıldı: ${roomId}`);
+      });
+
+      // 5. Olay: Mesaja Reaksiyon Ekleme
+      socket.on('add_reaction', async (data) => {
+        try {
+          const { messageId, emoji } = data;
+          if (!messageId || !emoji) return;
+
+          const msg = await Message.findByPk(messageId);
+          if (!msg) return;
+
+          let reactions = msg.reactions || [];
+          const existingIdx = reactions.findIndex(r => r.userId === socket.user.id && r.emoji === emoji);
+          
+          if (existingIdx >= 0) {
+            reactions.splice(existingIdx, 1); // toggle off
+          } else {
+            reactions.push({ userId: socket.user.id, emoji, username: socket.user.fullName || socket.user.username });
+          }
+          
+          msg.reactions = reactions;
+          
+          // Sequelize JSON update için changed flag gerekebilir
+          msg.changed('reactions', true);
+          await msg.save();
+
+          // Broadcast reaction update
+          const reactionUpdate = { messageId, reactions: msg.reactions };
+          if (msg.room_id === 'global') {
+            io.to('global').emit('receive_reaction', reactionUpdate);
+          } else if (msg.receiver_id) {
+            io.to(msg.receiver_id).emit('receive_reaction', reactionUpdate);
+            io.to(msg.sender_id).emit('receive_reaction', reactionUpdate);
+          } else if (msg.room_id) {
+            io.to(msg.room_id).emit('receive_reaction', reactionUpdate);
+          }
+        } catch (err) {
+          console.error('[SOCKET_ERR] Reaksiyon eklenemedi:', err);
+        }
       });
 
       socket.on('disconnect', () => {

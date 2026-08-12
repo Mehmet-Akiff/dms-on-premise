@@ -6,7 +6,7 @@
       <div class="drawer-header">
         <div class="header-title">
           <span>{{ systemMode === 'standalone' ? '📝' : '💬' }}</span>
-          <h3>{{ systemMode === 'standalone' ? 'Not Panosu' : 'Kurum İçi Mesajlaşma' }}</h3>
+          <h3>{{ systemMode === 'standalone' ? 'Not Panosu' : 'Kurum İçi İletişim' }}</h3>
           <span class="mode-badge" :class="systemMode">{{ systemMode === 'standalone' ? 'Tek PC' : 'Ağ' }}</span>
         </div>
         <button class="btn-close-drawer" @click="closeDrawer">✕</button>
@@ -15,18 +15,25 @@
       <div class="chat-layout">
         <!-- Sidebar / Kişiler -->
         <div class="chat-sidebar">
-          <div class="sidebar-header">
-            <h4>Kişiler &amp; Odalar</h4>
+          <div class="sidebar-search">
+            <input type="text" placeholder="Kişi ara..." v-model="searchQuery" class="search-input" />
           </div>
           <ul class="room-list">
             <li class="room-item" :class="{ active: activeChat === 'global' }" @click="selectChat('global')">
-              <span class="room-icon">#</span>
-              <span class="room-name">Sistem Odası</span>
+              <div class="room-avatar global-avatar">#</div>
+              <div class="room-info">
+                <span class="room-name">Sistem Odası</span>
+                <span class="room-preview">Genel iletişim kanalı</span>
+              </div>
             </li>
-            <li v-for="user in users" :key="user.id" class="room-item" :class="{ active: activeChat === user.id }" @click="selectChat(user.id)">
-              <span class="room-icon">👤</span>
-              <span class="room-name">{{ user.fullName || user.username }}</span>
-              <span v-if="user.status === 'active'" class="online-dot"></span>
+            <li v-for="user in filteredUsers" :key="user.id" class="room-item" :class="{ active: activeChat === user.id }" @click="selectChat(user.id)">
+              <div class="room-avatar">
+                {{ user.fullName ? user.fullName.charAt(0).toUpperCase() : user.username.charAt(0).toUpperCase() }}
+                <span v-if="user.status === 'active'" class="online-dot"></span>
+              </div>
+              <div class="room-info">
+                <span class="room-name">{{ user.fullName || user.username }}</span>
+              </div>
             </li>
           </ul>
         </div>
@@ -35,79 +42,162 @@
         <div class="chat-main">
           <!-- Aktif sohbet başlığı -->
           <div class="chat-top-bar">
-            <span class="chat-target-name">{{ activeChatLabel }}</span>
+            <div class="chat-top-avatar" :class="{'global-avatar': activeChat === 'global'}">
+               {{ activeChat === 'global' ? '#' : (activeChatLabel.charAt(0).toUpperCase()) }}
+            </div>
+            <div class="chat-top-info">
+              <span class="chat-target-name">{{ activeChatLabel }}</span>
+              <span class="chat-status" v-if="activeChat !== 'global'">Çevrimiçi</span>
+            </div>
+          </div>
+
+          <!-- Sticky Banner for Scheduled Messages -->
+          <div class="scheduled-sticky-banner" v-if="pendingMessages.length > 0">
+            <div class="banner-content">
+              <span class="banner-icon">⏰</span>
+              <span>Bu sohbet için <strong>{{ pendingMessages.length }}</strong> adet bekleyen zamanlanmış mesajınız var.</span>
+            </div>
+            <button class="btn-view-scheduled" @click="showScheduledModal = true">Görün</button>
           </div>
 
           <!-- Messages -->
           <div class="messages-container" ref="messagesContainer">
-            <div v-if="currentMessages.length === 0" class="no-messages">
+            <div v-if="deliveredMessages.length === 0" class="no-messages">
+              <div class="empty-state-icon">💬</div>
               {{ systemMode === 'standalone' ? 'Henüz not yok. İlk notu siz bırakın.' : 'Henüz mesaj yok. İlk mesajı siz gönderin.' }}
             </div>
             
-            <div v-for="(msg, index) in currentMessages" :key="msg.id || index" 
+            <div v-for="(msg, index) in deliveredMessages" :key="msg.id || index" 
                  class="message-wrapper"
                  :class="{ 'message-self': isMine(msg) }">
               
-              <div class="message-bubble" :class="{ 'scheduled-msg': msg.scheduled_at && !msg.is_delivered }">
-                <div class="message-sender" v-if="!isMine(msg)">
+              <div class="message-bubble">
+                <!-- Reaction Trigger (Hover) -->
+                <div class="reaction-trigger" v-if="systemMode === 'network'">
+                  <div class="quick-reactions">
+                    <span @click="addReaction(msg.id, '👍')">👍</span>
+                    <span @click="addReaction(msg.id, '❤️')">❤️</span>
+                    <span @click="addReaction(msg.id, '😂')">😂</span>
+                  </div>
+                </div>
+
+                <div class="message-sender" v-if="!isMine(msg) && activeChat === 'global'">
                   {{ msg.sender?.fullName || msg.senderName || msg.sender?.username || 'Bilinmeyen' }}
                 </div>
-                <div class="message-content">
+                
+                <!-- Media Content -->
+                <div v-if="msg.media_url" class="message-media">
+                  <img v-if="msg.media_type === 'image'" :src="msg.media_url" class="media-image" alt="Image" @click="openImage(msg.media_url)" />
+                  <audio v-else-if="msg.media_type === 'audio'" :src="msg.media_url" controls class="media-audio"></audio>
+                  <a v-else :href="msg.media_url" target="_blank" class="media-document">
+                    📄 Dosyayı İndir
+                  </a>
+                </div>
+
+                <div class="message-content" v-if="msg.content">
                   {{ msg.content }}
                 </div>
+                
                 <div class="message-meta">
                   <span class="message-time">{{ formatTime(msg.created_at || msg.createdAt || msg.timestamp) }}</span>
-                  <span v-if="msg.scheduled_at" class="scheduled-icon" title="Zamanlanmış mesaj">⏰</span>
                   <span v-if="msg.type === 'note'" class="note-icon" title="Not">📌</span>
+                  <span v-if="isMine(msg)" class="read-receipt" :class="{ read: msg.is_read }">
+                    <svg viewBox="0 0 16 15" width="16" height="15"><path fill="currentColor" d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.32.32 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.484-.033l6.272-8.048a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.879a.32.32 0 0 1-.484.033L1.891 7.769a.366.366 0 0 0-.515.006l-.423.433a.364.364 0 0 0 .006.514l3.258 3.185c.143.14.361.125.484-.033l6.272-8.048a.365.365 0 0 0-.063-.51z"></path></svg>
+                  </span>
+                </div>
+
+                <!-- Reactions Display -->
+                <div class="reactions-display" v-if="msg.reactions && msg.reactions.length > 0">
+                  <span v-for="(count, emoji) in aggregateReactions(msg.reactions)" :key="emoji" class="reaction-badge" @click="addReaction(msg.id, emoji)">
+                    {{ emoji }} {{ count }}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Emoji Picker -->
+          <!-- Emoji Picker Panel -->
           <div v-if="showEmojiPicker" class="emoji-picker-panel">
             <div class="emoji-grid">
               <span v-for="emoji in emojis" :key="emoji" class="emoji-item" @click="insertEmoji(emoji)">{{ emoji }}</span>
             </div>
           </div>
 
-          <!-- Zamanlama Paneli -->
-          <div v-if="showScheduler" class="scheduler-panel">
-            <label>📅 Gönderim Zamanı:</label>
-            <input type="datetime-local" v-model="scheduledTime" class="schedule-input" :min="minScheduleTime" />
-            <div class="scheduler-actions">
-              <button class="btn-schedule-confirm" @click="confirmSchedule">✓ Onayla</button>
-              <button class="btn-schedule-cancel" @click="cancelSchedule">✕ İptal</button>
+          <!-- Media Preview Box -->
+          <div v-if="selectedFile" class="media-preview-box">
+            <div class="preview-content">
+              <span class="preview-icon">📎</span>
+              <span class="preview-name">{{ selectedFile.name }}</span>
+            </div>
+            <button class="btn-clear-media" @click="clearMedia">✕</button>
+          </div>
+          
+          <!-- Audio Recording UI -->
+          <div v-if="isRecording" class="audio-recording-box">
+            <div class="recording-pulse"></div>
+            <span>Ses kaydediliyor... ({{ recordingTime }}s)</span>
+            <div class="recording-actions">
+              <button class="btn-stop-record" @click="stopRecording">Durdur & Gönder</button>
+              <button class="btn-cancel-record" @click="cancelRecording">İptal</button>
             </div>
           </div>
 
           <!-- Input Area -->
-          <div class="chat-input-area">
-            <form @submit.prevent="sendMessage" class="chat-form">
-              <button type="button" class="btn-emoji-toggle" @click="showEmojiPicker = !showEmojiPicker" title="Emoji">
-                😊
-              </button>
+          <div class="chat-input-area" v-if="!isRecording">
+            <form @submit.prevent="handleSend" class="chat-form">
+              <button type="button" class="btn-emoji-toggle" @click="showEmojiPicker = !showEmojiPicker" title="Emoji">😊</button>
+              
+              <input type="file" ref="fileInput" @change="onFileSelected" style="display: none" />
+              <button type="button" class="btn-attach" @click="$refs.fileInput.click()" title="Dosya Ekle">📎</button>
+
               <input 
                 v-model="newMessage" 
                 type="text" 
-                :placeholder="systemMode === 'standalone' ? 'Notunuzu yazın...' : 'Mesajınızı yazın...'" 
+                :placeholder="systemMode === 'standalone' ? 'Notunuzu yazın...' : 'Bir mesaj yazın...'" 
                 class="chat-input"
                 ref="chatInput"
               />
-              <button type="button" class="btn-schedule-toggle" @click="toggleScheduler" title="Zamanlanmış Gönderim" :class="{ active: scheduledTime }">
-                ⏰
+              
+              <button type="button" class="btn-schedule-toggle" @click="toggleScheduler" title="Zamanlanmış Gönderim" :class="{ active: scheduledTime }">⏰</button>
+              
+              <!-- Gönder veya Ses Kaydet Butonu -->
+              <button v-if="newMessage.trim() || selectedFile" type="submit" class="btn-send">
+                <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z"></path></svg>
               </button>
-              <button type="submit" class="btn-send" :disabled="!newMessage.trim()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
+              <button v-else type="button" class="btn-mic" @click="startRecording" title="Ses Kaydet">
+                <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M11.999 14.942c2.001 0 3.531-1.53 3.531-3.531V4.35c0-2.001-1.53-3.531-3.531-3.531S8.469 2.35 8.469 4.35v7.061c0 2.001 1.53 3.53 3.53 3.531zm6.238-3.53c0 3.531-2.942 6.002-6.237 6.002s-6.237-2.471-6.237-6.002H3.761c0 4.001 3.178 7.297 7.061 7.885v3.884h2.354v-3.884c3.884-.588 7.061-3.884 7.061-7.885h-2.002z"></path></svg>
               </button>
             </form>
-            <div v-if="scheduledTime" class="schedule-indicator">
-              ⏰ Zamanlanmış: {{ formatScheduleDisplay(scheduledTime) }}
-              <button @click="cancelSchedule" class="btn-clear-schedule">✕</button>
+
+            <div v-if="scheduledTime || showScheduler" class="scheduler-drawer">
+              <div v-if="showScheduler" class="scheduler-inputs">
+                <input type="datetime-local" v-model="scheduledTime" class="schedule-input" :min="minScheduleTime" />
+                <button class="btn-schedule-confirm" @click="showScheduler = false">Onayla</button>
+              </div>
+              <div v-if="scheduledTime && !showScheduler" class="schedule-indicator">
+                ⏰ Gönderim: {{ formatScheduleDisplay(scheduledTime) }}
+                <button @click="scheduledTime = ''" class="btn-clear-schedule">İptal</button>
+              </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scheduled Messages Modal -->
+    <div v-if="showScheduledModal" class="scheduled-modal-overlay">
+      <div class="scheduled-modal">
+        <div class="modal-header">
+          <h3>Bekleyen Zamanlanmış Mesajlar</h3>
+          <button @click="showScheduledModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div v-for="msg in pendingMessages" :key="msg.id" class="pending-item">
+            <div class="pending-time">⏰ {{ formatScheduleDisplay(msg.scheduled_at) }}</div>
+            <div class="pending-content">{{ msg.content || (msg.media_type ? `[${msg.media_type} Medyası]` : '') }}</div>
+          </div>
+          <div v-if="pendingMessages.length === 0" class="no-pending">
+            Bekleyen mesajınız bulunmamaktadır.
           </div>
         </div>
       </div>
@@ -122,7 +212,6 @@ import { io as socketIoClient } from 'socket.io-client'
 const props = defineProps({
   isOpen: { type: Boolean, default: false }
 })
-
 const emit = defineEmits(['close'])
 
 const socket = ref(null)
@@ -131,40 +220,65 @@ const messages = ref({ global: [] })
 const newMessage = ref('')
 const messagesContainer = ref(null)
 const chatInput = ref(null)
+const fileInput = ref(null)
 
 const currentUserId = ref('')
 const currentUserFullName = ref('')
-
 const users = ref([])
+const searchQuery = ref('')
 const activeChat = ref('global')
 const systemMode = ref('standalone')
 
-// Emoji & Zamanlama
+// Emoji & Schedule & Media
 const showEmojiPicker = ref(false)
 const showScheduler = ref(false)
 const scheduledTime = ref('')
+const selectedFile = ref(null)
+const showScheduledModal = ref(false)
+
+// Audio Recording
+const isRecording = ref(false)
+const mediaRecorder = ref(null)
+const audioChunks = ref([])
+const recordingTime = ref(0)
+let recordInterval = null
 
 const emojis = [
   '😊','😂','❤️','👍','🎉','🔥','😎','🤔','👋','✅',
   '⚠️','📌','💡','📎','📁','🔒','🔑','📊','📝','💬',
-  '✨','🚀','💪','👏','🙏','😄','😢','😡','🤝','👀',
-  '❌','⭐','🎯','📢','🔔','💻','📱','🌐','⏰','📅'
+  '✨','🚀','💪','👏','🙏','😄','😢','😡','🤝','👀'
 ]
 
-const minScheduleTime = computed(() => {
-  const d = new Date()
-  d.setMinutes(d.getMinutes() + 1)
-  return d.toISOString().slice(0, 16)
+const filteredUsers = computed(() => {
+  if (!searchQuery.value) return users.value
+  const q = searchQuery.value.toLowerCase()
+  return users.value.filter(u => (u.fullName || '').toLowerCase().includes(q) || u.username.toLowerCase().includes(q))
 })
 
 const currentMessages = computed(() => {
   return messages.value[activeChat.value] || []
 })
 
+// Sadece iletilmiş mesajlar
+const deliveredMessages = computed(() => {
+  return currentMessages.value.filter(m => m.is_delivered)
+})
+
+// Bekleyen zamanlanmış mesajlar
+const pendingMessages = computed(() => {
+  return currentMessages.value.filter(m => !m.is_delivered && isMine(m))
+})
+
 const activeChatLabel = computed(() => {
-  if (activeChat.value === 'global') return '# Sistem Odası'
+  if (activeChat.value === 'global') return 'Sistem Odası'
   const user = users.value.find(u => u.id === activeChat.value)
   return user ? (user.fullName || user.username) : 'Sohbet'
+})
+
+const minScheduleTime = computed(() => {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() + 1)
+  return d.toISOString().slice(0, 16)
 })
 
 function isMine(msg) {
@@ -208,13 +322,60 @@ function toggleScheduler() {
   showEmojiPicker.value = false
 }
 
-function confirmSchedule() {
-  showScheduler.value = false
+function onFileSelected(event) {
+  const file = event.target.files[0]
+  if (file) {
+    selectedFile.value = file
+  }
 }
 
-function cancelSchedule() {
-  scheduledTime.value = ''
-  showScheduler.value = false
+function clearMedia() {
+  selectedFile.value = null
+  if (fileInput.value) fileInput.value.value = ''
+}
+
+// Audio Recording
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaRecorder.value = new MediaRecorder(stream)
+    audioChunks.value = []
+    
+    mediaRecorder.value.ondataavailable = e => {
+      if (e.data.size > 0) audioChunks.value.push(e.data)
+    }
+    
+    mediaRecorder.value.onstop = async () => {
+      const audioBlob = new Blob(audioChunks.value, { type: 'audio/webm' })
+      stream.getTracks().forEach(track => track.stop())
+      isRecording.value = false
+      clearInterval(recordInterval)
+      await uploadAndSendMedia(audioBlob, 'ses_kaydi.webm')
+    }
+    
+    mediaRecorder.value.start()
+    isRecording.value = true
+    recordingTime.value = 0
+    recordInterval = setInterval(() => recordingTime.value++, 1000)
+  } catch (err) {
+    console.error('Mikrofon erişimi reddedildi veya hata:', err)
+    alert('Mikrofon erişimine izin vermeniz gerekiyor.')
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder.value && isRecording.value) {
+    mediaRecorder.value.stop()
+  }
+}
+
+function cancelRecording() {
+  if (mediaRecorder.value && isRecording.value) {
+    mediaRecorder.value.stop()
+    audioChunks.value = [] // clear so onstop doesn't send
+  }
+  isRecording.value = false
+  clearInterval(recordInterval)
 }
 
 function selectChat(id) {
@@ -296,14 +457,15 @@ function parseToken() {
 
 function initSocket() {
   if (systemMode.value === 'standalone') return
-
   const token = localStorage.getItem('token')
   if (!token) return
 
-  socket.value = socketIoClient('/', {
-    auth: { token },
-    transports: ['websocket']
-  })
+  if(!socket.value) {
+    socket.value = socketIoClient('/', {
+      auth: { token },
+      transports: ['websocket']
+    })
+  }
 
   socket.value.on('connect', () => {
     isConnected.value = true
@@ -322,28 +484,85 @@ function initSocket() {
       chatId = data.room_id
     }
     
-    if (!messages.value[chatId]) {
-      messages.value[chatId] = []
-    }
-
-    // Duplikasyonu önle
-    const exists = messages.value[chatId].some(m => m.id === data.id)
-    if (!exists) {
+    if (!messages.value[chatId]) messages.value[chatId] = []
+    
+    // Check if replacing an existing scheduled message that just got delivered
+    const existingIdx = messages.value[chatId].findIndex(m => m.id === data.id)
+    if (existingIdx !== -1) {
+      messages.value[chatId][existingIdx] = data
+    } else {
       messages.value[chatId].push(data)
     }
     
-    if (activeChat.value === chatId) {
-      scrollToBottom()
+    if (activeChat.value === chatId) scrollToBottom()
+  })
+
+  socket.value.on('receive_reaction', (data) => {
+    const { messageId, reactions } = data
+    // Find the message in active chat (or search all chats)
+    for (const chatKey in messages.value) {
+      const msg = messages.value[chatKey].find(m => m.id === messageId)
+      if (msg) {
+        msg.reactions = reactions
+        break
+      }
     }
   })
 }
 
-async function sendMessage() {
-  if (!newMessage.value.trim()) return
+// Reactions
+function addReaction(messageId, emoji) {
+  if (systemMode.value !== 'network' || !socket.value) return
+  socket.value.emit('add_reaction', { messageId, emoji })
+}
 
+function aggregateReactions(reactionsArr) {
+  if (!reactionsArr) return {}
+  const counts = {}
+  reactionsArr.forEach(r => {
+    counts[r.emoji] = (counts[r.emoji] || 0) + 1
+  })
+  return counts
+}
+
+async function uploadAndSendMedia(fileObj, filenameOverride = null) {
+  const token = localStorage.getItem('token')
+  const formData = new FormData()
+  formData.append('file', fileObj, filenameOverride || fileObj.name)
+
+  try {
+    const res = await fetch('/api/chat/upload', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    })
+    if (res.ok) {
+      const data = await res.json()
+      if (data.success) {
+        await executeSend(newMessage.value.trim(), data.url, data.type)
+      }
+    }
+  } catch (err) {
+    console.error('Medya yükleme hatası:', err)
+  }
+}
+
+async function handleSend() {
+  if (selectedFile.value) {
+    const file = selectedFile.value
+    clearMedia()
+    await uploadAndSendMedia(file)
+  } else if (newMessage.value.trim()) {
+    await executeSend(newMessage.value.trim())
+  }
+}
+
+async function executeSend(content, mediaUrl = null, mediaType = null) {
   const msgData = {
-    content: newMessage.value.trim(),
+    content,
     scheduledAt: scheduledTime.value || null,
+    mediaUrl,
+    mediaType
   }
 
   if (activeChat.value === 'global') {
@@ -353,7 +572,6 @@ async function sendMessage() {
   }
 
   if (systemMode.value === 'standalone') {
-    // Tek PC modu: HTTP API ile not gönder
     try {
       const token = localStorage.getItem('token')
       const response = await fetch('/api/chat/send', {
@@ -377,15 +595,11 @@ async function sendMessage() {
       console.error('Not gönderilemedi:', error)
     }
   } else {
-    // Ağ modu: Socket.io ile gerçek zamanlı mesaj
     if (!socket.value) return
     socket.value.emit('send_message', msgData, (response) => {
       if (response && response.success && response.data) {
-        // Global odada io.to('global') ile herkese gönderildiği için
-        // callback'ten gelen veriyi eklemiyoruz (receive_message'da gelecek).
-        // Ancak birebir mesajlarda gönderenin kendisi receive almaz.
-        if (msgData.receiverId) {
-          const chatId = msgData.receiverId
+        if (msgData.receiverId || msgData.scheduledAt) { // Handle scheduled local addition
+          const chatId = msgData.receiverId || 'global'
           if (!messages.value[chatId]) messages.value[chatId] = []
           const exists = messages.value[chatId].some(m => m.id === response.data.id)
           if (!exists) {
@@ -402,9 +616,12 @@ async function sendMessage() {
   showScheduler.value = false
 }
 
+function openImage(url) {
+  window.open(url, '_blank')
+}
+
 // Standalone modda her 15 saniyede bir mesajları yenile (polling)
 let pollingInterval = null
-
 function startPolling() {
   if (pollingInterval) return
   pollingInterval = setInterval(() => {
@@ -413,7 +630,6 @@ function startPolling() {
     }
   }, 15000)
 }
-
 function stopPolling() {
   if (pollingInterval) {
     clearInterval(pollingInterval)
@@ -431,9 +647,7 @@ watch(() => props.isOpen, async (newVal) => {
       fetchMessageHistory('global')
       startPolling()
     } else {
-      if (!socket.value) {
-        initSocket()
-      }
+      initSocket()
       stopPolling()
     }
     scrollToBottom()
@@ -466,505 +680,200 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* DRAWER BASE */
+/* BASE VARIABLES & DRAWER */
 .chat-drawer-wrapper {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 9999;
-  display: flex;
-  justify-content: flex-end;
-  overflow: hidden;
-  visibility: hidden;
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  pointer-events: none; z-index: 9999; display: flex; justify-content: flex-end;
+  overflow: hidden; visibility: hidden;
   transition: visibility 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  --chat-bg: #EFEAE2; /* WhatsApp Web like background */
+  --bubble-out: #D9FDD3;
+  --bubble-in: #FFFFFF;
 }
-
-.chat-drawer-wrapper.drawer-open {
-  pointer-events: auto;
-  visibility: visible;
-}
-
-.drawer-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(3, 7, 18, 0.4);
-  backdrop-filter: blur(4px);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.chat-drawer-wrapper.drawer-open .drawer-overlay {
-  opacity: 1;
-}
-
+.chat-drawer-wrapper.drawer-open { pointer-events: auto; visibility: visible; }
+.drawer-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s ease; }
+.chat-drawer-wrapper.drawer-open .drawer-overlay { opacity: 1; }
 .chat-drawer {
-  position: relative;
-  width: 100%;
-  max-width: 850px;
-  height: 100%;
-  background: var(--bg-primary);
-  border-left: 1px solid var(--border);
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
-  transform: translateX(100%);
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
+  position: relative; width: 100%; max-width: 900px; height: 100%;
+  background: var(--bg-primary); box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+  transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex; flex-direction: column;
 }
-
-.chat-drawer-wrapper.drawer-open .chat-drawer {
-  transform: translateX(0);
-}
+.chat-drawer-wrapper.drawer-open .chat-drawer { transform: translateX(0); }
 
 /* HEADER */
 .drawer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.8rem 1.5rem; background: #00A884; /* WhatsApp brand */
+  color: white; border-bottom: 1px solid rgba(0,0,0,0.1);
 }
+.header-title { display: flex; align-items: center; gap: 0.75rem; }
+.header-title h3 { margin: 0; font-size: 1.1rem; font-weight: 600; color: white;}
+.mode-badge { font-size: 0.65rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 99px; text-transform: uppercase; background: rgba(255,255,255,0.2); }
+.btn-close-drawer { background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; transition: transform 0.2s; }
+.btn-close-drawer:hover { transform: rotate(90deg); }
 
-.header-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.header-title span:first-child {
-  font-size: 1.25rem;
-}
-
-.header-title h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.mode-badge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.2rem 0.5rem;
-  border-radius: 99px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.mode-badge.standalone {
-  background: rgba(251, 146, 60, 0.15);
-  color: #fb923c;
-  border: 1px solid rgba(251, 146, 60, 0.3);
-}
-
-.mode-badge.network {
-  background: rgba(52, 211, 153, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(52, 211, 153, 0.3);
-}
-
-.btn-close-drawer {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-secondary);
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-close-drawer:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
-  transform: rotate(90deg);
-}
-
-/* CHAT LAYOUT */
-.chat-layout {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-/* SIDEBAR */
+/* LAYOUT & SIDEBAR */
+.chat-layout { display: flex; flex: 1; overflow: hidden; background: #F0F2F5; }
 .chat-sidebar {
-  width: 220px;
-  background: rgba(19, 28, 49, 0.4);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
+  width: 300px; background: #FFFFFF; border-right: 1px solid #D1D7DB;
+  display: flex; flex-direction: column;
 }
-
-.sidebar-header {
-  padding: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.sidebar-header h4 {
-  margin: 0;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  letter-spacing: 1px;
-}
-
-.room-list {
-  list-style: none;
-  padding: 0.5rem;
-  margin: 0;
-}
-
+.sidebar-search { padding: 0.5rem 1rem; border-bottom: 1px solid #F0F2F5; }
+.search-input { width: 100%; padding: 0.5rem 1rem; border-radius: 8px; border: none; background: #F0F2F5; outline: none; font-size: 0.9rem; }
+.room-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
 .room-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 0.8rem;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
+  display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1rem;
+  border-bottom: 1px solid #F0F2F5; cursor: pointer; transition: background 0.15s;
 }
-
-.room-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
+.room-item:hover, .room-item.active { background: #F5F6F6; }
+.room-avatar {
+  width: 48px; height: 48px; border-radius: 50%; background: #DFE5E7;
+  display: flex; justify-content: center; align-items: center;
+  font-size: 1.2rem; font-weight: bold; color: #54656F; position: relative; flex-shrink:0;
 }
-
-.room-item.active {
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  font-weight: 600;
-}
-
-.online-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #34d399;
-  margin-left: auto;
-  box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
-}
-
-.room-icon {
-  font-size: 1rem;
-  opacity: 0.7;
-}
-
-/* CHAT TOP BAR */
-.chat-top-bar {
-  padding: 0.6rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: rgba(19, 28, 49, 0.3);
-}
-
-.chat-target-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
+.global-avatar { background: #00A884; color: white; }
+.online-dot { position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px; background: #00A884; border-radius: 50%; border: 2px solid white; }
+.room-info { display: flex; flex-direction: column; overflow: hidden; }
+.room-name { font-weight: 500; color: #111B21; font-size: 1rem; }
+.room-preview { font-size: 0.8rem; color: #667781; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* MAIN CHAT AREA */
-.chat-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-primary);
+.chat-main { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); position: relative; }
+.chat-main::before {
+  content: ""; position: absolute; top:0; left:0; width:100%; height:100%;
+  background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+  opacity: 0.06; pointer-events: none;
 }
 
-.messages-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.chat-top-bar {
+  padding: 0.6rem 1rem; background: #F0F2F5; border-bottom: 1px solid #D1D7DB;
+  display: flex; align-items: center; gap: 1rem; z-index: 2;
+}
+.chat-top-avatar {
+  width: 40px; height: 40px; border-radius: 50%; background: #DFE5E7; color: #54656F;
+  display: flex; justify-content: center; align-items: center; font-weight: bold;
+}
+.chat-top-info { display: flex; flex-direction: column; }
+.chat-target-name { font-size: 1rem; font-weight: 500; color: #111B21; }
+.chat-status { font-size: 0.8rem; color: #667781; }
+
+/* STICKY BANNER */
+.scheduled-sticky-banner {
+  position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 10;
+  background: #FFF3CD; border: 1px solid #FFEEBA; color: #856404;
+  padding: 0.5rem 1rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  display: flex; align-items: center; gap: 1rem; font-size: 0.85rem;
+}
+.btn-view-scheduled {
+  background: #00A884; border: none; color: white; padding: 0.3rem 0.6rem;
+  border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.8rem;
 }
 
-.no-messages {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: var(--text-secondary);
-  font-style: italic;
-  font-size: 0.9rem;
-}
+/* MESSAGES */
+.messages-container { flex: 1; overflow-y: auto; padding: 2rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 2; }
+.no-messages { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #54656F; font-size: 0.95rem; }
+.empty-state-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
 
-.message-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  max-width: 80%;
-}
-
-.message-self {
-  align-self: flex-end;
-  align-items: flex-end;
-}
-
+.message-wrapper { display: flex; flex-direction: column; align-items: flex-start; max-width: 65%; position: relative; }
+.message-self { align-self: flex-end; align-items: flex-end; }
 .message-bubble {
-  background: var(--bg-card);
-  padding: 0.6rem 0.9rem;
-  border-radius: 12px;
-  border-top-left-radius: 4px;
-  border: 1px solid var(--border);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  background: var(--bubble-in); padding: 0.4rem 0.6rem 0.5rem 0.6rem;
+  border-radius: 7.5px; box-shadow: 0 1px 0.5px rgba(11,20,26,.13);
+  position: relative; display: flex; flex-direction: column;
+  min-width: 100px; color: #111B21;
+}
+.message-self .message-bubble { background: var(--bubble-out); }
+
+/* Reactions Trigger */
+.reaction-trigger {
+  position: absolute; top: -15px; right: -40px; background: white;
+  border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  display: none; align-items: center; padding: 0.2rem; z-index: 10;
+}
+.message-self .reaction-trigger { right: auto; left: -40px; }
+.message-wrapper:hover .reaction-trigger { display: flex; }
+.quick-reactions span { cursor: pointer; padding: 0.2rem; transition: transform 0.2s; display: inline-block; }
+.quick-reactions span:hover { transform: scale(1.3); }
+.btn-reaction-plus { background: #F0F2F5; border: none; border-radius: 50%; width: 20px; height: 20px; display: flex; justify-content: center; align-items: center; font-size: 0.7rem; cursor: pointer; margin-left: 0.2rem;}
+
+.message-sender { font-size: 0.75rem; color: #027EB5; font-weight: 500; margin-bottom: 0.2rem; }
+.message-content { font-size: 0.95rem; line-height: 1.3; word-break: break-word; }
+
+/* MEDIA */
+.message-media { margin-bottom: 0.3rem; max-width: 100%; }
+.media-image { max-width: 100%; border-radius: 6px; cursor: pointer; object-fit: cover; max-height: 250px; }
+.media-audio { height: 40px; outline: none; width: 250px; }
+.media-document {
+  display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.05);
+  padding: 0.7rem; border-radius: 6px; text-decoration: none; color: #111B21; font-weight: 500; font-size: 0.9rem;
 }
 
-.message-self .message-bubble {
-  background: rgba(56, 189, 248, 0.1);
-  border-color: rgba(56, 189, 248, 0.2);
-  border-top-left-radius: 12px;
-  border-top-right-radius: 4px;
-}
+.message-meta { display: flex; align-items: center; justify-content: flex-end; gap: 0.25rem; margin-top: 0.2rem; margin-bottom: -0.2rem; float: right; margin-left: 1rem;}
+.message-time { font-size: 0.65rem; color: #667781; }
+.read-receipt { color: #8696A0; display: flex; align-items: center; }
+.read-receipt.read { color: #53BDEB; } /* Blue double ticks */
 
-.scheduled-msg {
-  border-color: rgba(251, 146, 60, 0.3) !important;
-  background: rgba(251, 146, 60, 0.05) !important;
+.reactions-display {
+  display: flex; flex-wrap: wrap; gap: 0.2rem; position: absolute; bottom: -12px; left: 10px;
+  background: white; padding: 2px 6px; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.15); border: 1px solid #e2e8f0;
 }
+.message-self .reactions-display { left: auto; right: 10px; }
+.reaction-badge { font-size: 0.75rem; cursor: pointer; user-select: none; }
 
-.message-sender {
-  font-size: 0.72rem;
-  color: var(--accent);
-  margin-bottom: 0.15rem;
-  font-weight: 600;
+/* BOTTOM INPUT AREA */
+.chat-input-area { background: #F0F2F5; padding: 0.6rem 1rem; z-index: 2; display: flex; flex-direction: column;}
+.chat-form { display: flex; align-items: center; gap: 0.6rem; }
+.btn-emoji-toggle, .btn-attach, .btn-schedule-toggle {
+  background: none; border: none; font-size: 1.4rem; color: #54656F; cursor: pointer; padding: 0.3rem; transition: color 0.2s;
 }
-
-.message-content {
-  font-size: 0.88rem;
-  line-height: 1.4;
-  color: var(--text-primary);
-  word-break: break-word;
-}
-
-.message-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.3rem;
-  justify-content: flex-end;
-}
-
-.message-time {
-  font-size: 0.6rem;
-  color: var(--text-secondary);
-  opacity: 0.7;
-}
-
-.scheduled-icon, .note-icon {
-  font-size: 0.65rem;
-}
-
-/* EMOJI PICKER */
-.emoji-picker-panel {
-  padding: 0.5rem;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
-  max-height: 180px;
-  overflow-y: auto;
-}
-
-.emoji-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.emoji-item {
-  font-size: 1.3rem;
-  cursor: pointer;
-  padding: 0.3rem;
-  border-radius: 6px;
-  transition: background 0.15s;
-  user-select: none;
-}
-
-.emoji-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  transform: scale(1.15);
-}
-
-/* SCHEDULER */
-.scheduler-panel {
-  padding: 0.75rem 1rem;
-  border-top: 1px solid var(--border);
-  background: rgba(251, 146, 60, 0.05);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.scheduler-panel label {
-  font-size: 0.8rem;
-  color: #fb923c;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.schedule-input {
-  background: var(--bg-primary);
-  border: 1px solid rgba(251, 146, 60, 0.3);
-  color: var(--text-primary);
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  outline: none;
-}
-
-.scheduler-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.btn-schedule-confirm, .btn-schedule-cancel {
-  border: none;
-  padding: 0.35rem 0.7rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn-schedule-confirm {
-  background: rgba(52, 211, 153, 0.15);
-  color: #34d399;
-}
-
-.btn-schedule-cancel {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
-
-/* INPUT AREA */
-.chat-input-area {
-  padding: 0.75rem 1rem;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
-}
-
-.chat-form {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.btn-emoji-toggle, .btn-schedule-toggle {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-secondary);
-  font-size: 1.1rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.btn-emoji-toggle:hover, .btn-schedule-toggle:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.btn-schedule-toggle.active {
-  background: rgba(251, 146, 60, 0.15);
-  border-color: rgba(251, 146, 60, 0.3);
-  color: #fb923c;
-}
-
+.btn-schedule-toggle.active { color: #00A884; }
 .chat-input {
-  flex: 1;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  padding: 0.65rem 1rem;
-  border-radius: 99px;
-  color: var(--text-primary);
-  font-size: 0.88rem;
-  outline: none;
-  transition: border-color 0.2s;
+  flex: 1; border: none; border-radius: 8px; padding: 0.7rem 1rem; font-size: 0.95rem;
+  background: white; outline: none; color: #111B21;
 }
+.btn-send, .btn-mic {
+  background: #00A884; border: none; border-radius: 50%; width: 44px; height: 44px;
+  display: flex; justify-content: center; align-items: center; color: white; cursor: pointer; transition: transform 0.2s;
+}
+.btn-send:hover, .btn-mic:hover { transform: scale(1.05); }
 
-.chat-input:focus {
-  border-color: var(--accent);
+/* MEDIA PREVIEW & AUDIO RECORDING UI */
+.media-preview-box, .audio-recording-box {
+  background: white; padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 0.5rem;
+  display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
+.preview-content { display: flex; align-items: center; gap: 0.5rem; color: #111B21; font-weight: 500;}
+.btn-clear-media { background: #F0F2F5; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; color: #54656F;}
 
-.btn-send {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  border: none;
-  color: white;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
-  flex-shrink: 0;
-}
+.recording-pulse { width: 12px; height: 12px; background: #ef4444; border-radius: 50%; animation: pulse 1s infinite; margin-right: 1rem;}
+@keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+.recording-actions { display: flex; gap: 0.5rem; }
+.btn-stop-record { background: #00A884; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-weight: bold;}
+.btn-cancel-record { background: transparent; color: #ef4444; border: none; padding: 0.4rem; cursor: pointer;}
 
-.btn-send:hover:not(:disabled) {
-  transform: scale(1.05);
-}
+/* SCHEDULER & EMOJI DRAWER */
+.scheduler-drawer { background: white; margin-top: 0.5rem; border-radius: 8px; padding: 0.5rem; display: flex; justify-content: space-between; align-items: center;}
+.schedule-input { border: 1px solid #D1D7DB; border-radius: 6px; padding: 0.4rem; outline: none; }
+.emoji-picker-panel { background: #F0F2F5; padding: 0.5rem; border-top: 1px solid #D1D7DB; z-index: 2;}
+.emoji-grid { display: flex; flex-wrap: wrap; gap: 0.2rem; }
+.emoji-item { font-size: 1.5rem; cursor: pointer; padding: 0.2rem; border-radius: 4px; }
+.emoji-item:hover { background: #E1E8EB; }
 
-.btn-send:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: var(--border);
+/* SCHEDULED MODAL */
+.scheduled-modal-overlay {
+  position: absolute; top:0; left:0; width:100%; height:100%;
+  background: rgba(0,0,0,0.6); z-index: 100; display: flex; justify-content: center; align-items: center;
 }
-
-/* SCHEDULE INDICATOR */
-.schedule-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
-  font-size: 0.75rem;
-  color: #fb923c;
-  font-weight: 600;
+.scheduled-modal {
+  background: var(--bg-primary); width: 400px; border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2); overflow: hidden; display: flex; flex-direction: column;
 }
-
-.btn-clear-schedule {
-  background: none;
-  border: none;
-  color: #ef4444;
-  cursor: pointer;
-  font-size: 0.8rem;
-  padding: 0;
-}
-
-@media (max-width: 600px) {
-  .chat-layout {
-    flex-direction: column;
-  }
-  .chat-sidebar {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    max-height: 150px;
-  }
-  .room-list {
-    display: flex;
-    overflow-x: auto;
-  }
-  .room-item {
-    white-space: nowrap;
-  }
-}
+.modal-header { background: #00A884; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; font-weight: bold;}
+.modal-header button { background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;}
+.modal-body { padding: 1rem; max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;}
+.pending-item { background: #F0F2F5; padding: 0.8rem; border-radius: 8px; border-left: 4px solid #fb923c;}
+.pending-time { font-size: 0.75rem; color: #667781; font-weight: 600; margin-bottom: 0.3rem;}
+.pending-content { font-size: 0.9rem; color: #111B21;}
+.no-pending { text-align: center; color: #667781; padding: 2rem 0; font-style: italic;}
 </style>

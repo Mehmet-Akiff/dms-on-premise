@@ -5,7 +5,25 @@ const { Message, User, SystemSettings } = require('../models');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { logAction } = require('../utils/auditLogger');
 const { logCisoAction } = require('../utils/cisoLogger');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = '/app/uploads/chat';
+    if (!fs.existsSync(dir)){
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${uuidv4()}${ext}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 // Tüm chat rotaları korumalıdır
 router.use(verifyToken);
 
@@ -49,11 +67,12 @@ router.get('/history/:target', async (req, res) => {
 
     let messages = [];
 
-    // Zamanlanmış mesajlar: sadece zamanı gelmiş olanlar gösterilir
+    // Zamanlanmış mesajlar: sadece zamanı gelmiş olanlar VEYA kullanıcının KENDİ gönderdikleri (henüz gitmemiş olsa bile)
     const deliveredCondition = {
       [Op.or]: [
         { scheduled_at: null },
-        { scheduled_at: { [Op.lte]: now } }
+        { scheduled_at: { [Op.lte]: now } },
+        { sender_id: currentUserId } // Kendi zamanlanmış mesajlarını görebilsin
       ]
     };
 
@@ -156,6 +175,41 @@ router.post('/send', async (req, res) => {
   } catch (error) {
     console.error('[CHAT_API_ERR] Not gönderilemedi:', error);
     res.status(500).json({ error: 'Not gönderilirken sunucu hatası oluştu.' });
+  }
+});
+
+// ============================================================
+// POST /api/chat/upload — Chat Medya Yükleme
+// ============================================================
+router.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Dosya yüklenemedi.' });
+    }
+    // URL olarak /api/chat/media/... üzerinden erişim sağlayabiliriz veya statik path
+    const mediaUrl = `/uploads/chat/${req.file.filename}`;
+    
+    // MimeType üzerinden 'image', 'audio', 'document' ayrımı
+    let mediaType = 'document';
+    if (req.file.mimetype.startsWith('image/')) mediaType = 'image';
+    else if (req.file.mimetype.startsWith('audio/') || req.file.mimetype.startsWith('video/')) mediaType = 'audio';
+
+    res.json({ success: true, url: mediaUrl, type: mediaType, name: req.file.originalname });
+  } catch (error) {
+    console.error('[CHAT_UPLOAD_ERR] Dosya yüklenemedi:', error);
+    res.status(500).json({ error: 'Sunucu hatası oluştu.' });
+  }
+});
+
+// ============================================================
+// GET /api/chat/media/:filename — Medya Erişim (CISO Koruması eklenebilir, şimdilik JWT korumalı)
+// ============================================================
+router.get('/media/:filename', (req, res) => {
+  const filePath = path.join('/app/uploads/chat', req.params.filename);
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'Dosya bulunamadı.' });
   }
 });
 
