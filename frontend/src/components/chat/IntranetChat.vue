@@ -5,17 +5,18 @@
       <!-- Header -->
       <div class="drawer-header">
         <div class="header-title">
-          <span>💬</span>
-          <h3>{{ $t('chat.title') || 'Kurum İçi Haberleşme' }}</h3>
+          <span>{{ systemMode === 'standalone' ? '📝' : '💬' }}</span>
+          <h3>{{ systemMode === 'standalone' ? 'Not Panosu' : 'Kurum İçi Mesajlaşma' }}</h3>
+          <span class="mode-badge" :class="systemMode">{{ systemMode === 'standalone' ? 'Tek PC' : 'Ağ' }}</span>
         </div>
         <button class="btn-close-drawer" @click="closeDrawer">✕</button>
       </div>
 
       <div class="chat-layout">
-        <!-- Sidebar / Rooms -->
+        <!-- Sidebar / Kişiler -->
         <div class="chat-sidebar">
           <div class="sidebar-header">
-            <h4>Kişiler & Odalar</h4>
+            <h4>Kişiler &amp; Odalar</h4>
           </div>
           <ul class="room-list">
             <li class="room-item" :class="{ active: activeChat === 'global' }" @click="selectChat('global')">
@@ -25,53 +26,88 @@
             <li v-for="user in users" :key="user.id" class="room-item" :class="{ active: activeChat === user.id }" @click="selectChat(user.id)">
               <span class="room-icon">👤</span>
               <span class="room-name">{{ user.fullName || user.username }}</span>
+              <span v-if="user.status === 'active'" class="online-dot"></span>
             </li>
           </ul>
         </div>
 
         <!-- Main Chat Area -->
         <div class="chat-main">
+          <!-- Aktif sohbet başlığı -->
+          <div class="chat-top-bar">
+            <span class="chat-target-name">{{ activeChatLabel }}</span>
+          </div>
+
           <!-- Messages -->
           <div class="messages-container" ref="messagesContainer">
             <div v-if="currentMessages.length === 0" class="no-messages">
-              Henüz mesaj yok. İlk mesajı siz gönderin.
+              {{ systemMode === 'standalone' ? 'Henüz not yok. İlk notu siz bırakın.' : 'Henüz mesaj yok. İlk mesajı siz gönderin.' }}
             </div>
             
-            <div v-for="(msg, index) in currentMessages" :key="index" 
+            <div v-for="(msg, index) in currentMessages" :key="msg.id || index" 
                  class="message-wrapper"
-                 :class="{ 'message-self': msg.sender_id === currentUserId || msg.senderId === currentUserId }">
+                 :class="{ 'message-self': isMine(msg) }">
               
-              <div class="message-bubble">
-                <div class="message-sender" v-if="msg.sender_id !== currentUserId && msg.senderId !== currentUserId">
+              <div class="message-bubble" :class="{ 'scheduled-msg': msg.scheduled_at && !msg.is_delivered }">
+                <div class="message-sender" v-if="!isMine(msg)">
                   {{ msg.sender?.fullName || msg.senderName || msg.sender?.username || 'Bilinmeyen' }}
                 </div>
                 <div class="message-content">
                   {{ msg.content }}
                 </div>
-                <div class="message-time">
-                  {{ formatTime(msg.timestamp || msg.createdAt) }}
+                <div class="message-meta">
+                  <span class="message-time">{{ formatTime(msg.created_at || msg.createdAt || msg.timestamp) }}</span>
+                  <span v-if="msg.scheduled_at" class="scheduled-icon" title="Zamanlanmış mesaj">⏰</span>
+                  <span v-if="msg.type === 'note'" class="note-icon" title="Not">📌</span>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Emoji Picker -->
+          <div v-if="showEmojiPicker" class="emoji-picker-panel">
+            <div class="emoji-grid">
+              <span v-for="emoji in emojis" :key="emoji" class="emoji-item" @click="insertEmoji(emoji)">{{ emoji }}</span>
+            </div>
+          </div>
+
+          <!-- Zamanlama Paneli -->
+          <div v-if="showScheduler" class="scheduler-panel">
+            <label>📅 Gönderim Zamanı:</label>
+            <input type="datetime-local" v-model="scheduledTime" class="schedule-input" :min="minScheduleTime" />
+            <div class="scheduler-actions">
+              <button class="btn-schedule-confirm" @click="confirmSchedule">✓ Onayla</button>
+              <button class="btn-schedule-cancel" @click="cancelSchedule">✕ İptal</button>
             </div>
           </div>
 
           <!-- Input Area -->
           <div class="chat-input-area">
             <form @submit.prevent="sendMessage" class="chat-form">
+              <button type="button" class="btn-emoji-toggle" @click="showEmojiPicker = !showEmojiPicker" title="Emoji">
+                😊
+              </button>
               <input 
                 v-model="newMessage" 
                 type="text" 
-                placeholder="Mesajınızı yazın..." 
+                :placeholder="systemMode === 'standalone' ? 'Notunuzu yazın...' : 'Mesajınızı yazın...'" 
                 class="chat-input"
-                :disabled="!isConnected"
+                ref="chatInput"
               />
-              <button type="submit" class="btn-send" :disabled="!newMessage.trim() || !isConnected">
+              <button type="button" class="btn-schedule-toggle" @click="toggleScheduler" title="Zamanlanmış Gönderim" :class="{ active: scheduledTime }">
+                ⏰
+              </button>
+              <button type="submit" class="btn-send" :disabled="!newMessage.trim()">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13"></line>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
               </button>
             </form>
+            <div v-if="scheduledTime" class="schedule-indicator">
+              ⏰ Zamanlanmış: {{ formatScheduleDisplay(scheduledTime) }}
+              <button @click="cancelSchedule" class="btn-clear-schedule">✕</button>
+            </div>
           </div>
         </div>
       </div>
@@ -81,13 +117,10 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
-import { io } from 'socket.io-client'
+import { io as socketIoClient } from 'socket.io-client'
 
 const props = defineProps({
-  isOpen: {
-    type: Boolean,
-    default: false
-  }
+  isOpen: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['close'])
@@ -97,19 +130,50 @@ const isConnected = ref(false)
 const messages = ref({ global: [] })
 const newMessage = ref('')
 const messagesContainer = ref(null)
+const chatInput = ref(null)
 
 const currentUserId = ref('')
 const currentUserFullName = ref('')
 
-// Yeni durumlar
 const users = ref([])
 const activeChat = ref('global')
+const systemMode = ref('standalone')
+
+// Emoji & Zamanlama
+const showEmojiPicker = ref(false)
+const showScheduler = ref(false)
+const scheduledTime = ref('')
+
+const emojis = [
+  '😊','😂','❤️','👍','🎉','🔥','😎','🤔','👋','✅',
+  '⚠️','📌','💡','📎','📁','🔒','🔑','📊','📝','💬',
+  '✨','🚀','💪','👏','🙏','😄','😢','😡','🤝','👀',
+  '❌','⭐','🎯','📢','🔔','💻','📱','🌐','⏰','📅'
+]
+
+const minScheduleTime = computed(() => {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() + 1)
+  return d.toISOString().slice(0, 16)
+})
 
 const currentMessages = computed(() => {
   return messages.value[activeChat.value] || []
 })
 
+const activeChatLabel = computed(() => {
+  if (activeChat.value === 'global') return '# Sistem Odası'
+  const user = users.value.find(u => u.id === activeChat.value)
+  return user ? (user.fullName || user.username) : 'Sohbet'
+})
+
+function isMine(msg) {
+  return (msg.sender_id || msg.senderId) === currentUserId.value
+}
+
 function closeDrawer() {
+  showEmojiPicker.value = false
+  showScheduler.value = false
   emit('close')
 }
 
@@ -117,6 +181,12 @@ function formatTime(timestamp) {
   if (!timestamp) return ''
   const d = new Date(timestamp)
   return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatScheduleDisplay(dtLocal) {
+  if (!dtLocal) return ''
+  const d = new Date(dtLocal)
+  return d.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function scrollToBottom() {
@@ -127,12 +197,49 @@ function scrollToBottom() {
   })
 }
 
+function insertEmoji(emoji) {
+  newMessage.value += emoji
+  showEmojiPicker.value = false
+  chatInput.value?.focus()
+}
+
+function toggleScheduler() {
+  showScheduler.value = !showScheduler.value
+  showEmojiPicker.value = false
+}
+
+function confirmSchedule() {
+  showScheduler.value = false
+}
+
+function cancelSchedule() {
+  scheduledTime.value = ''
+  showScheduler.value = false
+}
+
 function selectChat(id) {
   activeChat.value = id
+  showEmojiPicker.value = false
+  showScheduler.value = false
   if (!messages.value[id] || messages.value[id].length === 0) {
     fetchMessageHistory(id)
   }
   scrollToBottom()
+}
+
+async function fetchSystemMode() {
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch('/api/chat/mode', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (response.ok) {
+      const data = await response.json()
+      systemMode.value = data.mode || 'standalone'
+    }
+  } catch (e) {
+    systemMode.value = 'standalone'
+  }
 }
 
 async function fetchMessageHistory(targetId) {
@@ -146,10 +253,7 @@ async function fetchMessageHistory(targetId) {
       if (result.success && result.data) {
         messages.value[targetId] = result.data.map(msg => ({
           ...msg,
-          text: msg.content,
           senderName: msg.sender?.fullName || msg.sender?.username || 'Bilinmeyen',
-          isMine: msg.sender_id === currentUserId.value,
-          createdAt: msg.created_at
         }))
         scrollToBottom()
       }
@@ -162,12 +266,11 @@ async function fetchMessageHistory(targetId) {
 async function fetchUsers() {
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch('/api/auth/chat-users', {
+    const response = await fetch('/api/chat/users', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     if (response.ok) {
       const data = await response.json()
-      // Kendimizi listeden çıkartıyoruz
       if (data.users) {
         users.value = data.users.filter(u => u.id !== currentUserId.value)
       }
@@ -177,10 +280,9 @@ async function fetchUsers() {
   }
 }
 
-function initSocket() {
+function parseToken() {
   const token = localStorage.getItem('token')
   if (!token) return
-
   try {
     const base64Url = token.split('.')[1]
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
@@ -190,19 +292,21 @@ function initSocket() {
   } catch (e) {
     console.warn('Token parse error in chat', e)
   }
+}
 
-  // Connect to socket server via NGINX proxy (which handles /socket.io/)
-  // and force websocket to avoid polling which exhausts browser connection limits
-  socket.value = io('/', {
+function initSocket() {
+  if (systemMode.value === 'standalone') return
+
+  const token = localStorage.getItem('token')
+  if (!token) return
+
+  socket.value = socketIoClient('/', {
     auth: { token },
     transports: ['websocket']
   })
 
   socket.value.on('connect', () => {
     isConnected.value = true
-    // Genel odaya katıl
-    socket.value.emit('join_room', 'global')
-    // Geçmiş mesajları çek
     fetchMessageHistory('global')
   })
 
@@ -213,7 +317,6 @@ function initSocket() {
   socket.value.on('receive_message', (data) => {
     let chatId = 'global'
     if (data.receiver_id) {
-      // Eğer mesaj birebir ise, chatId karşı tarafın id'si olmalı
       chatId = data.sender_id === currentUserId.value ? data.receiver_id : data.sender_id
     } else if (data.room_id) {
       chatId = data.room_id
@@ -222,21 +325,25 @@ function initSocket() {
     if (!messages.value[chatId]) {
       messages.value[chatId] = []
     }
-    messages.value[chatId].push(data)
+
+    // Duplikasyonu önle
+    const exists = messages.value[chatId].some(m => m.id === data.id)
+    if (!exists) {
+      messages.value[chatId].push(data)
+    }
     
-    // Eğer o an açık olan chat'e geldiyse kaydır
     if (activeChat.value === chatId) {
       scrollToBottom()
     }
   })
 }
 
-function sendMessage() {
-  if (!newMessage.value.trim() || !socket.value) return
+async function sendMessage() {
+  if (!newMessage.value.trim()) return
 
   const msgData = {
     content: newMessage.value.trim(),
-    timestamp: new Date().toISOString()
+    scheduledAt: scheduledTime.value || null,
   }
 
   if (activeChat.value === 'global') {
@@ -245,46 +352,112 @@ function sendMessage() {
     msgData.receiverId = activeChat.value
   }
 
-  socket.value.emit('send_message', msgData, (response) => {
-    if (response && response.success) {
-      const data = response.data
-      let chatId = 'global'
-      if (data.receiver_id) {
-        chatId = data.sender_id === currentUserId.value ? data.receiver_id : data.sender_id
-      } else if (data.room_id) {
-        chatId = data.room_id
+  if (systemMode.value === 'standalone') {
+    // Tek PC modu: HTTP API ile not gönder
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(msgData)
+      })
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data) {
+          const chatId = activeChat.value
+          if (!messages.value[chatId]) messages.value[chatId] = []
+          messages.value[chatId].push(result.data)
+          scrollToBottom()
+        }
       }
-      if (!messages.value[chatId]) messages.value[chatId] = []
-      messages.value[chatId].push(data)
-      
-      if (activeChat.value === chatId) {
-        scrollToBottom()
-      }
+    } catch (error) {
+      console.error('Not gönderilemedi:', error)
     }
-  })
+  } else {
+    // Ağ modu: Socket.io ile gerçek zamanlı mesaj
+    if (!socket.value) return
+    socket.value.emit('send_message', msgData, (response) => {
+      if (response && response.success && response.data) {
+        // Global odada io.to('global') ile herkese gönderildiği için
+        // callback'ten gelen veriyi eklemiyoruz (receive_message'da gelecek).
+        // Ancak birebir mesajlarda gönderenin kendisi receive almaz.
+        if (msgData.receiverId) {
+          const chatId = msgData.receiverId
+          if (!messages.value[chatId]) messages.value[chatId] = []
+          const exists = messages.value[chatId].some(m => m.id === response.data.id)
+          if (!exists) {
+            messages.value[chatId].push(response.data)
+          }
+          scrollToBottom()
+        }
+      }
+    })
+  }
+
   newMessage.value = ''
+  scheduledTime.value = ''
+  showScheduler.value = false
 }
 
-watch(() => props.isOpen, (newVal) => {
-  if (newVal) {
-    if (!socket.value) {
-      initSocket()
+// Standalone modda her 15 saniyede bir mesajları yenile (polling)
+let pollingInterval = null
+
+function startPolling() {
+  if (pollingInterval) return
+  pollingInterval = setInterval(() => {
+    if (props.isOpen && systemMode.value === 'standalone') {
+      fetchMessageHistory(activeChat.value)
     }
-    if (users.value.length === 0) {
-      fetchUsers()
+  }, 15000)
+}
+
+function stopPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+    pollingInterval = null
+  }
+}
+
+watch(() => props.isOpen, async (newVal) => {
+  if (newVal) {
+    parseToken()
+    await fetchSystemMode()
+    await fetchUsers()
+
+    if (systemMode.value === 'standalone') {
+      fetchMessageHistory('global')
+      startPolling()
+    } else {
+      if (!socket.value) {
+        initSocket()
+      }
+      stopPolling()
     }
     scrollToBottom()
+  } else {
+    stopPolling()
   }
 })
 
-onMounted(() => {
+onMounted(async () => {
+  parseToken()
   if (props.isOpen) {
-    initSocket()
-    fetchUsers()
+    await fetchSystemMode()
+    await fetchUsers()
+    if (systemMode.value === 'standalone') {
+      fetchMessageHistory('global')
+      startPolling()
+    } else {
+      initSocket()
+    }
   }
 })
 
 onUnmounted(() => {
+  stopPolling()
   if (socket.value) {
     socket.value.disconnect()
     socket.value = null
@@ -333,7 +506,7 @@ onUnmounted(() => {
 .chat-drawer {
   position: relative;
   width: 100%;
-  max-width: 800px;
+  max-width: 850px;
   height: 100%;
   background: var(--bg-primary);
   border-left: 1px solid var(--border);
@@ -353,7 +526,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.25rem 1.5rem;
+  padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--bg-secondary);
 }
@@ -364,15 +537,36 @@ onUnmounted(() => {
   gap: 0.75rem;
 }
 
-.header-title span {
+.header-title span:first-child {
   font-size: 1.25rem;
 }
 
 .header-title h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.mode-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mode-badge.standalone {
+  background: rgba(251, 146, 60, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.3);
+}
+
+.mode-badge.network {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
 }
 
 .btn-close-drawer {
@@ -410,6 +604,7 @@ onUnmounted(() => {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .sidebar-header {
@@ -440,6 +635,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
+  position: relative;
 }
 
 .room-item:hover {
@@ -453,9 +649,31 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  margin-left: auto;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+}
+
 .room-icon {
   font-size: 1rem;
   opacity: 0.7;
+}
+
+/* CHAT TOP BAR */
+.chat-top-bar {
+  padding: 0.6rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(19, 28, 49, 0.3);
+}
+
+.chat-target-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* MAIN CHAT AREA */
@@ -472,7 +690,7 @@ onUnmounted(() => {
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .no-messages {
@@ -499,12 +717,11 @@ onUnmounted(() => {
 
 .message-bubble {
   background: var(--bg-card);
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.9rem;
   border-radius: 12px;
   border-top-left-radius: 4px;
   border: 1px solid var(--border);
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  position: relative;
 }
 
 .message-self .message-bubble {
@@ -514,49 +731,171 @@ onUnmounted(() => {
   border-top-right-radius: 4px;
 }
 
+.scheduled-msg {
+  border-color: rgba(251, 146, 60, 0.3) !important;
+  background: rgba(251, 146, 60, 0.05) !important;
+}
+
 .message-sender {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--accent);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.15rem;
   font-weight: 600;
 }
 
 .message-content {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   line-height: 1.4;
   color: var(--text-primary);
   word-break: break-word;
 }
 
+.message-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+  justify-content: flex-end;
+}
+
 .message-time {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   color: var(--text-secondary);
-  margin-top: 0.4rem;
-  text-align: right;
   opacity: 0.7;
+}
+
+.scheduled-icon, .note-icon {
+  font-size: 0.65rem;
+}
+
+/* EMOJI PICKER */
+.emoji-picker-panel {
+  padding: 0.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.emoji-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.emoji-item {
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.emoji-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.15);
+}
+
+/* SCHEDULER */
+.scheduler-panel {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border);
+  background: rgba(251, 146, 60, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.scheduler-panel label {
+  font-size: 0.8rem;
+  color: #fb923c;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.schedule-input {
+  background: var(--bg-primary);
+  border: 1px solid rgba(251, 146, 60, 0.3);
+  color: var(--text-primary);
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.scheduler-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-schedule-confirm, .btn-schedule-cancel {
+  border: none;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-schedule-confirm {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+}
+
+.btn-schedule-cancel {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
 }
 
 /* INPUT AREA */
 .chat-input-area {
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1rem;
   border-top: 1px solid var(--border);
   background: var(--bg-secondary);
 }
 
 .chat-form {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
   align-items: center;
+}
+
+.btn-emoji-toggle, .btn-schedule-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-emoji-toggle:hover, .btn-schedule-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-schedule-toggle.active {
+  background: rgba(251, 146, 60, 0.15);
+  border-color: rgba(251, 146, 60, 0.3);
+  color: #fb923c;
 }
 
 .chat-input {
   flex: 1;
   background: var(--bg-primary);
   border: 1px solid var(--border);
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 1rem;
   border-radius: 99px;
   color: var(--text-primary);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   outline: none;
   transition: border-color 0.2s;
 }
@@ -565,14 +904,9 @@ onUnmounted(() => {
   border-color: var(--accent);
 }
 
-.chat-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .btn-send {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   border: none;
@@ -582,6 +916,7 @@ onUnmounted(() => {
   align-items: center;
   cursor: pointer;
   transition: transform 0.2s, opacity 0.2s;
+  flex-shrink: 0;
 }
 
 .btn-send:hover:not(:disabled) {
@@ -594,6 +929,26 @@ onUnmounted(() => {
   background: var(--border);
 }
 
+/* SCHEDULE INDICATOR */
+.schedule-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: #fb923c;
+  font-weight: 600;
+}
+
+.btn-clear-schedule {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0;
+}
+
 @media (max-width: 600px) {
   .chat-layout {
     flex-direction: column;
@@ -602,6 +957,7 @@ onUnmounted(() => {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--border);
+    max-height: 150px;
   }
   .room-list {
     display: flex;

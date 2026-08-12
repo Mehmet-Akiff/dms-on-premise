@@ -38,7 +38,10 @@ const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
 // Middleware Katmanı
 // ============================================================
 
-app.use(helmet());                              // Güvenlik başlıkları
+app.use(helmet({
+  frameguard: { action: 'sameorigin' },       // X-Frame-Options: SAMEORIGIN (iframe'den erişim)
+  contentSecurityPolicy: false,                 // CSP devre dışı (geliştirme ortamında)
+}));                              // Güvenlik başlıkları
 
 app.use(cors());                                // Cross-Origin isteklerine izin ver
 app.use(morgan(':date[iso] :method :url :status :res[content-length] - :response-time ms'));
