@@ -103,11 +103,8 @@
 
         <!-- 2. CISO HIZLI GİRİŞ FORMU -->
         <form v-else-if="activeTab === 'ciso'" @submit.prevent="handleCisoLogin" class="lock-form">
-          <div class="ciso-info-banner">
-            {{ $t('auth.cisoInfo') }}
-          </div>
           <div class="form-group">
-            <label>CISO {{ $t('auth.username') || 'Kullanıcı Adı' }}</label>
+            <label>{{ $t('auth.username') || 'Kullanıcı Adı' }}</label>
             <input 
               v-model="cisoUsername" 
               type="text" 
@@ -209,15 +206,15 @@
             </select>
           </div>
 
-          <div class="security-policy-banner" style="background: rgba(139, 92, 246, 0.1); border-left: 4px solid #8b5cf6; padding: 0.8rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.85rem; color: #c4b5fd;">
-            <strong>ℹ️ Güvenlik Politikası:</strong> Hem Standart hem de Yönetici (Admin) hesap başvuruları, sistem yöneticilerinin onayından geçmeden aktif hale gelmez.
-          </div>
-
           <div v-if="errorMessage" class="error-msg">
             ⚠️ {{ errorMessage }}
           </div>
           <div v-if="successMessage" class="success-msg">
             ✅ {{ successMessage }}
+          </div>
+
+          <div class="security-policy-info" style="font-size: 0.82rem; color: #c4b5fd; line-height: 1.4; margin-top: 0.5rem; margin-bottom: 0.8rem; background: rgba(139, 92, 246, 0.1); border-left: 3px solid #8b5cf6; padding: 0.6rem 0.8rem; border-radius: 4px;">
+            ℹ️ Güvenlik Politikası: Hem Standart hem de Yönetici (Admin) hesap başvuruları, sistem yöneticilerinin onayından geçmeden aktif hale gelmez.
           </div>
 
           <button type="submit" class="btn-unlock btn-register" :disabled="isLoading">
