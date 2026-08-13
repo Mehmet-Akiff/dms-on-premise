@@ -80,7 +80,8 @@
             
             <div v-for="(msg, index) in deliveredMessages" :key="msg.id || index" 
                  class="message-wrapper"
-                 :class="{ 'message-self': isMine(msg), 'message-deleted': msg.is_deleted }">
+                 :class="{ 'message-self': isMine(msg), 'message-deleted': msg.is_deleted }"
+                 @contextmenu.prevent="openContextMenu($event, msg)">
               
               <div class="message-bubble">
                 <!-- Silinen mesaj gösterimi -->
