@@ -145,7 +145,13 @@ module.exports = {
           const msg = await Message.findByPk(messageId);
           if (!msg) return;
 
-          let reactions = msg.reactions || [];
+          let reactions = [];
+          if (typeof msg.reactions === 'string') {
+            try { reactions = JSON.parse(msg.reactions); } catch (e) {}
+          } else if (Array.isArray(msg.reactions)) {
+            reactions = [...msg.reactions];
+          }
+
           const existingIdx = reactions.findIndex(r => r.userId === socket.user.id && r.emoji === emoji);
           
           if (existingIdx >= 0) {
@@ -154,9 +160,7 @@ module.exports = {
             reactions.push({ userId: socket.user.id, emoji, username: socket.user.fullName || socket.user.username });
           }
           
-          msg.reactions = reactions;
-          
-          // Sequelize JSON update için changed flag gerekebilir
+          msg.set('reactions', reactions);
           msg.changed('reactions', true);
           await msg.save();
 
