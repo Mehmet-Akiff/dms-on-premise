@@ -51,6 +51,18 @@ const Message = sequelize.define('Message', {
   media_type: {
     type: DataTypes.STRING,
     allowNull: true,
+  },
+  is_edited: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  edited_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
   }
 }, {
   tableName: 'messages',

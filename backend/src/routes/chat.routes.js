@@ -253,5 +253,101 @@ router.delete('/scheduled/:id', async (req, res) => {
   }
 });
 
+// ============================================================
+// PUT /api/chat/message/:id — Mesaj düzenleme (ilk 2 dakika)
+// ============================================================
+router.put('/message/:id', async (req, res) => {
+  try {
+    const messageId = req.params.id;
+    const currentUserId = req.user.id;
+    const { content } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Mesaj içeriği boş olamaz.' });
+    }
+
+    const msg = await Message.findByPk(messageId);
+    if (!msg) return res.status(404).json({ error: 'Mesaj bulunamadı.' });
+    if (msg.sender_id !== currentUserId) return res.status(403).json({ error: 'Bu mesajı düzenleme yetkiniz yok.' });
+    if (msg.is_deleted) return res.status(400).json({ error: 'Silinmiş mesaj düzenlenemez.' });
+
+    // 2 dakika kuralı
+    const twoMinutes = 2 * 60 * 1000;
+    const elapsed = Date.now() - new Date(msg.created_at).getTime();
+    if (elapsed > twoMinutes) {
+      return res.status(400).json({ error: 'Düzenleme süresi doldu (maks. 2 dakika).' });
+    }
+
+    const oldContent = msg.content;
+
+    msg.content = content.trim();
+    msg.is_edited = true;
+    msg.edited_at = new Date();
+    await msg.save();
+
+    // GENEL LOG: metin yok
+    logAction(req, 'MESAJ_DUZENLENDI', null, null,
+      `${req.user.fullName || req.user.username} mesajı düzenledi (ID: ${messageId})`);
+
+    // CISO LOG: tam içerik (eski + yeni)
+    logCisoAction('MESAJ_DUZENLENDI', {
+      senderId: currentUserId,
+      senderName: req.user.fullName || req.user.username,
+      messageId,
+      oldContent,
+      newContent: content.trim(),
+    }, req.ip);
+
+    const updated = await Message.findByPk(messageId, {
+      include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'fullName'] }]
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('[CHAT_API_ERR] Mesaj düzenlenemedi:', error);
+    res.status(500).json({ error: 'Düzenleme sırasında sunucu hatası.' });
+  }
+});
+
+// ============================================================
+// DELETE /api/chat/message/:id — Mesaj silme (soft delete)
+// ============================================================
+router.delete('/message/:id', async (req, res) => {
+  try {
+    const messageId = req.params.id;
+    const currentUserId = req.user.id;
+
+    const msg = await Message.findByPk(messageId);
+    if (!msg) return res.status(404).json({ error: 'Mesaj bulunamadı.' });
+    if (msg.sender_id !== currentUserId) return res.status(403).json({ error: 'Bu mesajı silme yetkiniz yok.' });
+    if (msg.is_deleted) return res.status(400).json({ error: 'Mesaj zaten silinmiş.' });
+
+    const deletedContent = msg.content;
+
+    msg.content = '';
+    msg.is_deleted = true;
+    msg.media_url = null;
+    msg.media_type = null;
+    await msg.save();
+
+    // GENEL LOG: metin yok
+    logAction(req, 'MESAJ_SILINDI', null, null,
+      `${req.user.fullName || req.user.username} mesajı sildi (ID: ${messageId})`);
+
+    // CISO LOG: silinen metin
+    logCisoAction('MESAJ_SILINDI', {
+      senderId: currentUserId,
+      senderName: req.user.fullName || req.user.username,
+      messageId,
+      deletedContent,
+    }, req.ip);
+
+    res.json({ success: true, message: 'Mesaj silindi.' });
+  } catch (error) {
+    console.error('[CHAT_API_ERR] Mesaj silinemedi:', error);
+    res.status(500).json({ error: 'Silme sırasında sunucu hatası.' });
+  }
+});
+
 module.exports = router;
 

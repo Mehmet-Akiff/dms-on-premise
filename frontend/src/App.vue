@@ -30,6 +30,10 @@
             💬 Mesajlar
           </button>
 
+          <button class="btn-theme-toggle" @click="onToggleTheme" :title="currentTheme === 'dark' ? 'Açık Tema' : 'Koyu Tema'">
+            {{ currentTheme === 'dark' ? '☀️' : '🌙' }}
+          </button>
+
           <button v-if="isCiso" class="btn-audit-toggle" @click="isAuditLogOpen = true" :title="$t('nav.auditLogs')">
             📜 {{ $t('nav.auditLogs') }}
           </button>
@@ -170,6 +174,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getTheme, toggleTheme, initTheme } from './utils/ThemeProvider'
 import FileUpload from './components/FileUpload.vue'
 import DocumentList from './components/DocumentList.vue'
 import SearchBar from './components/SearchBar.vue'
@@ -192,6 +197,12 @@ const isChatOpen = ref(false)
 const isKasaLocked = ref(true)
 
 const { locale } = useI18n()
+
+const currentTheme = ref(getTheme())
+
+function onToggleTheme() {
+  currentTheme.value = toggleTheme()
+}
 
 function formatFullName(name) {
   if (!name) return '';
@@ -310,6 +321,7 @@ function lockKasa() {
 }
 
 onMounted(() => {
+  initTheme();
   updateUserInfo();
   window.addEventListener('kasa-unlocked', updateUserInfo);
   window.addEventListener('kasa-lock', updateUserInfo);
@@ -362,6 +374,34 @@ function onSearchLoading(isLoading) {
   --accent-secondary: #3b82f6;
   --danger: #ef4444;
   --success: #22c55e;
+  /* Chat-specific tokens */
+  --chat-bg: #0b141a;
+  --bubble-in: #1e293b;
+  --bubble-out: #1e3a5f;
+}
+
+/* ============ AÇIK TEMA ============ */
+[data-theme="light"] {
+  --bg-primary: #f0f2f5;
+  --bg-secondary: #ffffff;
+  --bg-card: #f8fafc;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --accent: #2563eb;
+  --accent-glow: rgba(37, 99, 235, 0.12);
+  --border: #e2e8f0;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --accent-primary: #7c3aed;
+  --accent-secondary: #2563eb;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --chat-bg: #efeae2;
+  --bubble-in: #ffffff;
+  --bubble-out: #d9fdd3;
+}
+[data-theme="light"] body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 * {
@@ -537,6 +577,28 @@ font {
     align-items: flex-start;
     gap: 1rem;
   }
+}
+
+.btn-theme-toggle {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+  padding: 0.4rem 0.6rem;
+  font-size: 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+.btn-theme-toggle:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: #38bdf8;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
+  transform: rotate(20deg);
 }
 
 .btn-settings-toggle {

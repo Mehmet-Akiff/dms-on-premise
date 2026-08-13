@@ -169,6 +169,85 @@ module.exports = {
         }
       });
 
+      // 6. Olay: Mesaj Düzenleme
+      socket.on('edit_message', async (data, callback) => {
+        try {
+          const { messageId, content } = data;
+          if (!messageId || !content?.trim()) return;
+
+          const msg = await Message.findByPk(messageId);
+          if (!msg || msg.sender_id !== socket.user.id || msg.is_deleted) return;
+
+          const twoMinutes = 2 * 60 * 1000;
+          if (Date.now() - new Date(msg.created_at).getTime() > twoMinutes) {
+            if (callback) callback({ error: 'Düzenleme süresi doldu.' });
+            return;
+          }
+
+          const oldContent = msg.content;
+          msg.content = content.trim();
+          msg.is_edited = true;
+          msg.edited_at = new Date();
+          await msg.save();
+
+          logCisoAction('MESAJ_DUZENLENDI', {
+            senderId: socket.user.id,
+            senderName: socket.user.fullName || socket.user.username,
+            messageId, oldContent, newContent: content.trim(),
+          });
+
+          const editUpdate = { messageId, content: msg.content, is_edited: true, edited_at: msg.edited_at };
+          if (msg.room_id === 'global') {
+            io.to('global').emit('message_edited', editUpdate);
+          } else if (msg.receiver_id) {
+            io.to(msg.receiver_id).emit('message_edited', editUpdate);
+            io.to(msg.sender_id).emit('message_edited', editUpdate);
+          } else if (msg.room_id) {
+            io.to(msg.room_id).emit('message_edited', editUpdate);
+          }
+          if (callback) callback({ success: true });
+        } catch (err) {
+          console.error('[SOCKET_ERR] Mesaj düzenlenemedi:', err);
+        }
+      });
+
+      // 7. Olay: Mesaj Silme (Soft Delete)
+      socket.on('delete_message', async (data, callback) => {
+        try {
+          const { messageId } = data;
+          if (!messageId) return;
+
+          const msg = await Message.findByPk(messageId);
+          if (!msg || msg.sender_id !== socket.user.id || msg.is_deleted) return;
+
+          const deletedContent = msg.content;
+          msg.content = '';
+          msg.is_deleted = true;
+          msg.media_url = null;
+          msg.media_type = null;
+          await msg.save();
+
+          logCisoAction('MESAJ_SILINDI', {
+            senderId: socket.user.id,
+            senderName: socket.user.fullName || socket.user.username,
+            messageId, deletedContent,
+          });
+
+          const deleteUpdate = { messageId };
+          if (msg.room_id === 'global') {
+            io.to('global').emit('message_deleted', deleteUpdate);
+          } else if (msg.receiver_id) {
+            io.to(msg.receiver_id).emit('message_deleted', deleteUpdate);
+            io.to(msg.sender_id).emit('message_deleted', deleteUpdate);
+          } else if (msg.room_id) {
+            io.to(msg.room_id).emit('message_deleted', deleteUpdate);
+          }
+          if (callback) callback({ success: true });
+        } catch (err) {
+          console.error('[SOCKET_ERR] Mesaj silinemedi:', err);
+        }
+      });
+
       socket.on('disconnect', () => {
 
       });

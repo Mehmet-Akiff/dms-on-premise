@@ -69,45 +69,72 @@
             
             <div v-for="(msg, index) in deliveredMessages" :key="msg.id || index" 
                  class="message-wrapper"
-                 :class="{ 'message-self': isMine(msg) }">
+                 :class="{ 'message-self': isMine(msg), 'message-deleted': msg.is_deleted }">
               
               <div class="message-bubble">
-                <!-- Reaction Trigger (Hover) -->
-                <div class="reaction-trigger" v-if="systemMode === 'network'">
-                  <div class="quick-reactions">
-                    <span @click="addReaction(msg.id, '👍')">👍</span>
-                    <span @click="addReaction(msg.id, '❤️')">❤️</span>
-                    <span @click="addReaction(msg.id, '😂')">😂</span>
+                <!-- Silinen mesaj gösterimi -->
+                <div v-if="msg.is_deleted" class="deleted-message-content">
+                  <span class="deleted-icon">🚫</span> Bu mesaj silindi.
+                </div>
+
+                <template v-else>
+                  <!-- Action Buttons (Hover) -->
+                  <div class="message-actions" v-if="isMine(msg)">
+                    <div class="quick-reactions" v-if="systemMode === 'network'">
+                      <span @click="addReaction(msg.id, '👍')">👍</span>
+                      <span @click="addReaction(msg.id, '❤️')">❤️</span>
+                      <span @click="addReaction(msg.id, '😂')">😂</span>
+                    </div>
+                    <button v-if="canEdit(msg)" class="btn-msg-action edit" @click="startEdit(msg)" title="Düzenle">✏️</button>
+                    <button class="btn-msg-action delete" @click="confirmDeleteMessage(msg)" title="Sil">🗑️</button>
                   </div>
-                </div>
+                  <!-- Others' reaction trigger -->
+                  <div class="reaction-trigger" v-else-if="systemMode === 'network'">
+                    <div class="quick-reactions">
+                      <span @click="addReaction(msg.id, '👍')">👍</span>
+                      <span @click="addReaction(msg.id, '❤️')">❤️</span>
+                      <span @click="addReaction(msg.id, '😂')">😂</span>
+                    </div>
+                  </div>
 
-                <div class="message-sender" v-if="!isMine(msg) && activeChat === 'global'">
-                  {{ msg.sender?.fullName || msg.senderName || msg.sender?.username || 'Bilinmeyen' }}
-                </div>
-                
-                <!-- Media Content -->
-                <div v-if="msg.media_url" class="message-media">
-                  <img v-if="msg.media_type === 'image'" :src="msg.media_url" class="media-image" alt="Image" @click="openImage(msg.media_url)" />
-                  <audio v-else-if="msg.media_type === 'audio'" :src="msg.media_url" controls class="media-audio"></audio>
-                  <a v-else :href="msg.media_url" target="_blank" class="media-document">
-                    📄 Dosyayı İndir
-                  </a>
-                </div>
+                  <div class="message-sender" v-if="!isMine(msg) && activeChat === 'global'">
+                    {{ msg.sender?.fullName || msg.senderName || msg.sender?.username || 'Bilinmeyen' }}
+                  </div>
+                  
+                  <!-- Media Content -->
+                  <div v-if="msg.media_url" class="message-media">
+                    <img v-if="msg.media_type === 'image'" :src="msg.media_url" class="media-image" alt="Image" @click="openImage(msg.media_url)" />
+                    <audio v-else-if="msg.media_type === 'audio'" :src="msg.media_url" controls class="media-audio"></audio>
+                    <a v-else :href="msg.media_url" target="_blank" class="media-document">
+                      📄 Dosyayı İndir
+                    </a>
+                  </div>
 
-                <div class="message-content" v-if="msg.content">
-                  {{ msg.content }}
-                </div>
+                  <!-- Inline Edit Mode -->
+                  <div v-if="editingMessageId === msg.id" class="inline-edit-box">
+                    <input v-model="editContent" class="edit-input" @keyup.enter="saveEdit(msg.id)" @keyup.escape="cancelEdit" />
+                    <div class="edit-actions">
+                      <button class="btn-edit-save" @click="saveEdit(msg.id)">✓ Kaydet</button>
+                      <button class="btn-edit-cancel" @click="cancelEdit">✕ İptal</button>
+                    </div>
+                  </div>
+                  <!-- Normal Content -->
+                  <div class="message-content" v-else-if="msg.content">
+                    {{ msg.content }}
+                  </div>
+                </template>
                 
                 <div class="message-meta">
                   <span class="message-time">{{ formatTime(msg.created_at || msg.createdAt || msg.timestamp) }}</span>
+                  <span v-if="msg.is_edited" class="edited-tag">düzenlendi</span>
                   <span v-if="msg.type === 'note'" class="note-icon" title="Not">📌</span>
-                  <span v-if="isMine(msg)" class="read-receipt" :class="{ read: msg.is_read }">
+                  <span v-if="isMine(msg) && !msg.is_deleted" class="read-receipt" :class="{ read: msg.is_read }">
                     <svg viewBox="0 0 16 15" width="16" height="15"><path fill="currentColor" d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.32.32 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.484-.033l6.272-8.048a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.879a.32.32 0 0 1-.484.033L1.891 7.769a.366.366 0 0 0-.515.006l-.423.433a.364.364 0 0 0 .006.514l3.258 3.185c.143.14.361.125.484-.033l6.272-8.048a.365.365 0 0 0-.063-.51z"></path></svg>
                   </span>
                 </div>
 
                 <!-- Reactions Display -->
-                <div class="reactions-display" v-if="msg.reactions && msg.reactions.length > 0">
+                <div class="reactions-display" v-if="msg.reactions && msg.reactions.length > 0 && !msg.is_deleted">
                   <span v-for="(count, emoji) in aggregateReactions(msg.reactions)" :key="emoji" class="reaction-badge" @click="addReaction(msg.id, emoji)">
                     {{ emoji }} {{ count }}
                   </span>
@@ -205,12 +232,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Mesaj Silme Onay Modalı -->
+    <ConfirmModal
+      :visible="showDeleteConfirm"
+      title="Mesajı Sil"
+      message="Bu mesaj kalıcı olarak silinecek. Emin misiniz?"
+      confirmText="Sil"
+      cancelText="Vazgeç"
+      variant="danger"
+      @confirm="executeDeleteMessage"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { io as socketIoClient } from 'socket.io-client'
+import ConfirmModal from '../ConfirmModal.vue'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false }
@@ -238,6 +278,12 @@ const showScheduler = ref(false)
 const scheduledTime = ref('')
 const selectedFile = ref(null)
 const showScheduledModal = ref(false)
+
+// Edit/Delete state
+const editingMessageId = ref(null)
+const editContent = ref('')
+const showDeleteConfirm = ref(false)
+const deleteTargetId = ref(null)
 
 // Audio Recording
 const isRecording = ref(false)
@@ -502,7 +548,6 @@ function initSocket() {
 
   socket.value.on('receive_reaction', (data) => {
     const { messageId, reactions } = data
-    // Find the message in active chat (or search all chats)
     for (const chatKey in messages.value) {
       const msg = messages.value[chatKey].find(m => m.id === messageId)
       if (msg) {
@@ -510,6 +555,18 @@ function initSocket() {
         break
       }
     }
+  })
+
+  // Mesaj düzenleme broadcast'i
+  socket.value.on('message_edited', (data) => {
+    const { messageId, content, is_edited, edited_at } = data
+    updateLocalMessage(messageId, { content, is_edited, edited_at })
+  })
+
+  // Mesaj silme broadcast'i
+  socket.value.on('message_deleted', (data) => {
+    const { messageId } = data
+    updateLocalMessage(messageId, { is_deleted: true, content: '', media_url: null, media_type: null })
   })
 }
 
@@ -537,7 +594,6 @@ async function deleteScheduledMessage(msgId) {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     if (res.ok) {
-      // Lokal diziden de kaldır
       const chatId = activeChat.value
       if (messages.value[chatId]) {
         const idx = messages.value[chatId].findIndex(m => m.id === msgId)
@@ -545,7 +601,100 @@ async function deleteScheduledMessage(msgId) {
       }
     }
   } catch (err) {
-    // Sessizce yakala, kullanıcıyı meşgul etme
+    // Sessizce yakala
+  }
+}
+
+// ============================================================
+// Mesaj Düzenleme / Silme
+// ============================================================
+function canEdit(msg) {
+  if (!msg.created_at && !msg.createdAt) return false
+  const elapsed = Date.now() - new Date(msg.created_at || msg.createdAt).getTime()
+  return elapsed < 2 * 60 * 1000 // 2 dakika
+}
+
+function startEdit(msg) {
+  editingMessageId.value = msg.id
+  editContent.value = msg.content || ''
+}
+
+function cancelEdit() {
+  editingMessageId.value = null
+  editContent.value = ''
+}
+
+async function saveEdit(messageId) {
+  if (!editContent.value.trim()) return
+  
+  if (systemMode.value === 'network' && socket.value) {
+    socket.value.emit('edit_message', { messageId, content: editContent.value.trim() }, (res) => {
+      if (res?.success) {
+        // Socket handler (message_edited) güncelleyecek
+      }
+    })
+  } else {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/chat/message/${messageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ content: editContent.value.trim() })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.data) {
+          updateLocalMessage(messageId, { content: data.data.content, is_edited: true, edited_at: data.data.edited_at })
+        }
+      }
+    } catch (err) {
+      // Sessiz hata
+    }
+  }
+  cancelEdit()
+}
+
+function confirmDeleteMessage(msg) {
+  deleteTargetId.value = msg.id
+  showDeleteConfirm.value = true
+}
+
+async function executeDeleteMessage() {
+  const messageId = deleteTargetId.value
+  showDeleteConfirm.value = false
+  deleteTargetId.value = null
+  if (!messageId) return
+
+  if (systemMode.value === 'network' && socket.value) {
+    socket.value.emit('delete_message', { messageId }, (res) => {
+      if (res?.success) {
+        // Socket handler (message_deleted) güncelleyecek
+      }
+    })
+  } else {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/chat/message/${messageId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        updateLocalMessage(messageId, { is_deleted: true, content: '', media_url: null, media_type: null })
+      }
+    } catch (err) {
+      // Sessiz hata
+    }
+  }
+}
+
+function updateLocalMessage(messageId, updates) {
+  for (const chatKey in messages.value) {
+    const idx = messages.value[chatKey].findIndex(m => m.id === messageId)
+    if (idx !== -1) {
+      const updated = { ...messages.value[chatKey][idx], ...updates }
+      messages.value[chatKey].splice(idx, 1, updated)
+      break
+    }
   }
 }
 
@@ -704,15 +853,16 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* BASE VARIABLES & DRAWER */
+/* ============================================================
+   DMS KURUMSAL CHAT TEMASI — CSS Değişkenleri ile Tema Uyumlu
+   ============================================================ */
+
+/* BASE DRAWER */
 .chat-drawer-wrapper {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
   pointer-events: none; z-index: 9999; display: flex; justify-content: flex-end;
   overflow: hidden; visibility: hidden;
   transition: visibility 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  --chat-bg: #EFEAE2; /* WhatsApp Web like background */
-  --bubble-out: #D9FDD3;
-  --bubble-in: #FFFFFF;
 }
 .chat-drawer-wrapper.drawer-open { pointer-events: auto; visibility: visible; }
 .drawer-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s ease; }
@@ -725,93 +875,112 @@ onUnmounted(() => {
 }
 .chat-drawer-wrapper.drawer-open .chat-drawer { transform: translateX(0); }
 
-/* HEADER */
+/* HEADER — Kurumsal gradient */
 .drawer-header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 0.8rem 1.5rem; background: #00A884; /* WhatsApp brand */
-  color: white; border-bottom: 1px solid rgba(0,0,0,0.1);
+  padding: 0.8rem 1.5rem;
+  background: linear-gradient(135deg, var(--accent-primary, #8b5cf6), var(--accent-secondary, #3b82f6));
+  color: white; border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 .header-title { display: flex; align-items: center; gap: 0.75rem; }
-.header-title h3 { margin: 0; font-size: 1.1rem; font-weight: 600; color: white;}
+.header-title h3 { margin: 0; font-size: 1.1rem; font-weight: 600; color: white; }
 .mode-badge { font-size: 0.65rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 99px; text-transform: uppercase; background: rgba(255,255,255,0.2); }
 .btn-close-drawer { background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; transition: transform 0.2s; }
 .btn-close-drawer:hover { transform: rotate(90deg); }
 
 /* LAYOUT & SIDEBAR */
-.chat-layout { display: flex; flex: 1; overflow: hidden; background: #F0F2F5; }
+.chat-layout { display: flex; flex: 1; overflow: hidden; background: var(--bg-primary); }
 .chat-sidebar {
-  width: 300px; background: #FFFFFF; border-right: 1px solid #D1D7DB;
+  width: 300px; background: var(--bg-secondary); border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
 }
-.sidebar-search { padding: 0.5rem 1rem; border-bottom: 1px solid #F0F2F5; }
-.search-input { width: 100%; padding: 0.5rem 1rem; border-radius: 8px; border: none; background: #F0F2F5; outline: none; font-size: 0.9rem; }
+.sidebar-search { padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); }
+.search-input { width: 100%; padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card, var(--bg-primary)); outline: none; font-size: 0.9rem; color: var(--text-primary); }
 .room-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
 .room-item {
   display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1rem;
-  border-bottom: 1px solid #F0F2F5; cursor: pointer; transition: background 0.15s;
+  border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s;
 }
-.room-item:hover, .room-item.active { background: #F5F6F6; }
+.room-item:hover, .room-item.active { background: var(--accent-glow); }
 .room-avatar {
-  width: 48px; height: 48px; border-radius: 50%; background: #DFE5E7;
+  width: 48px; height: 48px; border-radius: 50%; background: var(--bg-card, #1e293b);
   display: flex; justify-content: center; align-items: center;
-  font-size: 1.2rem; font-weight: bold; color: #54656F; position: relative; flex-shrink:0;
+  font-size: 1.2rem; font-weight: bold; color: var(--text-secondary); position: relative; flex-shrink:0;
 }
-.global-avatar { background: #00A884; color: white; }
-.online-dot { position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px; background: #00A884; border-radius: 50%; border: 2px solid white; }
+.global-avatar { background: var(--accent-primary, #8b5cf6); color: white; }
+.online-dot { position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px; background: var(--success, #22c55e); border-radius: 50%; border: 2px solid var(--bg-secondary); }
 .room-info { display: flex; flex-direction: column; overflow: hidden; }
-.room-name { font-weight: 500; color: #111B21; font-size: 1rem; }
-.room-preview { font-size: 0.8rem; color: #667781; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-name { font-weight: 500; color: var(--text-primary); font-size: 1rem; }
+.room-preview { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* MAIN CHAT AREA */
 .chat-main { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); position: relative; }
 .chat-main::before {
   content: ""; position: absolute; top:0; left:0; width:100%; height:100%;
-  background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
-  opacity: 0.06; pointer-events: none;
+  opacity: 0.03; pointer-events: none;
+  background-image: repeating-linear-gradient(45deg, var(--border) 0, var(--border) 1px, transparent 0, transparent 50%);
+  background-size: 16px 16px;
 }
 
 .chat-top-bar {
-  padding: 0.6rem 1rem; background: #F0F2F5; border-bottom: 1px solid #D1D7DB;
+  padding: 0.6rem 1rem; background: var(--bg-secondary); border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 1rem; z-index: 2;
 }
 .chat-top-avatar {
-  width: 40px; height: 40px; border-radius: 50%; background: #DFE5E7; color: #54656F;
+  width: 40px; height: 40px; border-radius: 50%; background: var(--bg-card); color: var(--text-secondary);
   display: flex; justify-content: center; align-items: center; font-weight: bold;
 }
 .chat-top-info { display: flex; flex-direction: column; }
-.chat-target-name { font-size: 1rem; font-weight: 500; color: #111B21; }
-.chat-status { font-size: 0.8rem; color: #667781; }
+.chat-target-name { font-size: 1rem; font-weight: 500; color: var(--text-primary); }
+.chat-status { font-size: 0.8rem; color: var(--success, #22c55e); }
 
 /* STICKY BANNER */
 .scheduled-sticky-banner {
   position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 10;
-  background: #FFF3CD; border: 1px solid #FFEEBA; color: #856404;
-  padding: 0.5rem 1rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); color: var(--text-primary);
+  padding: 0.5rem 1rem; border-radius: 8px; box-shadow: var(--shadow);
   display: flex; align-items: center; gap: 1rem; font-size: 0.85rem;
 }
 .btn-view-scheduled {
-  background: #00A884; border: none; color: white; padding: 0.3rem 0.6rem;
+  background: var(--accent-primary, #8b5cf6); border: none; color: white; padding: 0.3rem 0.6rem;
   border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.8rem;
 }
 
 /* MESSAGES */
 .messages-container { flex: 1; overflow-y: auto; padding: 2rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 2; }
-.no-messages { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #54656F; font-size: 0.95rem; }
+.no-messages { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: var(--text-secondary); font-size: 0.95rem; }
 .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
 
 .message-wrapper { display: flex; flex-direction: column; align-items: flex-start; max-width: 65%; position: relative; }
 .message-self { align-self: flex-end; align-items: flex-end; }
+.message-deleted .message-bubble { opacity: 0.6; }
 .message-bubble {
   background: var(--bubble-in); padding: 0.4rem 0.6rem 0.5rem 0.6rem;
   border-radius: 7.5px; box-shadow: 0 1px 0.5px rgba(11,20,26,.13);
   position: relative; display: flex; flex-direction: column;
-  min-width: 100px; color: #111B21;
+  min-width: 100px; color: var(--text-primary);
 }
 .message-self .message-bubble { background: var(--bubble-out); }
 
+/* Message Actions (Edit/Delete on hover) */
+.message-actions {
+  position: absolute; top: -15px; right: -50px;
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  display: none; align-items: center; padding: 0.15rem 0.25rem; z-index: 10; gap: 0.1rem;
+}
+.message-self .message-actions { right: auto; left: -50px; }
+.message-wrapper:hover .message-actions { display: flex; }
+.btn-msg-action {
+  background: none; border: none; cursor: pointer; padding: 0.15rem 0.25rem;
+  font-size: 0.85rem; border-radius: 4px; transition: background 0.15s;
+}
+.btn-msg-action:hover { background: var(--accent-glow); }
+
 /* Reactions Trigger */
 .reaction-trigger {
-  position: absolute; top: -15px; right: -40px; background: white;
+  position: absolute; top: -15px; right: -40px; background: var(--bg-secondary);
+  border: 1px solid var(--border);
   border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
   display: none; align-items: center; padding: 0.2rem; z-index: 10;
 }
@@ -819,10 +988,36 @@ onUnmounted(() => {
 .message-wrapper:hover .reaction-trigger { display: flex; }
 .quick-reactions span { cursor: pointer; padding: 0.2rem; transition: transform 0.2s; display: inline-block; }
 .quick-reactions span:hover { transform: scale(1.3); }
-.btn-reaction-plus { background: #F0F2F5; border: none; border-radius: 50%; width: 20px; height: 20px; display: flex; justify-content: center; align-items: center; font-size: 0.7rem; cursor: pointer; margin-left: 0.2rem;}
 
-.message-sender { font-size: 0.75rem; color: #027EB5; font-weight: 500; margin-bottom: 0.2rem; }
+.message-sender { font-size: 0.75rem; color: var(--accent, #38bdf8); font-weight: 500; margin-bottom: 0.2rem; }
 .message-content { font-size: 0.95rem; line-height: 1.3; word-break: break-word; }
+
+/* Deleted message */
+.deleted-message-content {
+  font-size: 0.88rem; color: var(--text-secondary); font-style: italic;
+  display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0;
+}
+.deleted-icon { font-size: 0.85rem; }
+
+/* Edited tag */
+.edited-tag { font-size: 0.6rem; color: var(--text-secondary); font-style: italic; margin-left: 0.25rem; }
+
+/* Inline Edit */
+.inline-edit-box { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.2rem 0; }
+.edit-input {
+  width: 100%; padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.9rem;
+  border: 1px solid var(--accent-primary, #8b5cf6); outline: none;
+  background: var(--bg-primary); color: var(--text-primary);
+}
+.edit-actions { display: flex; gap: 0.3rem; justify-content: flex-end; }
+.btn-edit-save {
+  background: var(--accent-primary, #8b5cf6); color: white; border: none;
+  padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+}
+.btn-edit-cancel {
+  background: transparent; color: var(--danger, #ef4444); border: 1px solid var(--danger, #ef4444);
+  padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+}
 
 /* MEDIA */
 .message-media { margin-bottom: 0.3rem; max-width: 100%; }
@@ -830,59 +1025,64 @@ onUnmounted(() => {
 .media-audio { height: 40px; outline: none; width: 250px; }
 .media-document {
   display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.05);
-  padding: 0.7rem; border-radius: 6px; text-decoration: none; color: #111B21; font-weight: 500; font-size: 0.9rem;
+  padding: 0.7rem; border-radius: 6px; text-decoration: none; color: var(--text-primary); font-weight: 500; font-size: 0.9rem;
 }
 
 .message-meta { display: flex; align-items: center; justify-content: flex-end; gap: 0.25rem; margin-top: 0.2rem; margin-bottom: -0.2rem; float: right; margin-left: 1rem;}
-.message-time { font-size: 0.65rem; color: #667781; }
-.read-receipt { color: #8696A0; display: flex; align-items: center; }
-.read-receipt.read { color: #53BDEB; } /* Blue double ticks */
+.message-time { font-size: 0.65rem; color: var(--text-secondary); }
+.read-receipt { color: var(--text-secondary); display: flex; align-items: center; }
+.read-receipt.read { color: var(--accent, #38bdf8); }
 
 .reactions-display {
   display: flex; flex-wrap: wrap; gap: 0.2rem; position: absolute; bottom: -12px; left: 10px;
-  background: white; padding: 2px 6px; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.15); border: 1px solid #e2e8f0;
+  background: var(--bg-secondary); padding: 2px 6px; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.15); border: 1px solid var(--border);
 }
 .message-self .reactions-display { left: auto; right: 10px; }
 .reaction-badge { font-size: 0.75rem; cursor: pointer; user-select: none; }
 
 /* BOTTOM INPUT AREA */
-.chat-input-area { background: #F0F2F5; padding: 0.6rem 1rem; z-index: 2; display: flex; flex-direction: column;}
+.chat-input-area { background: var(--bg-secondary); padding: 0.6rem 1rem; z-index: 2; display: flex; flex-direction: column; border-top: 1px solid var(--border);}
 .chat-form { display: flex; align-items: center; gap: 0.6rem; }
 .btn-emoji-toggle, .btn-attach, .btn-schedule-toggle {
-  background: none; border: none; font-size: 1.4rem; color: #54656F; cursor: pointer; padding: 0.3rem; transition: color 0.2s;
+  background: none; border: none; font-size: 1.4rem; color: var(--text-secondary); cursor: pointer; padding: 0.3rem; transition: color 0.2s;
 }
-.btn-schedule-toggle.active { color: #00A884; }
+.btn-schedule-toggle.active { color: var(--accent-primary, #8b5cf6); }
 .chat-input {
-  flex: 1; border: none; border-radius: 8px; padding: 0.7rem 1rem; font-size: 0.95rem;
-  background: white; outline: none; color: #111B21;
+  flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1rem; font-size: 0.95rem;
+  background: var(--bg-primary); outline: none; color: var(--text-primary);
 }
+.chat-input:focus { border-color: var(--accent-primary, #8b5cf6); }
 .btn-send, .btn-mic {
-  background: #00A884; border: none; border-radius: 50%; width: 44px; height: 44px;
+  background: var(--accent-primary, #8b5cf6); border: none; border-radius: 50%; width: 44px; height: 44px;
   display: flex; justify-content: center; align-items: center; color: white; cursor: pointer; transition: transform 0.2s;
 }
 .btn-send:hover, .btn-mic:hover { transform: scale(1.05); }
 
 /* MEDIA PREVIEW & AUDIO RECORDING UI */
 .media-preview-box, .audio-recording-box {
-  background: white; padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 0.5rem;
+  background: var(--bg-secondary); padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 0.5rem;
   display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid var(--border);
 }
-.preview-content { display: flex; align-items: center; gap: 0.5rem; color: #111B21; font-weight: 500;}
-.btn-clear-media { background: #F0F2F5; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; color: #54656F;}
+.preview-content { display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary); font-weight: 500;}
+.btn-clear-media { background: var(--bg-card); border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; color: var(--text-secondary);}
 
 .recording-pulse { width: 12px; height: 12px; background: #ef4444; border-radius: 50%; animation: pulse 1s infinite; margin-right: 1rem;}
 @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
 .recording-actions { display: flex; gap: 0.5rem; }
-.btn-stop-record { background: #00A884; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-weight: bold;}
+.btn-stop-record { background: var(--accent-primary); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-weight: bold;}
 .btn-cancel-record { background: transparent; color: #ef4444; border: none; padding: 0.4rem; cursor: pointer;}
 
 /* SCHEDULER & EMOJI DRAWER */
-.scheduler-drawer { background: white; margin-top: 0.5rem; border-radius: 8px; padding: 0.5rem; display: flex; justify-content: space-between; align-items: center;}
-.schedule-input { border: 1px solid #D1D7DB; border-radius: 6px; padding: 0.4rem; outline: none; }
-.emoji-picker-panel { background: #F0F2F5; padding: 0.5rem; border-top: 1px solid #D1D7DB; z-index: 2;}
+.scheduler-drawer { background: var(--bg-secondary); margin-top: 0.5rem; border-radius: 8px; padding: 0.5rem; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border);}
+.schedule-input { border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; outline: none; background: var(--bg-primary); color: var(--text-primary); }
+.btn-schedule-confirm { background: var(--accent-primary); color: white; border: none; padding: 0.35rem 0.7rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem; }
+.emoji-picker-panel { background: var(--bg-secondary); padding: 0.5rem; border-top: 1px solid var(--border); z-index: 2;}
 .emoji-grid { display: flex; flex-wrap: wrap; gap: 0.2rem; }
 .emoji-item { font-size: 1.5rem; cursor: pointer; padding: 0.2rem; border-radius: 4px; }
-.emoji-item:hover { background: #E1E8EB; }
+.emoji-item:hover { background: var(--accent-glow); }
+.schedule-indicator { font-size: 0.82rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;}
+.btn-clear-schedule { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.8rem; font-weight: 600;}
 
 /* SCHEDULED MODAL */
 .scheduled-modal-overlay {
@@ -890,21 +1090,25 @@ onUnmounted(() => {
   background: rgba(0,0,0,0.6); z-index: 100; display: flex; justify-content: center; align-items: center;
 }
 .scheduled-modal {
-  background: var(--bg-primary); width: 400px; border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2); overflow: hidden; display: flex; flex-direction: column;
+  background: var(--bg-secondary); width: 400px; border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3); overflow: hidden; display: flex; flex-direction: column;
+  border: 1px solid var(--border);
 }
-.modal-header { background: #00A884; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; font-weight: bold;}
+.modal-header {
+  background: linear-gradient(135deg, var(--accent-primary, #8b5cf6), var(--accent-secondary, #3b82f6));
+  color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; font-weight: bold;
+}
 .modal-header button { background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;}
 .modal-body { padding: 1rem; max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;}
-.pending-item { background: #F0F2F5; padding: 0.8rem; border-radius: 8px; border-left: 4px solid #fb923c;}
+.pending-item { background: var(--bg-card, var(--bg-primary)); padding: 0.8rem; border-radius: 8px; border-left: 4px solid #fb923c;}
 .pending-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; }
-.pending-time { font-size: 0.75rem; color: #667781; font-weight: 600;}
-.pending-content { font-size: 0.9rem; color: #111B21;}
+.pending-time { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;}
+.pending-content { font-size: 0.9rem; color: var(--text-primary);}
 .btn-delete-scheduled {
   background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
   color: #ef4444; font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.5rem;
   border-radius: 6px; cursor: pointer; transition: all 0.2s;
 }
 .btn-delete-scheduled:hover { background: rgba(239, 68, 68, 0.2); }
-.no-pending { text-align: center; color: #667781; padding: 2rem 0; font-style: italic;}
+.no-pending { text-align: center; color: var(--text-secondary); padding: 2rem 0; font-style: italic;}
 </style>
