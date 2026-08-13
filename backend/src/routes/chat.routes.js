@@ -411,5 +411,50 @@ router.put('/scheduled/:id', async (req, res) => {
   }
 });
 
+// ============================================================
+// POST /api/chat/message/:id/reaction — Reaksiyon Ekle / Kaldır
+// ============================================================
+router.post('/message/:id/reaction', async (req, res) => {
+  try {
+    const messageId = req.params.id;
+    const { emoji } = req.body;
+    const userId = req.user.id;
+    const username = req.user.fullName || req.user.username;
+
+    if (!emoji) {
+      return res.status(400).json({ error: 'Emoji parametresi gerekli.' });
+    }
+
+    const msg = await Message.findByPk(messageId);
+    if (!msg) {
+      return res.status(404).json({ error: 'Mesaj bulunamadı.' });
+    }
+
+    let reactions = [];
+    if (typeof msg.reactions === 'string') {
+      try { reactions = JSON.parse(msg.reactions); } catch (e) {}
+    } else if (Array.isArray(msg.reactions)) {
+      reactions = [...msg.reactions];
+    }
+
+    const existingIdx = reactions.findIndex(r => r.userId === userId && r.emoji === emoji);
+
+    if (existingIdx >= 0) {
+      reactions.splice(existingIdx, 1); // toggle off
+    } else {
+      reactions.push({ userId, emoji, username });
+    }
+
+    msg.set('reactions', reactions);
+    msg.changed('reactions', true);
+    await msg.save();
+
+    res.json({ success: true, reactions: msg.reactions });
+  } catch (error) {
+    console.error('[CHAT_API_ERR] Reaksiyon eklenemedi:', error);
+    res.status(500).json({ error: 'Reaksiyon işlenirken sunucu hatası.' });
+  }
+});
+
 module.exports = router;
 

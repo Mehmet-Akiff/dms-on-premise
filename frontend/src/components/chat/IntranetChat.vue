@@ -728,9 +728,37 @@ function initSocket() {
 }
 
 // Reactions
-function addReaction(messageId, emoji) {
-  if (socket.value) {
+async function addReaction(messageId, emoji) {
+  if (socket.value && isConnected.value) {
     socket.value.emit('add_reaction', { messageId, emoji })
+    return
+  }
+
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/chat/message/${messageId}/reaction`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ emoji })
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      if (data.success && data.reactions) {
+        for (const chatKey in messages.value) {
+          const msg = messages.value[chatKey].find(m => m.id === messageId)
+          if (msg) {
+            msg.reactions = data.reactions
+            break
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[REACTION_ERR] Reaksiyon eklenemedi:', err)
   }
 }
 
