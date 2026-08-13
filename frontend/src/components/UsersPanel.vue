@@ -445,7 +445,7 @@ onMounted(() => {
 }
 
 .role--ciso { background: rgba(16, 185, 129, 0.12); color: var(--color-success); border: 1px solid rgba(16, 185, 129, 0.25); }
-.role--admin { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+.role--admin { background: rgba(245, 158, 11, 0.12); color: var(--color-warning, #fbbf24); border: 1px solid rgba(245, 158, 11, 0.25); }
 .role--user { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
 
 .status-badge {
@@ -456,7 +456,7 @@ onMounted(() => {
 }
 
 .status--active { background: rgba(34, 197, 94, 0.1); color: #4ade80; }
-.status--pending_approval { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+.status--pending_approval { background: rgba(245, 158, 11, 0.1); color: var(--color-warning, #fbbf24); }
 
 .online-tag {
   display: inline-flex;

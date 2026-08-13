@@ -1538,10 +1538,10 @@ onMounted(() => {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(245, 158, 11, 0.1);
 }
 .settings-drawer.theme--admin h4 {
-  color: #fbbf24;
+  color: var(--color-warning, #fbbf24);
 }
 .settings-drawer.theme--admin .btn-settings-save {
-  background: linear-gradient(135deg, #fbbf24, #d97706);
+  background: linear-gradient(135deg, var(--color-warning, #fbbf24), #d97706);
 }
 
 .settings-drawer.theme--ciso {
@@ -1638,7 +1638,7 @@ onMounted(() => {
 .profile-role-tag.role--admin {
   background: rgba(245, 158, 11, 0.15);
   border: 1px solid rgba(245, 158, 11, 0.3);
-  color: #fbbf24;
+  color: var(--color-warning, #fbbf24);
 }
 .profile-role-tag.role--ciso {
   background: rgba(16, 185, 129, 0.15);
@@ -1877,7 +1877,7 @@ onMounted(() => {
 
 .status-badge.status--pending {
   background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
+  color: var(--color-warning, #fbbf24);
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
@@ -2012,7 +2012,7 @@ onMounted(() => {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(3, 7, 18, 0.75);
+  background: var(--overlay-bg, rgba(3, 7, 18, 0.75));
   backdrop-filter: blur(6px);
   display: flex;
   justify-content: center;

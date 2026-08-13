@@ -96,8 +96,8 @@
                   
                   <!-- Media Content -->
                   <div v-if="msg.media_url" class="message-media">
-                    <img v-if="msg.media_type === 'image'" :src="msg.media_url" class="media-image" alt="Image" @click="openImage(msg.media_url)" />
-                    <audio v-else-if="msg.media_type === 'audio'" :src="msg.media_url" controls class="media-audio" preload="metadata" @loadedmetadata="onAudioLoaded"></audio>
+                    <img v-if="msg.media_type === 'image'" :src="getAuthMediaUrl(msg.media_url)" class="media-image" alt="Image" @click="openImage(msg.media_url)" />
+                    <audio v-else-if="msg.media_type === 'audio'" :src="getAuthMediaUrl(msg.media_url)" controls class="media-audio" preload="metadata" @loadedmetadata="onAudioLoaded"></audio>
                     <a v-else href="#" @click.prevent="downloadMedia(msg.media_url, 'download')" class="media-document">
                       📎 Dosyayı İndir
                     </a>
@@ -412,6 +412,8 @@ function isMine(msg) {
   return (msg.sender_id || msg.senderId) === currentUserId.value
 }
 
+
+
 function closeDrawer() {
   showEmojiPicker.value = false
   showScheduler.value = false
@@ -583,10 +585,11 @@ function onAudioLoaded(event) {
   const audio = event.target
   if (audio && (audio.duration === Infinity || isNaN(audio.duration) || audio.duration === 0)) {
     audio.currentTime = 1e101
-    audio.ontimeupdate = function () {
-      this.ontimeupdate = null
-      audio.currentTime = 0
-    }
+    setTimeout(() => {
+      if (audio.duration !== Infinity && !isNaN(audio.duration) && audio.duration > 0) {
+        audio.currentTime = 0
+      }
+    }, 200)
   }
 }
 
@@ -1095,6 +1098,14 @@ async function downloadMedia(url, action = 'download') {
   } catch (err) {
     toast.error(`Dosya İndirme Hatası: ${err.message}`)
   }
+}
+
+function getAuthMediaUrl(url) {
+  if (!url) return ''
+  const token = localStorage.getItem('token')
+  if (!token) return url
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}token=${token}`
 }
 
 function openImage(url) {

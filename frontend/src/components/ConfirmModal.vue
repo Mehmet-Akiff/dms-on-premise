@@ -56,7 +56,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .confirm-overlay {
   position: fixed;
   top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(3, 7, 18, 0.75);
+  background: var(--overlay-bg, rgba(3, 7, 18, 0.75));
   backdrop-filter: blur(6px);
   display: flex; justify-content: center; align-items: center;
   z-index: 99999;

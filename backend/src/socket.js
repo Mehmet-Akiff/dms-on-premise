@@ -166,7 +166,7 @@ module.exports = {
 
           // Broadcast reaction update
           const reactionUpdate = { messageId, reactions: msg.reactions };
-          if (msg.room_id === 'global') {
+          if (!msg.receiver_id && (!msg.room_id || msg.room_id === 'global')) {
             io.to('global').emit('receive_reaction', reactionUpdate);
           } else if (msg.receiver_id) {
             io.to(msg.receiver_id).emit('receive_reaction', reactionUpdate);
@@ -207,7 +207,7 @@ module.exports = {
           });
 
           const editUpdate = { messageId, content: msg.content, is_edited: true, edited_at: msg.edited_at };
-          if (msg.room_id === 'global') {
+          if (!msg.receiver_id && (!msg.room_id || msg.room_id === 'global')) {
             io.to('global').emit('message_edited', editUpdate);
           } else if (msg.receiver_id) {
             io.to(msg.receiver_id).emit('message_edited', editUpdate);
@@ -244,7 +244,7 @@ module.exports = {
           });
 
           const deleteUpdate = { messageId };
-          if (msg.room_id === 'global') {
+          if (!msg.receiver_id && (!msg.room_id || msg.room_id === 'global')) {
             io.to('global').emit('message_deleted', deleteUpdate);
           } else if (msg.receiver_id) {
             io.to(msg.receiver_id).emit('message_deleted', deleteUpdate);
@@ -282,7 +282,7 @@ module.exports = {
           await msg.save();
 
           // Mesajı ilgili odaya/kişiye ilet
-          if (msg.room_id === 'global') {
+          if (!msg.receiver_id && (!msg.room_id || msg.room_id === 'global')) {
             io.to('global').emit('receive_message', msg);
           } else if (msg.receiver_id) {
             io.to(msg.receiver_id).emit('receive_message', msg);

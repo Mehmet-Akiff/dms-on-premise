@@ -381,6 +381,8 @@ function onSearchLoading(isLoading) {
   --color-accent-text: #a78bfa;
   --color-accent-bg: #8b5cf6;
   --color-accent-light: #c4b5fd;
+  --color-warning: #fbbf24;
+  --overlay-bg: rgba(3, 7, 18, 0.75);
   /* Chat-specific tokens */
   --chat-bg: #0b141a;
   --bubble-in: #1e293b;
@@ -410,6 +412,8 @@ function onSearchLoading(isLoading) {
   --color-accent-text: #4f46e5;
   --color-accent-bg: #6366f1;
   --color-accent-light: #818cf8;
+  --color-warning: #d97706;
+  --overlay-bg: rgba(148, 163, 184, 0.45);
   --chat-bg: #f5f5f7;
   --bubble-in: #ffffff;
   --bubble-out: #e5f0ff;
@@ -693,7 +697,7 @@ font {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(3, 7, 18, 0.7);
+  background: var(--overlay-bg);
   backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
@@ -702,8 +706,8 @@ font {
 }
 
 .audit-log-modal-content {
-  background: #0f172a;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 12px;
   width: 92%;
   max-width: 1150px;
@@ -718,7 +722,7 @@ font {
   justify-content: space-between;
   align-items: center;
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-close-header h3 {
@@ -751,7 +755,7 @@ font {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(3, 7, 18, 0.75);
+  background: var(--overlay-bg);
   backdrop-filter: blur(6px);
   display: flex;
   justify-content: center;
@@ -760,8 +764,8 @@ font {
 }
 
 .logout-confirm-card {
-  background: #111827;
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 12px;
   width: 100%;
   max-width: 380px;
@@ -771,13 +775,13 @@ font {
 }
 
 .logout-confirm-card h4 {
-  color: #f87171;
+  color: var(--danger);
   font-size: 1.05rem;
   margin: 0 0 0.5rem 0;
 }
 
 .logout-confirm-card p {
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 0.82rem;
   line-height: 1.4;
   margin: 0 0 1.25rem 0;
@@ -785,8 +789,8 @@ font {
 
 .btn-confirm-cancel {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #9ca3af;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
   padding: 0.5rem 1.25rem;
   font-size: 0.8rem;
   font-weight: 600;
