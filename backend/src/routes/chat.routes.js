@@ -357,5 +357,59 @@ router.delete('/message/:id', async (req, res) => {
   }
 });
 
+// ============================================================
+// PUT /api/chat/scheduled/:id — Zamanlanmış mesajı düzenle
+// ============================================================
+router.put('/scheduled/:id', async (req, res) => {
+  try {
+    const messageId = req.params.id;
+    const currentUserId = req.user.id;
+    const { content, scheduled_at } = req.body;
+
+    const msg = await Message.findByPk(messageId);
+    if (!msg) {
+      return res.status(404).json({ error: 'Mesaj bulunamadı.' });
+    }
+
+    // Sadece kendi mesajını düzenleyebilir
+    if (msg.sender_id !== currentUserId) {
+      return res.status(403).json({ error: 'Bu mesajı düzenleme yetkiniz yok.' });
+    }
+
+    // Sadece henüz iletilmemiş zamanlanmış mesajlar düzenlenebilir
+    if (msg.is_delivered) {
+      return res.status(400).json({ error: 'Zaten iletilmiş bir mesaj düzenlenemez.' });
+    }
+
+    // Geçmiş bir tarih seçilmesini engelle
+    if (scheduled_at) {
+      const scheduledDate = new Date(scheduled_at);
+      if (scheduledDate <= new Date()) {
+        return res.status(400).json({ error: 'Zamanlanmış tarih geçmişte olamaz.' });
+      }
+      msg.scheduled_at = scheduled_at;
+    }
+
+    if (content !== undefined) {
+      msg.content = content;
+    }
+
+    await msg.save();
+
+    logAction(
+      req,
+      'ZAMANLANMIS_MESAJ_DUZENLENDI',
+      null,
+      null,
+      `${req.user.fullName || req.user.username} zamanlanmış mesajı düzenledi (ID: ${messageId})`
+    );
+
+    res.json({ success: true, message: 'Zamanlanmış mesaj başarıyla güncellendi.', data: msg });
+  } catch (error) {
+    console.error('[CHAT_API_ERR] Zamanlanmış mesaj düzenlenemedi:', error);
+    res.status(500).json({ error: 'Düzenleme işlemi sırasında sunucu hatası.' });
+  }
+});
+
 module.exports = router;
 

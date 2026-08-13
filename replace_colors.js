@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const dir = path.join(__dirname, 'frontend/src/components');
-const files = fs.readdirSync(dir).filter(f => f.endsWith('.vue'));
+const filePaths = [
+  path.join(__dirname, 'frontend/src/components/chat/IntranetChat.vue')
+];
 
 const colorMap = {
   '#34d399': 'var(--color-success)',
@@ -27,24 +28,19 @@ const colorMap = {
 };
 
 let count = 0;
-files.forEach(f => {
-  if (f === 'NativeLangSelector.vue') return; // skipping as I already manually styled it
-  const filePath = path.join(dir, f);
+filePaths.forEach(filePath => {
   let content = fs.readFileSync(filePath, 'utf8');
   let original = content;
   
   for (const [hex, cssVar] of Object.entries(colorMap)) {
-    // regex to match hex colors case-insensitively, optionally followed by semi-colon or quote
     const regex = new RegExp(hex + '(?=[^a-zA-Z0-9])', 'gi');
     content = content.replace(regex, cssVar);
   }
   
   if (content !== original) {
     fs.writeFileSync(filePath, content);
-    console.log('Updated', f);
+    console.log('Updated', filePath);
     count++;
   }
 });
-
-// Also do it for KasaLock.vue inside components, which is included above.
 console.log('Finished modifying', count, 'files.');

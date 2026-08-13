@@ -98,8 +98,8 @@
                   <div v-if="msg.media_url" class="message-media">
                     <img v-if="msg.media_type === 'image'" :src="msg.media_url" class="media-image" alt="Image" @click="openImage(msg.media_url)" />
                     <audio v-else-if="msg.media_type === 'audio'" :src="msg.media_url" controls class="media-audio"></audio>
-                    <a v-else :href="msg.media_url" target="_blank" class="media-document">
-                      📄 Dosyayı İndir
+                    <a v-else href="#" @click.prevent="downloadMedia(msg.media_url, 'download')" class="media-document">
+                      📎 Dosyayı İndir
                     </a>
                   </div>
 
@@ -128,8 +128,8 @@
 
                 <!-- Reactions Display -->
                 <div class="reactions-display" v-if="msg.reactions && msg.reactions.length > 0 && !msg.is_deleted">
-                  <span v-for="(count, emoji) in aggregateReactions(msg.reactions)" :key="emoji" class="reaction-badge" @click="addReaction(msg.id, emoji)" :title="`${emoji} ile tepki ver/kaldır`">
-                    {{ emoji }} {{ count }}
+                  <span v-for="(data, emoji) in aggregateReactions(msg.reactions)" :key="emoji" class="reaction-badge" @click.stop="addReaction(msg.id, emoji)" :title="data.users.length ? data.users.join(', ') : `${emoji} ile tepki ver/kaldır`">
+                    {{ emoji }} <small style="opacity:0.8; font-size:0.65rem;" v-if="data.count > 1">{{ data.count }}</small>
                   </span>
                 </div>
               </div>
@@ -250,9 +250,21 @@
           <div v-for="msg in pendingMessages" :key="msg.id" class="pending-item">
             <div class="pending-item-header">
               <div class="pending-time">⏰ {{ formatScheduleDisplay(msg.scheduled_at) }}</div>
-              <button class="btn-delete-scheduled" @click="deleteScheduledMessage(msg.id)" title="Sil / İptal Et">🗑️ Sil</button>
+              <div style="display:flex; gap:0.5rem;">
+                <button class="btn-edit-scheduled" @click="startEditScheduled(msg)" title="Düzenle" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem;">✏️ Düzenle</button>
+                <button class="btn-delete-scheduled" @click="deleteScheduledMessage(msg.id)" title="Sil / İptal Et">🗑️ Sil</button>
+              </div>
             </div>
-            <div class="pending-content">{{ msg.content || (msg.media_type ? `[${msg.media_type} Medyası]` : '') }}</div>
+            
+            <div v-if="editingScheduledId === msg.id" class="scheduled-edit-box" style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+               <input type="text" v-model="editScheduledContent" class="chat-input" style="padding: 0.4rem;" />
+               <input type="datetime-local" v-model="editScheduledTime" class="schedule-input" :min="minScheduleTime" />
+               <div style="display:flex; gap:0.5rem; margin-top:0.2rem;">
+                 <button @click="saveEditScheduled(msg.id)" class="btn-schedule-confirm">Kaydet</button>
+                 <button @click="editingScheduledId = null" class="btn-clear-schedule">İptal</button>
+               </div>
+            </div>
+            <div v-else class="pending-content">{{ msg.content || (msg.media_type ? `[${msg.media_type} Medyası]` : '') }}</div>
           </div>
           <div v-if="pendingMessages.length === 0" class="no-pending">
             Bekleyen mesajınız bulunmamaktadır.
@@ -280,6 +292,9 @@ import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { io as socketIoClient } from 'socket.io-client'
 import { getChatTheme, setChatTheme } from '../../utils/ThemeProvider'
 import ConfirmModal from '../ConfirmModal.vue'
+import { useToast } from 'vue-toastification'
+
+const toast = useToast()
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false }
@@ -310,11 +325,17 @@ function toggleChatTheme() {
 }
 
 // Emoji & Schedule & Media
-const showEmojiPicker = ref(false)
-const showScheduler = ref(false)
-const scheduledTime = ref('')
 const selectedFile = ref(null)
+const isRecording = ref(false)
+const recordingTime = ref(0)
+const scheduledTime = ref('')
+const showScheduler = ref(false)
 const showScheduledModal = ref(false)
+
+// Scheduled Edit Refs
+const editingScheduledId = ref(null)
+const editScheduledContent = ref('')
+const editScheduledTime = ref('')
 
 // Edit/Delete state
 const editingMessageId = ref(null)
@@ -323,10 +344,8 @@ const showDeleteConfirm = ref(false)
 const deleteTargetId = ref(null)
 
 // Audio Recording
-const isRecording = ref(false)
 const mediaRecorder = ref(null)
 const audioChunks = ref([])
-const recordingTime = ref(0)
 let recordInterval = null
 
 // Context Menu State
@@ -716,11 +735,67 @@ function addReaction(messageId, emoji) {
 
 function aggregateReactions(reactionsArr) {
   if (!reactionsArr) return {}
-  const counts = {}
+  const groups = {}
   reactionsArr.forEach(r => {
-    counts[r.emoji] = (counts[r.emoji] || 0) + 1
+    if (!groups[r.emoji]) groups[r.emoji] = { count: 0, users: [] }
+    groups[r.emoji].count++
+    if (r.username) groups[r.emoji].users.push(r.username)
   })
-  return counts
+  return groups
+}
+
+// Scheduled mesaj düzenleme
+function startEditScheduled(msg) {
+  editingScheduledId.value = msg.id
+  editScheduledContent.value = msg.content
+  if (msg.scheduled_at) {
+    const d = new Date(msg.scheduled_at)
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    const hh = String(d.getHours()).padStart(2, '0')
+    const min = String(d.getMinutes()).padStart(2, '0')
+    editScheduledTime.value = `${yyyy}-${mm}-${dd}T${hh}:${min}`
+  }
+}
+
+async function saveEditScheduled(msgId) {
+  if (!editScheduledTime.value) {
+    toast.error('Lütfen bir zaman seçin!')
+    return
+  }
+  const dateObj = new Date(editScheduledTime.value)
+  if (dateObj <= new Date()) {
+    toast.error('Geçmiş bir tarih seçilemez!')
+    return
+  }
+
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/chat/scheduled/${msgId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        content: editScheduledContent.value,
+        scheduled_at: dateObj.toISOString()
+      })
+    })
+    
+    if (res.ok) {
+      const result = await res.json()
+      updateLocalMessage(msgId, result.data)
+      editingScheduledId.value = null
+      toast.success('Zamanlanmış mesaj güncellendi.')
+    } else {
+      const err = await res.json()
+      toast.error(err.error || 'Mesaj güncellenemedi.')
+    }
+  } catch (error) {
+    toast.error('Güncelleme sırasında hata oluştu.')
+  }
 }
 
 // Zamanlanmış mesaj silme
@@ -927,8 +1002,57 @@ async function executeSend(content, mediaUrl = null, mediaType = null) {
   showScheduler.value = false
 }
 
+async function downloadMedia(url, action = 'download') {
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    
+    if (!res.ok) {
+      if (res.headers.get('content-type')?.includes('application/json')) {
+        const errObj = await res.json()
+        throw new Error(errObj.error || `HTTP error! status: ${res.status}`)
+      }
+      throw new Error(`Dosya bulunamadı veya yetkiniz yok. (Status: ${res.status})`)
+    }
+    
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    
+    if (action === 'view') {
+      window.open(blobUrl, '_blank')
+      return
+    }
+
+    const a = document.createElement('a')
+    a.href = blobUrl
+    
+    const disposition = res.headers.get('content-disposition')
+    let downloadName = url.split('/').pop()
+    if (disposition && disposition.indexOf('filename=') !== -1) {
+      const match = disposition.match(/filename="?([^"]+)"?/)
+      if (match && match[1]) {
+        downloadName = match[1]
+      }
+    }
+    
+    a.download = downloadName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+    
+  } catch (err) {
+    toast.error(`Dosya İndirme Hatası: ${err.message}`)
+  }
+}
+
 function openImage(url) {
-  window.open(url, '_blank')
+  downloadMedia(url, 'view')
 }
 
 // Standalone modda her 15 saniyede bir mesajları yenile (polling)
@@ -1021,7 +1145,7 @@ onUnmounted(() => {
 .drawer-header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 0.75rem 1.25rem;
-  background: linear-gradient(135deg, var(--accent-primary, #8b5cf6), var(--accent-secondary, #3b82f6));
+  background: linear-gradient(135deg, var(--accent-primary, var(--color-accent-bg)), var(--accent-secondary, #3b82f6));
   color: white; border-bottom: none;
 }
 .header-title { display: flex; align-items: center; gap: 0.6rem; }
@@ -1070,7 +1194,7 @@ onUnmounted(() => {
   outline: none; font-size: 0.85rem; color: var(--text-primary);
   transition: border-color 0.2s;
 }
-.search-input:focus { border-color: var(--accent-primary, #8b5cf6); }
+.search-input:focus { border-color: var(--accent-primary, var(--color-accent-bg)); }
 .room-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
 .room-item {
   display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.75rem;
@@ -1080,17 +1204,17 @@ onUnmounted(() => {
 .room-item:hover { background: var(--accent-glow); }
 .room-item.active {
   background: var(--accent-glow);
-  border-left: 3px solid var(--accent-primary, #8b5cf6);
+  border-left: 3px solid var(--accent-primary, var(--color-accent-bg));
 }
 .room-avatar {
   width: 44px; height: 44px; border-radius: 50%;
-  background: var(--bg-card, #1e293b);
+  background: var(--bg-card, var(--bg-card));
   display: flex; justify-content: center; align-items: center;
   font-size: 1.1rem; font-weight: bold; color: var(--text-secondary);
   position: relative; flex-shrink: 0;
 }
 .global-avatar {
-  background: linear-gradient(135deg, var(--accent-primary, #8b5cf6), var(--accent-secondary, #3b82f6));
+  background: linear-gradient(135deg, var(--accent-primary, var(--color-accent-bg)), var(--accent-secondary, #3b82f6));
   color: white;
 }
 .online-dot {
@@ -1140,7 +1264,7 @@ onUnmounted(() => {
   display: flex; align-items: center; gap: 0.75rem; font-size: 0.82rem;
 }
 .btn-view-scheduled {
-  background: var(--accent-primary, #8b5cf6); border: none; color: white;
+  background: var(--accent-primary, var(--color-accent-bg)); border: none; color: white;
   padding: 0.25rem 0.6rem; border-radius: 6px; font-weight: bold;
   cursor: pointer; font-size: 0.75rem; transition: transform 0.15s;
 }
@@ -1184,7 +1308,7 @@ onUnmounted(() => {
 .message-bubble:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 
 .message-sender {
-  font-size: 0.72rem; color: var(--accent-primary, #8b5cf6);
+  font-size: 0.72rem; color: var(--accent-primary, var(--color-accent-bg));
   font-weight: 700; margin-bottom: 0.15rem;
 }
 .message-content { font-size: 0.92rem; line-height: 1.35; word-break: break-word; }
@@ -1202,18 +1326,18 @@ onUnmounted(() => {
 .inline-edit-box { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.2rem 0; }
 .edit-input {
   width: 100%; padding: 0.4rem 0.6rem; border-radius: 8px; font-size: 0.88rem;
-  border: 1.5px solid var(--accent-primary, #8b5cf6); outline: none;
+  border: 1.5px solid var(--accent-primary, var(--color-accent-bg)); outline: none;
   background: var(--bg-primary); color: var(--text-primary);
 }
 .edit-actions { display: flex; gap: 0.3rem; justify-content: flex-end; }
 .btn-edit-save {
-  background: var(--accent-primary, #8b5cf6); color: white; border: none;
+  background: var(--accent-primary, var(--color-accent-bg)); color: white; border: none;
   padding: 0.25rem 0.55rem; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
   transition: transform 0.1s;
 }
 .btn-edit-save:hover { transform: scale(1.05); }
 .btn-edit-cancel {
-  background: transparent; color: var(--danger, #ef4444); border: 1px solid var(--danger, #ef4444);
+  background: transparent; color: var(--danger, var(--color-danger-bg)); border: 1px solid var(--danger, var(--color-danger-bg));
   padding: 0.25rem 0.55rem; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
 }
 
@@ -1241,17 +1365,25 @@ onUnmounted(() => {
 .read-receipt { color: var(--text-secondary); display: flex; align-items: center; }
 .read-receipt.read { color: var(--accent, #38bdf8); }
 
+.message-bubble {
+  max-width: 75%; position: relative;
+  display: flex; flex-direction: column;
+  transition: opacity 0.2s;
+  margin-bottom: 0.8rem; /* Make room for reactions */
+}
+
 .reactions-display {
-  display: flex; flex-wrap: wrap; gap: 0.15rem; position: absolute; bottom: -14px; left: 8px;
-  background: var(--bg-secondary); padding: 2px 5px; border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15); border: 1px solid var(--border);
+  display: flex; flex-wrap: wrap; gap: 0.25rem; position: absolute; bottom: -18px; left: 8px;
+  background: var(--bg-secondary); padding: 3px 6px; border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2); border: 1px solid var(--border);
+  z-index: 5; /* Ensure it stays above other messages */
 }
 .message-self .reactions-display { left: auto; right: 8px; }
 .reaction-badge {
-  font-size: 0.72rem; cursor: pointer; user-select: none;
-  padding: 0 2px; transition: transform 0.15s;
+  font-size: 0.8rem; cursor: pointer; user-select: none;
+  padding: 0 2px; transition: transform 0.15s; display: flex; align-items: center; gap: 0.2rem;
 }
-.reaction-badge:hover { transform: scale(1.2); }
+.reaction-badge:hover { transform: scale(1.15); }
 
 /* ============================================================
    CONTEXT MENU (Right Click)
@@ -1306,7 +1438,7 @@ onUnmounted(() => {
   text-align: left;
 }
 .ctx-item:hover { background: var(--accent-glow); }
-.ctx-item.ctx-danger { color: var(--danger, #ef4444); }
+.ctx-item.ctx-danger { color: var(--danger, var(--color-danger-bg)); }
 .ctx-item.ctx-danger:hover { background: rgba(239, 68, 68, 0.1); }
 .ctx-icon { font-size: 1rem; width: 22px; text-align: center; }
 
@@ -1323,9 +1455,9 @@ onUnmounted(() => {
   transition: all 0.2s; border-radius: 8px;
 }
 .btn-emoji-toggle:hover, .btn-attach:hover, .btn-schedule-toggle:hover {
-  color: var(--accent-primary, #8b5cf6); background: var(--accent-glow);
+  color: var(--accent-primary, var(--color-accent-bg)); background: var(--accent-glow);
 }
-.btn-schedule-toggle.active { color: var(--accent-primary, #8b5cf6); }
+.btn-schedule-toggle.active { color: var(--accent-primary, var(--color-accent-bg)); }
 .chat-input {
   flex: 1; border: 1px solid var(--border); border-radius: 12px;
   padding: 0.6rem 1rem; font-size: 0.92rem;
@@ -1333,11 +1465,11 @@ onUnmounted(() => {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .chat-input:focus {
-  border-color: var(--accent-primary, #8b5cf6);
+  border-color: var(--accent-primary, var(--color-accent-bg));
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 .btn-send, .btn-mic {
-  background: var(--accent-primary, #8b5cf6); border: none; border-radius: 50%;
+  background: var(--accent-primary, var(--color-accent-bg)); border: none; border-radius: 50%;
   width: 42px; height: 42px;
   display: flex; justify-content: center; align-items: center;
   color: white; cursor: pointer; transition: all 0.2s;
@@ -1362,7 +1494,7 @@ onUnmounted(() => {
 .btn-clear-media:hover { background: rgba(239,68,68,0.15); color: var(--danger); }
 
 .recording-pulse {
-  width: 12px; height: 12px; background: #ef4444; border-radius: 50%;
+  width: 12px; height: 12px; background: var(--color-danger-bg); border-radius: 50%;
   animation: pulse 1s infinite; margin-right: 0.75rem;
 }
 @keyframes pulse {
@@ -1379,7 +1511,7 @@ onUnmounted(() => {
 }
 .btn-stop-record:hover { transform: scale(1.05); }
 .btn-cancel-record {
-  background: transparent; color: #ef4444; border: 1px solid rgba(239,68,68,0.3);
+  background: transparent; color: var(--color-danger-bg); border: 1px solid rgba(239,68,68,0.3);
   padding: 0.35rem 0.6rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.8rem;
 }
 
@@ -1429,7 +1561,7 @@ onUnmounted(() => {
   display: flex; flex-direction: column; border: 1px solid var(--border);
 }
 .modal-header {
-  background: linear-gradient(135deg, var(--accent-primary, #8b5cf6), var(--accent-secondary, #3b82f6));
+  background: linear-gradient(135deg, var(--accent-primary, var(--color-accent-bg)), var(--accent-secondary, #3b82f6));
   color: white; padding: 0.8rem 1rem;
   display: flex; justify-content: space-between; align-items: center; font-weight: bold;
 }
@@ -1454,7 +1586,7 @@ onUnmounted(() => {
 .pending-content { font-size: 0.88rem; color: var(--text-primary); }
 .btn-delete-scheduled {
   background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #ef4444; font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.45rem;
+  color: var(--color-danger-bg); font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.45rem;
   border-radius: 6px; cursor: pointer; transition: all 0.2s;
 }
 .btn-delete-scheduled:hover { background: rgba(239, 68, 68, 0.2); }
@@ -1465,31 +1597,31 @@ onUnmounted(() => {
 /* Chat-specific Independent Themes */
 .chat-drawer[data-theme="light"] {
   --bg-primary: #f5f5f7;
-  --bg-secondary: #ffffff;
-  --bg-card: #ffffff;
+  --bg-secondary: var(--text-primary);
+  --bg-card: var(--text-primary);
   --text-primary: #1d1d1f;
   --text-secondary: #86868b;
   --accent: #6366f1;
   --accent-glow: rgba(99, 102, 241, 0.15);
   --border: #d2d2d7;
   --chat-bg: #f5f5f7;
-  --bubble-in: #ffffff;
+  --bubble-in: var(--text-primary);
   --bubble-out: #e0e7ff;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(24px) saturate(180%);
 }
 
 .chat-drawer[data-theme="dark"] {
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-card: #1e293b;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --accent: #8b5cf6;
+  --bg-primary: var(--bg-card);
+  --bg-secondary: var(--bg-card);
+  --bg-card: var(--bg-card);
+  --text-primary: var(--text-primary);
+  --text-secondary: var(--text-secondary);
+  --accent: var(--color-accent-bg);
   --accent-glow: rgba(139, 92, 246, 0.15);
   --border: #334155;
-  --chat-bg: #0f172a;
-  --bubble-in: #1e293b;
+  --chat-bg: var(--bg-card);
+  --bubble-in: var(--bg-card);
   --bubble-out: #1e3a5f;
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(24px) saturate(180%);
