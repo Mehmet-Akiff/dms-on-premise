@@ -80,8 +80,7 @@
             
             <div v-for="(msg, index) in deliveredMessages" :key="msg.id || index" 
                  class="message-wrapper"
-                 :class="{ 'message-self': isMine(msg), 'message-deleted': msg.is_deleted }"
-                 @contextmenu.prevent="openContextMenu($event, msg)">
+                 :class="{ 'message-self': isMine(msg), 'message-deleted': msg.is_deleted }">
               
               <div class="message-bubble">
                 <!-- Silinen mesaj gösterimi -->
@@ -1300,6 +1299,30 @@ onUnmounted(() => {
 }
 .message-self { align-self: flex-end; align-items: flex-end; }
 .message-deleted .message-bubble { opacity: 0.5; }
+
+/* Hover Actions */
+.msg-hover-actions {
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  right: -32px;
+  opacity: 0; transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+.message-self .msg-hover-actions {
+  right: auto; left: -32px;
+}
+.message-wrapper:hover .msg-hover-actions {
+  opacity: 1; pointer-events: auto;
+}
+.btn-msg-hover {
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 50%; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  font-size: 0.9rem; color: var(--text-primary); transition: transform 0.15s;
+}
+.btn-msg-hover:hover { transform: scale(1.15); }
+
 .message-bubble {
   background: var(--bubble-in); padding: 0.45rem 0.65rem 0.35rem;
   border-radius: 12px 12px 12px 4px;
