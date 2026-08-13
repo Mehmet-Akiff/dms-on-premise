@@ -20,7 +20,7 @@
             <span :class="['role-badge', 'role-badge--' + currentUserRole]">
               {{ getRoleLabel(currentUserRole) }}
             </span>
-            <span class="header-username" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.05); padding: 0.25rem 0.6rem; border-radius: 6px;">{{ formatFullName(currentUserFullName) }}</span>
+              <span class="header-username" style="font-size: 0.8rem; font-weight: 700; padding: 0.25rem 0.6rem; border-radius: 6px;">{{ formatFullName(currentUserFullName) }}</span>
           </div>
 
           <!-- Arama Destekli Dünya Dilleri Menüsü -->
@@ -985,16 +985,68 @@ font {
 [data-theme="light"] .panel,
 [data-theme="light"] .settings-drawer,
 [data-theme="light"] .notifications-panel,
-[data-theme="light"] .users-panel,
-[data-theme="light"] .lang-modal-card,
-[data-theme="light"] .kasa-lock-card {
-  background: rgba(255, 255, 255, 0.65) !important;
-  backdrop-filter: blur(24px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.9) !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
-  color: var(--text-primary) !important;
-}
+  [data-theme="light"] .users-panel,
+  [data-theme="light"] .lang-modal-card,
+  [data-theme="light"] .kasa-lock-card,
+  [data-theme="light"] .confirm-card {
+    background: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(226, 232, 240, 0.8) !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.6) !important;
+    color: var(--text-primary) !important;
+  }
+  
+  [data-theme="light"] .header-username {
+    color: #1e293b !important;
+    background: rgba(0, 0, 0, 0.05) !important;
+  }
+  
+  [data-theme="dark"] .header-username {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+  }
+
+  [data-theme="light"] h4, [data-theme="light"] h3, [data-theme="light"] .panel-desc {
+    color: var(--text-primary) !important;
+  }
+
+  [data-theme="light"] .role-badge--admin, [data-theme="light"] .role--admin {
+    color: #b45309 !important;
+    background: rgba(245, 158, 11, 0.1) !important;
+    border-color: rgba(245, 158, 11, 0.2) !important;
+  }
+
+  [data-theme="light"] .role-badge--user, [data-theme="light"] .role--user {
+    color: #1d4ed8 !important;
+    background: rgba(59, 130, 246, 0.1) !important;
+    border-color: rgba(59, 130, 246, 0.2) !important;
+  }
+
+  [data-theme="light"] .role-badge--ciso, [data-theme="light"] .role--ciso {
+    color: #047857 !important;
+    background: rgba(16, 185, 129, 0.1) !important;
+    border-color: rgba(16, 185, 129, 0.2) !important;
+  }
+
+  /* Force light mode pastel backgrounds for hardcoded dark inner elements */
+  [data-theme="light"] .users-panel th, 
+  [data-theme="light"] .users-panel .user-row,
+  [data-theme="light"] .users-panel .users-list,
+  [data-theme="light"] .notifications-panel .notification-item,
+  [data-theme="light"] .notifications-panel .notification-header,
+  [data-theme="light"] .settings-panel form,
+  [data-theme="light"] .settings-section {
+    background: rgba(255, 255, 255, 0.5) !important;
+    border-color: rgba(0, 0, 0, 0.05) !important;
+    color: var(--text-primary) !important;
+  }
+  
+  [data-theme="light"] .users-panel .user-email,
+  [data-theme="light"] .users-panel .last-login {
+    color: var(--text-secondary) !important;
+  }
+
 
 [data-theme="light"] .kasa-lock-overlay {
   background: rgba(255, 255, 255, 0.2) !important;

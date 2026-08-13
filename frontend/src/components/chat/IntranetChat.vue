@@ -729,15 +729,21 @@ function initSocket() {
 
 // Reactions
 function addReaction(messageId, emoji) {
-  if (systemMode.value === 'network' && socket.value) {
+  if (socket.value) {
     socket.value.emit('add_reaction', { messageId, emoji })
   }
 }
 
 function aggregateReactions(reactionsArr) {
   if (!reactionsArr) return {}
+  let arr = reactionsArr
+  if (typeof arr === 'string') {
+    try { arr = JSON.parse(arr) } catch (e) { return {} }
+  }
+  if (!Array.isArray(arr)) return {}
+  
   const groups = {}
-  reactionsArr.forEach(r => {
+  arr.forEach(r => {
     if (!groups[r.emoji]) groups[r.emoji] = { count: 0, users: [] }
     groups[r.emoji].count++
     if (r.username) groups[r.emoji].users.push(r.username)
@@ -841,7 +847,7 @@ function cancelEdit() {
 async function saveEdit(messageId) {
   if (!editContent.value.trim()) return
   
-  if (systemMode.value === 'network' && socket.value) {
+  if (socket.value) {
     socket.value.emit('edit_message', { messageId, content: editContent.value.trim() }, (res) => {
       if (res?.success) {
         // Socket handler (message_edited) güncelleyecek
@@ -879,7 +885,7 @@ async function executeDeleteMessage() {
   deleteTargetId.value = null
   if (!messageId) return
 
-  if (systemMode.value === 'network' && socket.value) {
+  if (socket.value) {
     socket.value.emit('delete_message', { messageId }, (res) => {
       if (res?.success) {
         // Socket handler (message_deleted) güncelleyecek
