@@ -286,6 +286,19 @@ const startServer = async () => {
         console.log('[DB] Varsayılan Admin hesabı oluşturuldu (admin / admin)');
       }
 
+      // Varsayılan Global Chat Odası
+      const ChatRoom = require('./models/ChatRoom');
+      const GLOBAL_ROOM_ID = '00000000-0000-0000-0000-000000000001';
+      const globalRoom = await ChatRoom.findByPk(GLOBAL_ROOM_ID);
+      if (!globalRoom) {
+        await ChatRoom.create({
+          id: GLOBAL_ROOM_ID,
+          name: 'Sistem Odası',
+          type: 'group',
+        });
+        console.log('[DB] Varsayılan Global Chat Odası oluşturuldu.');
+      }
+
       // Fuzzy Search için pg_trgm eklentisini güvenli bir şekilde aktifleştir
       try {
         await sequelize.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;');

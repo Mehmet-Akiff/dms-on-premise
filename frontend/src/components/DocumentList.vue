@@ -39,19 +39,19 @@
     </div>
 
     <!-- Aktif Etiket Filtresi -->
-    <div v-if="activeTagFilter" class="tag-filter-bar" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1rem; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; margin: 0.75rem 0; font-size: 0.82rem;">
+    <div v-if="activeTagFilter" class="tag-filter-bar" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; margin: 0.75rem 0; font-size: 0.82rem;">
       <span style="color: var(--text-secondary);">{{ $t('list.activeTagFilter') || 'Aktif Etiket Filtresi:' }}</span>
-      <span style="font-weight: 700; background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #a78bfa; padding: 0.15rem 0.5rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.3rem;">
+      <span style="font-weight: 700; background: var(--bg-card); border: 1px solid var(--border); color: var(--color-accent-text); padding: 0.15rem 0.5rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.3rem;">
         🏷️ {{ activeTagFilter }}
-        <button type="button" @click="clearTagFilter" style="background: transparent; border: none; color: #f87171; font-weight: 700; cursor: pointer; font-size: 0.78rem; padding: 0 0.1rem;">✕</button>
+        <button type="button" @click="clearTagFilter" style="background: transparent; border: none; color: var(--color-danger); font-weight: 700; cursor: pointer; font-size: 0.78rem; padding: 0 0.1rem;">✕</button>
       </span>
-      <button @click="clearTagFilter" style="margin-left: auto; background: transparent; border: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.72rem; cursor: pointer;">
+      <button @click="clearTagFilter" style="margin-left: auto; background: transparent; border: 1px solid var(--border); color: var(--text-secondary); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.72rem; cursor: pointer;">
         {{ $t('list.clearFilter') || 'Filtreyi Temizle' }}
       </button>
     </div>
 
     <!-- Hızlı Etiket Filtresi Şeridi -->
-    <div v-if="allAvailableTags.length > 0" class="available-tags-wrapper" style="margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; background: rgba(30, 41, 59, 0.4); padding: 0.6rem 0.85rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+    <div v-if="allAvailableTags.length > 0" class="available-tags-wrapper" style="margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; background: var(--bg-secondary); padding: 0.6rem 0.85rem; border-radius: 8px; border: 1px solid var(--border);">
       <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">🏷️ {{ $t('list.tags') || 'Etiketler:' }}</span>
       <span 
         v-for="tag in allAvailableTags" 
@@ -67,7 +67,7 @@
       <button 
         v-if="activeTagFilter" 
         @click="clearTagFilter" 
-        style="margin-left: auto; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: #f87171; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.68rem; cursor: pointer; font-weight: 700;"
+        style="margin-left: auto; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: var(--color-danger); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.68rem; cursor: pointer; font-weight: 700;"
       >
         ✕ Filtreyi Kaldır
       </button>
@@ -123,7 +123,7 @@
                     v-for="tag in doc.tags" 
                     :key="tag" 
                     @click.stop="filterByTag(tag)"
-                    style="font-size: 0.65rem; font-weight: 700; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.22); color: #a78bfa; padding: 0.1rem 0.35rem; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
+                    style="font-size: 0.65rem; font-weight: 700; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.22); color: var(--color-accent-text); padding: 0.1rem 0.35rem; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
                     title="Bu etikete göre filtrele"
                   >
                     🏷️ {{ tag }}
@@ -245,7 +245,7 @@
                     v-for="tag in doc.tags" 
                     :key="tag" 
                     @click.stop="filterByTag(tag)"
-                    style="font-size: 0.65rem; font-weight: 700; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.22); color: #a78bfa; padding: 0.1rem 0.35rem; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
+                    style="font-size: 0.65rem; font-weight: 700; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.22); color: var(--color-accent-text); padding: 0.1rem 0.35rem; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
                     title="Bu etikete göre filtrele"
                   >
                     🏷️ {{ tag }}
@@ -404,7 +404,7 @@
             </div>
             <div class="meta-item file-path-brief" style="display: flex; align-items: center; gap: 0.5rem;">
               <span class="meta-label">Dosya Konumu:</span>
-              <span class="meta-value" style="font-family: monospace; font-size: 0.72rem; color: #a78bfa; background: rgba(167, 139, 250, 0.08); padding: 0.2rem 0.5rem; border-radius: 4px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ selectedDoc.filePath }}</span>
+              <span class="meta-value" style="font-family: monospace; font-size: 0.72rem; color: var(--color-accent-text); background: rgba(167, 139, 250, 0.08); padding: 0.2rem 0.5rem; border-radius: 4px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ selectedDoc.filePath }}</span>
               <button 
                 class="action-link-btn" 
                 style="padding: 0.2rem 0.5rem; font-size: 0.7rem; border: 1px solid var(--border);"
@@ -440,7 +440,7 @@
               
               <!-- 1. Yapay Zeka Özeti -->
               <div class="summary-section" style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 8px; padding: 1.25rem;">
-                <h5 style="margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; color: #a78bfa;">🤖 Yapay Zeka Belge Özeti</h5>
+                <h5 style="margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; color: var(--color-accent-text);">🤖 Yapay Zeka Belge Özeti</h5>
                 <p style="font-size: 0.82rem; line-height: 1.5; color: var(--text-primary);">{{ aiSummary }}</p>
               </div>
 
@@ -452,8 +452,8 @@
                       <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
                     </svg>
                     Çıkarılan Tam Metin (OCR)
-                    <span v-if="isTranslatingOcr" style="font-size: 0.7rem; color: #a78bfa; margin-left: 0.5rem;">🌐 Yükleniyor...</span>
-                    <span v-else-if="translatedOcrContent" style="font-size: 0.68rem; color: #34d399; background: rgba(52, 211, 153, 0.1); padding: 0.15rem 0.45rem; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.25); margin-left: 0.5rem;">🌐 Otomatik Çevrildi</span>
+                    <span v-if="isTranslatingOcr" style="font-size: 0.7rem; color: var(--color-accent-text); margin-left: 0.5rem;">🌐 Yükleniyor...</span>
+                    <span v-else-if="translatedOcrContent" style="font-size: 0.68rem; color: var(--color-success); background: rgba(52, 211, 153, 0.1); padding: 0.15rem 0.45rem; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.25); margin-left: 0.5rem;">🌐 Otomatik Çevrildi</span>
                   </span>
                   
                   <div class="ocr-header-actions" style="display:flex; align-items:center; gap:0.75rem">
@@ -532,7 +532,7 @@
 
               <!-- 3. Orijinal Görsel / PDF Önizlemesi -->
               <div class="original-preview-section" style="border-top: 1px solid var(--border); padding-top: 1.5rem;">
-                <h5 style="margin-bottom: 0.75rem; font-size: 0.85rem; font-weight: 700; color: #a78bfa;">🖼️ Orijinal Belge Önizlemesi</h5>
+                <h5 style="margin-bottom: 0.75rem; font-size: 0.85rem; font-weight: 700; color: var(--color-accent-text);">🖼️ Orijinal Belge Önizlemesi</h5>
                 <div class="preview-frame-wrapper" style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 300px; max-height: 500px;">
                   <iframe 
                     v-if="isPdf(selectedDoc.mimeType || selectedDoc.mime_type)" 
@@ -558,7 +558,7 @@
       <div v-if="deleteModalOpen" class="modal-overlay" @click.self="deleteModalOpen = false">
         <div class="modal modal--danger">
           <div class="modal-header">
-            <h3 class="modal-title" style="color: #ef4444">{{ isBulkDelete ? 'Toplu Belge Sil' : 'Belgeyi Sil' }}</h3>
+            <h3 class="modal-title" style="color: var(--color-danger-bg)">{{ isBulkDelete ? 'Toplu Belge Sil' : 'Belgeyi Sil' }}</h3>
             <button class="modal-close" @click="deleteModalOpen = false">✕</button>
           </div>
           <div class="modal-body text-center" style="padding: 1.5rem; text-align: center">
@@ -569,7 +569,7 @@
               <span v-else>
                 "<strong>{{ docToDelete?.originalName || docToDelete?.original_name }}</strong>" isimli belgeyi 
               </span>
-              <span style="color: #ef4444; font-weight: 600">{{ isTrashView ? 'sistemden KALICI olarak silmek' : 'ÇÖP KUTUSUNA göndermek' }}</span> istediğinize emin misiniz?
+              <span style="color: var(--color-danger-bg); font-weight: 600">{{ isTrashView ? 'sistemden KALICI olarak silmek' : 'ÇÖP KUTUSUNA göndermek' }}</span> istediğinize emin misiniz?
             </p>
             <div class="modal-danger-actions" style="display: flex; gap: 0.75rem; justify-content: center">
               <button class="btn-cancel" @click="deleteModalOpen = false">Vazgeç</button>
@@ -1468,7 +1468,7 @@ async function filterFromDashboard(type) {
   border: 1px solid rgba(56, 189, 248, 0.3);
 }
 .search-badge strong {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .doc-list-header {
@@ -1586,7 +1586,7 @@ async function filterFromDashboard(type) {
 .bulk-count {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 .bulk-delete-btn {
@@ -1614,7 +1614,7 @@ async function filterFromDashboard(type) {
 }
 
 .doc-table thead {
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--bg-secondary);
 }
 
 .doc-table th {
@@ -1638,7 +1638,7 @@ async function filterFromDashboard(type) {
 }
 
 .doc-row:hover {
-  background: rgba(56, 189, 248, 0.03);
+  background: var(--bg-primary);
 }
 
 .doc-row--dimmed {
@@ -1835,7 +1835,7 @@ async function filterFromDashboard(type) {
 
 .sens--high {
   background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
+  color: var(--color-danger);
   border-color: rgba(239, 68, 68, 0.25);
 }
 
@@ -1883,10 +1883,10 @@ async function filterFromDashboard(type) {
 
 .status--failed {
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--color-danger-bg);
   border: 1px solid rgba(239, 68, 68, 0.25);
 }
-.status--failed .status-dot { background: #ef4444; }
+.status--failed .status-dot { background: var(--color-danger-bg); }
 
 /* Action Button */
 .doc-actions {
@@ -2166,7 +2166,7 @@ async function filterFromDashboard(type) {
 /* Match Highlights (Fosforlu Kalem) */
 .ocr-text :deep(.doc-match) {
   background: rgba(250, 204, 21, 0.35);
-  color: #fff;
+  color: var(--text-primary);
   border-radius: 2px;
   transition: all 0.15s;
   padding: 0.05rem 0.1rem;
@@ -2174,7 +2174,7 @@ async function filterFromDashboard(type) {
 
 .ocr-text :deep(.doc-match--active) {
   background: linear-gradient(120deg, rgba(34, 197, 94, 0.75) 0%, rgba(74, 222, 128, 0.7) 100%) !important;
-  color: #ffffff !important;
+  color: var(--text-primary) !important;
   box-shadow: 0 0 10px rgba(74, 222, 128, 0.6), 0 2px 4px rgba(0, 0, 0, 0.2);
   font-weight: 600;
   transform: scale(1.03);
@@ -2213,14 +2213,14 @@ async function filterFromDashboard(type) {
 .trash-toggle-btn:hover {
   background: rgba(239, 68, 68, 0.1);
   border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
+  color: var(--color-danger-bg);
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
 }
 
 .trash-toggle-btn.trash-active {
   background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-  color: #fff;
+  border-color: var(--color-danger-bg);
+  color: var(--text-primary);
   box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
   animation: neon-pulse-danger 2s infinite alternate;
 }
@@ -2280,9 +2280,9 @@ async function filterFromDashboard(type) {
 }
 
 .btn-delete {
-  background: #ef4444;
-  color: #fff;
-  border: 1px solid #ef4444;
+  background: var(--color-danger-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--color-danger-bg);
   border-radius: 8px;
   padding: 0.5rem 1rem;
   cursor: pointer;
@@ -2319,14 +2319,14 @@ async function filterFromDashboard(type) {
 
 .action-btn--danger {
   background: rgba(239, 68, 68, 0.1) !important;
-  color: #ef4444 !important;
+  color: var(--color-danger-bg) !important;
   border-color: rgba(239, 68, 68, 0.25) !important;
   margin-left: 0.35rem;
 }
 
 .action-btn--danger:hover {
   background: rgba(239, 68, 68, 0.25) !important;
-  border-color: #ef4444 !important;
+  border-color: var(--color-danger-bg) !important;
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
 }
 
@@ -2404,7 +2404,7 @@ async function filterFromDashboard(type) {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.25rem;
-  background: rgba(30, 41, 59, 0.4);
+  background: var(--bg-secondary);
   padding: 0.4rem;
   border-radius: 6px;
   border: 1px solid rgba(139, 92, 246, 0.2);
@@ -2421,7 +2421,7 @@ async function filterFromDashboard(type) {
 
 .btn-comment-add {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-primary);
   border: none;
   font-size: 0.72rem;
   font-weight: 600;

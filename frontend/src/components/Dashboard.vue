@@ -124,13 +124,13 @@ function getBarWidth(count) {
 
 const categoryColors = {
   'Fatura': 'linear-gradient(90deg, #38bdf8, #0ea5e9)',
-  'Sözleşme': 'linear-gradient(90deg, #a78bfa, #7c3aed)',
-  'Dilekçe': 'linear-gradient(90deg, #34d399, #10b981)',
+  'Sözleşme': 'linear-gradient(90deg, var(--color-accent-text), #7c3aed)',
+  'Dilekçe': 'linear-gradient(90deg, var(--color-success), var(--color-success-bg))',
   'Rapor': 'linear-gradient(90deg, #fbbf24, #f59e0b)',
   'Resmi Yazı': 'linear-gradient(90deg, #f472b6, #ec4899)',
   'Kimlik/Belge': 'linear-gradient(90deg, #fb923c, #f97316)',
   'Mektup': 'linear-gradient(90deg, #818cf8, #6366f1)',
-  'Diger': 'linear-gradient(90deg, #94a3b8, #64748b)',
+  'Diger': 'linear-gradient(90deg, var(--text-secondary), var(--text-secondary))',
 }
 
 const categoryIcons = {
@@ -185,7 +185,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.85rem;
   padding: 1rem 1.1rem;
-  background: rgba(30, 41, 59, 0.6);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
@@ -207,15 +207,15 @@ onMounted(() => {
 }
 
 .stat-card.active {
-  border-color: #8b5cf6;
+  border-color: var(--color-accent-bg);
   background: rgba(139, 92, 246, 0.12);
   box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
 }
 
 .stat-card--total.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.08); box-shadow: 0 0 20px rgba(56, 189, 248, 0.15); }
 .stat-card--recent.active { border-color: #22c55e; background: rgba(34, 197, 150, 0.08); box-shadow: 0 0 20px rgba(34, 197, 150, 0.15); }
-.stat-card--weekly.active { border-color: #a78bfa; background: rgba(167, 139, 250, 0.08); box-shadow: 0 0 20px rgba(167, 139, 250, 0.15); }
-.stat-card--trash.active { border-color: #ef4444; background: rgba(239, 68, 68, 0.08); box-shadow: 0 0 20px rgba(239, 68, 68, 0.15); }
+.stat-card--weekly.active { border-color: var(--color-accent-text); background: rgba(167, 139, 250, 0.08); box-shadow: 0 0 20px rgba(167, 139, 250, 0.15); }
+.stat-card--trash.active { border-color: var(--color-danger-bg); background: rgba(239, 68, 68, 0.08); box-shadow: 0 0 20px rgba(239, 68, 68, 0.15); }
 
 .stat-icon {
   font-size: 1.6rem;
@@ -271,12 +271,12 @@ onMounted(() => {
 
 .stat-glow--blue { background: #38bdf8; }
 .stat-glow--green { background: #22c55e; }
-.stat-glow--purple { background: #a78bfa; }
-.stat-glow--red { background: #ef4444; }
+.stat-glow--purple { background: var(--color-accent-text); }
+.stat-glow--red { background: var(--color-danger-bg); }
 
 /* ==================== KATEGORİ BÖLÜMÜ ==================== */
 .category-section {
-  background: rgba(30, 41, 59, 0.5);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 1rem 1.25rem;
@@ -326,7 +326,7 @@ onMounted(() => {
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-body);
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
   min-width: 28px;
@@ -335,7 +335,7 @@ onMounted(() => {
 
 .category-bar-track {
   height: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-secondary);
   border-radius: 999px;
   overflow: hidden;
 }

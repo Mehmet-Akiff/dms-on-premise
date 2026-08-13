@@ -20,10 +20,10 @@
         <span 
           v-for="(tag, idx) in tags" 
           :key="tag" 
-          style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.72rem; font-weight:700; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a78bfa; padding:0.2rem 0.5rem; border-radius:4px;"
+          style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.72rem; font-weight:700; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:var(--color-accent-text); padding:0.2rem 0.5rem; border-radius:4px;"
         >
           {{ tag }}
-          <button type="button" @click="removeTag(idx)" style="background:transparent; border:none; color:#f87171; font-weight:700; cursor:pointer; font-size:0.68rem; padding:0 0.1rem;">✕</button>
+          <button type="button" @click="removeTag(idx)" style="background:transparent; border:none; color:var(--color-danger); font-weight:700; cursor:pointer; font-size:0.68rem; padding:0 0.1rem;">✕</button>
         </span>
         <input 
           v-model="tagInput" 
@@ -31,7 +31,7 @@
           placeholder="Etiket yazıp Enter'a basın..." 
           @keydown.enter.prevent="addTag"
           @keydown.comma.prevent="addTag"
-          style="flex:1; border:none; background:transparent; outline:none; color:#fff; font-size:0.78rem; min-width:150px; padding:0.2rem;"
+          style="flex:1; border:none; background:transparent; outline:none; color:var(--text-primary); font-size:0.78rem; min-width:150px; padding:0.2rem;"
         />
       </div>
     </div>
@@ -39,7 +39,7 @@
     <!-- Belge Hassasiyet Seviyesi -->
     <div class="editor-sensitivity-section" style="margin-bottom:0.75rem; display:flex; flex-direction:column; gap:0.4rem;">
       <label style="font-size:0.76rem; font-weight:700; color:#e2e8f0;">Belge Hassasiyeti</label>
-      <select v-model="sensitivity" style="width:100%; padding:0.5rem; background:var(--bg-primary); border:1px solid var(--border); border-radius:8px; color:#fff; font-size:0.78rem; outline:none; cursor:pointer;">
+      <select v-model="sensitivity" style="width:100%; padding:0.5rem; background:var(--bg-primary); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); font-size:0.78rem; outline:none; cursor:pointer;">
         <option value="public">🟢 Herkese Açık (Standart, Admin, CISO görebilir)</option>
         <option value="medium">🟡 Orta Hassas (Sadece Admin ve CISO görebilir)</option>
         <option value="high">🔴 En Hassas (Sadece Admin görebilir)</option>
@@ -297,7 +297,7 @@ function cancelEdit() {
 .rich-editor .ql-toolbar.ql-snow {
   border: none !important;
   border-bottom: 1px solid var(--border) !important;
-  background: rgba(30, 41, 59, 0.5) !important;
+  background: var(--bg-card) !important;
 }
 
 .rich-editor .ql-container.ql-snow {
@@ -375,8 +375,8 @@ function cancelEdit() {
 }
 
 .btn-cancel:hover:not(:disabled) {
-  border-color: #ef4444;
-  color: #ef4444;
+  border-color: var(--color-danger-bg);
+  color: var(--color-danger-bg);
   background: rgba(239, 68, 68, 0.05);
 }
 
@@ -384,8 +384,8 @@ function cancelEdit() {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-accent-text), var(--color-accent-bg));
+  color: var(--text-primary);
   border: none;
   padding: 0.55rem 1.5rem;
   font-size: 0.82rem;
@@ -399,7 +399,7 @@ function cancelEdit() {
 .btn-save:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35);
-  background: linear-gradient(135deg, #c4b5fd, #7c3aed);
+  background: linear-gradient(135deg, var(--color-accent-light), #7c3aed);
 }
 
 .btn-save:disabled, .btn-cancel:disabled {
@@ -412,7 +412,7 @@ function cancelEdit() {
 .btn-reset-format {
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #f87171;
+  color: var(--color-danger);
   padding: 0.4rem 0.85rem;
   font-size: 0.75rem;
   font-weight: 600;
@@ -424,7 +424,7 @@ function cancelEdit() {
 .btn-reset-format:hover {
   background: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
+  color: var(--color-danger-bg);
 }
 
 /* Onay Modalı Stilleri */
@@ -444,7 +444,7 @@ function cancelEdit() {
 }
 
 .editor-confirm-card {
-  background: #111827;
+  background: var(--bg-primary);
   border: 1px solid rgba(139, 92, 246, 0.25);
   border-radius: 12px;
   width: 100%;
@@ -455,13 +455,13 @@ function cancelEdit() {
 }
 
 .editor-confirm-card h4 {
-  color: #a78bfa;
+  color: var(--color-accent-text);
   font-size: 1.05rem;
   margin: 0 0 0.5rem 0;
 }
 
 .editor-confirm-card p {
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 0.82rem;
   line-height: 1.4;
   margin: 0 0 1.25rem 0;

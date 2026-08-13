@@ -27,7 +27,42 @@
             </span>
             <h5>{{ currentUserFullName }}</h5>
             <p>@{{ currentUsername }}</p>
-            <p style="font-size:0.75rem; color:#9ca3af; margin-top:0.15rem; font-weight:500;">📧 {{ currentUserEmail }}</p>
+            <p style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.15rem; font-weight:500;">✉️ {{ currentUserEmail }}</p>
+          </div>
+        </div>
+
+        <hr class="section-divider" />
+
+        <!-- 0A. GÖRÜNÜM & TEMA AYARLARI -->
+        <div class="settings-section">
+          <h4>🎨 Görünüm Ayarları</h4>
+          <p class="section-desc">Uygulama temasını ve vurgu rengini kişiselleştirin. Seçimleriniz kalıcı olarak kaydedilir.</p>
+          
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <label style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Tema Modu</label>
+            <div class="theme-toggle-row">
+              <button class="theme-choice-btn" :class="{ active: settingsTheme === 'dark' }" @click="onThemeChange('dark')">
+                🌙 Koyu
+              </button>
+              <button class="theme-choice-btn" :class="{ active: settingsTheme === 'light' }" @click="onThemeChange('light')">
+                ☀️ Açık
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 0.75rem;">
+            <label style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Vurgu Rengi</label>
+            <div class="accent-palette-row">
+              <button v-for="(palette, key) in ACCENT_PALETTES" :key="key"
+                class="accent-palette-btn"
+                :class="{ active: settingsAccent === key }"
+                :style="{ '--dot-color': palette.primary }"
+                @click="onSettingsAccentChange(key)"
+                :title="palette.label">
+                <span class="accent-preview-dot" :style="{ background: palette.primary }"></span>
+                <span class="accent-label">{{ palette.label }}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -38,8 +73,8 @@
           <h4>🔒 {{ $t('settings.securityPrefs') || 'Güvenlik & Oturum Tercihleri' }}</h4>
           <p class="section-desc">{{ $t('settings.securityDesc') || 'Cihaz hatırlama ve sayfayı yenilediğinizde kilitlenme tercihinizi belirleyin.' }}</p>
           <div class="form-group" style="margin-top: 0.5rem;">
-            <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">{{ $t('settings.sessionMode') || 'Oturum Güvenlik Modu' }}</label>
-            <select v-model="rememberDevice" @change="saveRememberDevice" style="width: 100%; padding: 0.55rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 0.78rem; outline: none; cursor: pointer; margin-top: 0.25rem;">
+            <label style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">{{ $t('settings.sessionMode') || 'Oturum Güvenlik Modu' }}</label>
+            <select v-model="rememberDevice" @change="saveRememberDevice" style="width: 100%; padding: 0.55rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.78rem; outline: none; cursor: pointer; margin-top: 0.25rem;">
               <option value="always">🔓 {{ $t('settings.modeAlways') || 'Cihazı Hatırla (Oturum kalıcıdır, F5 atınca kilitlenmez)' }}</option>
               <option value="session">⏱ {{ $t('settings.modeSession') || 'Sekme Kapanınca Kilitle' }}</option>
               <option value="never">🔒 {{ $t('settings.modeNever') || 'Sayfa Yenilendiğinde Kilitle' }}</option>
@@ -119,7 +154,7 @@
                     :type="isProfileNewPasswordVisible ? 'text' : 'password'" 
                     :placeholder="$t('settings.newPasswordPlaceholder') || 'Yeni şifreniz...'" 
                     required
-                    :style="profileNewPassword ? { borderColor: isProfilePasswordValid ? '#22c55e' : '#ef4444' } : {}"
+                    :style="profileNewPassword ? { borderColor: isProfilePasswordValid ? '#22c55e' : 'var(--color-danger-bg)' } : {}"
                   />
                   <button 
                     type="button" 
@@ -134,7 +169,7 @@
                   </button>
                 </div>
                 <!-- Dinamik Şifre Gereksinimleri -->
-                <div v-if="profileNewPassword && profilePasswordErrors.length > 0" class="password-requirements" style="font-size:0.68rem; color:#f87171; margin-top:0.25rem; display:flex; flex-direction:column; gap:0.15rem;">
+                <div v-if="profileNewPassword && profilePasswordErrors.length > 0" class="password-requirements" style="font-size:0.68rem; color:var(--color-danger); margin-top:0.25rem; display:flex; flex-direction:column; gap:0.15rem;">
                   <span v-for="err in profilePasswordErrors" :key="err">⚠️ {{ err }}</span>
                 </div>
               </div>
@@ -177,7 +212,7 @@
           <!-- Form D: E-posta Adresi Değiştirme (OTP ile) -->
           <div class="sub-profile-section">
             <h5>{{ $t('settings.emailChangeTitle') || 'E-posta Adresi Değiştirme' }}</h5>
-            <p style="font-size:0.72rem; color:#9ca3af; margin:0 0 0.75rem;">{{ $t('settings.emailChangeDesc') || 'Yeni e-postanıza bir doğrulama kodu gönderilecektir.' }}</p>
+            <p style="font-size:0.72rem; color:var(--text-secondary); margin:0 0 0.75rem;">{{ $t('settings.emailChangeDesc') || 'Yeni e-postanıza bir doğrulama kodu gönderilecektir.' }}</p>
             <form @submit.prevent="sendEmailOtp" class="settings-form" v-if="!emailOtpSent">
               <div class="form-group">
                 <input v-model="userEmail" type="email" :placeholder="$t('settings.newEmailPlaceholder') || 'Yeni e-posta adresiniz...'" required />
@@ -187,17 +222,17 @@
               </button>
             </form>
             <div v-if="emailOtpSent" style="background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.85rem; display:flex; flex-direction:column; gap:0.65rem;">
-              <p style="font-size:0.72rem; color:#9ca3af; margin:0;"><strong style="color:#34d399;">{{ userEmail }}</strong> {{ $t('settings.codeSentDesc') || 'adresine kod gönderildi. 5 dakika geçerlidir.' }}</p>
+              <p style="font-size:0.72rem; color:var(--text-secondary); margin:0;"><strong style="color:var(--color-success);">{{ userEmail }}</strong> {{ $t('settings.codeSentDesc') || 'adresine kod gönderildi. 5 dakika geçerlidir.' }}</p>
               <input 
                 v-model="emailOtp" 
                 type="text" 
                 maxlength="6"
                 :placeholder="$t('settings.codePlaceholder') || '6 Haneli Kod'"
-                style="width:140px; height:38px; background:rgba(15,23,42,0.7); border:1.5px solid rgba(255,255,255,0.12); border-radius:6px; text-align:center; color:#fff; font-size:1.1rem; font-weight:700; outline:none; margin:0 auto;"
+                style="width:140px; height:38px; background:var(--bg-secondary); border:1.5px solid var(--border); border-radius:6px; text-align:center; color:var(--text-primary); font-size:1.1rem; font-weight:700; outline:none; margin:0 auto;"
               />
               <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
-                <button type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:0.35rem 0.75rem; font-size:0.72rem; border-radius:6px; cursor:pointer;" @click="emailOtpSent=false; emailOtp=''; emailOtpTimer=0;">{{ $t('settings.cancelBtn') || 'Vazgeç' }}</button>
-                <button type="button" style="background:#10b981; border:none; color:#fff; padding:0.35rem 1rem; font-size:0.72rem; font-weight:700; border-radius:6px; cursor:pointer;" @click="verifyEmailOtp">{{ $t('settings.verifyEmailBtn') || 'E-postayı Doğrula & Kaydet' }}</button>
+                <button type="button" style="background:transparent; border:1px solid var(--border); color:var(--text-secondary); padding:0.35rem 0.75rem; font-size:0.72rem; border-radius:6px; cursor:pointer;" @click="emailOtpSent=false; emailOtp=''; emailOtpTimer=0;">{{ $t('settings.cancelBtn') || 'Vazgeç' }}</button>
+                <button type="button" style="background:var(--color-success-bg); border:none; color:var(--text-primary); padding:0.35rem 1rem; font-size:0.72rem; font-weight:700; border-radius:6px; cursor:pointer;" @click="verifyEmailOtp">{{ $t('settings.verifyEmailBtn') || 'E-postayı Doğrula & Kaydet' }}</button>
               </div>
             </div>
           </div>
@@ -221,7 +256,7 @@
                   v-model="kasaNewPassword" 
                   :type="isNewPasswordVisible ? 'text' : 'password'" 
                   :placeholder="$t('settings.newPasswordPlaceholder2') || 'Yeni şifre...'" 
-                  :style="kasaNewPassword ? { borderColor: isKasaPasswordValid ? '#22c55e' : '#ef4444' } : {}"
+                  :style="kasaNewPassword ? { borderColor: isKasaPasswordValid ? '#22c55e' : 'var(--color-danger-bg)' } : {}"
                 />
                 <button 
                   type="button" 
@@ -236,7 +271,7 @@
                 </button>
               </div>
               <!-- Dinamik Şifre Gereksinimleri -->
-              <div v-if="kasaNewPassword && kasaPasswordErrors.length > 0" class="password-requirements" style="font-size:0.68rem; color:#f87171; margin-top:0.25rem; display:flex; flex-direction:column; gap:0.15rem;">
+              <div v-if="kasaNewPassword && kasaPasswordErrors.length > 0" class="password-requirements" style="font-size:0.68rem; color:var(--color-danger); margin-top:0.25rem; display:flex; flex-direction:column; gap:0.15rem;">
                 <span v-for="err in kasaPasswordErrors" :key="err">⚠️ {{ err }}</span>
               </div>
             </div>
@@ -303,7 +338,7 @@
                   v-if="currentUserRole === 'ciso' || currentUserRole === 'admin'" 
                   @click="openCisoDetail(user)" 
                   type="button"
-                  style="margin-top:0.3rem; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#a78bfa; padding:0.2rem 0.6rem; font-size:0.65rem; border-radius:4px; cursor:pointer; font-weight:600;"
+                  style="margin-top:0.3rem; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:var(--color-accent-text); padding:0.2rem 0.6rem; font-size:0.65rem; border-radius:4px; cursor:pointer; font-weight:600;"
                 >
                   🔎 {{ $t('settings.viewDetailBtn') || 'Detay Gör' }}
                 </button>
@@ -382,9 +417,9 @@
               v-model="doubleApprovalEnabled" 
               @change="updateDoubleApproval"
               :disabled="currentUserRole === 'ciso'"
-              style="width: 18px; height: 18px; accent-color: #8b5cf6; cursor: pointer; flex-shrink: 0;"
+              style="width: 18px; height: 18px; accent-color: var(--color-accent-bg); cursor: pointer; flex-shrink: 0;"
             />
-            <label for="double-approval-checkbox" style="font-size: 0.82rem; font-weight: 700; color: #fff; cursor: pointer; display: inline; margin: 0; user-select: none;">
+            <label for="double-approval-checkbox" style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); cursor: pointer; display: inline; margin: 0; user-select: none;">
               {{ $t('settings.doubleApprovalLabel') || 'E-posta + Arayüz Çift Onayı Zorunlu' }}
             </label>
           </div>
@@ -444,16 +479,16 @@
           <div class="log-status-card" style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 1rem;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
-                <p style="margin:0; font-size:0.8rem; color:#9ca3af;">{{ $t('settings.activeLogPath') || 'Aktif Log Yolu:' }}</p>
-                <code style="font-size:0.75rem; color:#34d399; font-weight:700;">{{ logFilePath || '/app/uploads/dms-audit.jsonl' }}</code>
+                <p style="margin:0; font-size:0.8rem; color:var(--text-secondary);">{{ $t('settings.activeLogPath') || 'Aktif Log Yolu:' }}</p>
+                <code style="font-size:0.75rem; color:var(--color-success); font-weight:700;">{{ logFilePath || '/app/uploads/dms-audit.jsonl' }}</code>
               </div>
-              <span :style="{ background: logFileExists ? '#065f46' : '#991b1b', color: logFileExists ? '#34d399' : '#f87171', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: '700' }">
+              <span :style="{ background: logFileExists ? '#065f46' : '#991b1b', color: logFileExists ? 'var(--color-success)' : 'var(--color-danger)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: '700' }">
                 {{ logFileExists ? ($t('settings.logConnected') || 'BAĞLI') : ($t('settings.logNotFound') || 'DOSYA BULUNAMADI') }}
               </span>
             </div>
             
             <div v-if="!logFileExists" style="margin-top:1rem; border-top:1px dashed rgba(255,255,255,0.08); padding-top:0.75rem;">
-              <p style="font-size:0.72rem; color:#ef4444; margin:0 0 0.5rem 0;">⚠️ {{ $t('settings.logFileMissing') || 'Log dosyası disk üzerinde bulunamadı! Yeni bir kayıt dosyası oluşturmak ister misiniz?' }}</p>
+              <p style="font-size:0.72rem; color:var(--color-danger-bg); margin:0 0 0.5rem 0;">⚠️ {{ $t('settings.logFileMissing') || 'Log dosyası disk üzerinde bulunamadı! Yeni bir kayıt dosyası oluşturmak ister misiniz?' }}</p>
               <button type="button" class="btn-approval btn-approval--approve" @click="askConfirm($t('settings.createLogConfirm') || 'Yeni boş bir log dosyası oluşturmak istediğinize emin misiniz?', createLogFile)">
                 {{ $t('settings.createLogBtn') || 'Evet, Yeni Dosya Oluştur' }}
               </button>
@@ -515,28 +550,28 @@
 
   <!-- CISO Kullanıcı Detay Modalı -->
   <div v-if="cisoDetailModalOpen" class="global-confirm-overlay" style="z-index:13000;" @click.self="cisoDetailModalOpen = false">
-    <div style="background:#111827; border:1px solid rgba(99,102,241,0.3); border-radius:14px; width:100%; max-width:680px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 25px 50px rgba(0,0,0,0.7);">
+    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:14px; width:100%; max-width:680px; max-height:80vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 25px 50px rgba(0,0,0,0.7);">
       <div style="display:flex; justify-content:space-between; align-items:center; padding:1.25rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.08);">
         <div>
-          <h4 style="margin:0; color:#a78bfa; font-size:1rem;">{{ cisoDetailUser?.fullName }} {{ $t('settings.userDetailTitle') || 'Kullanıcı Detayı' }}</h4>
-          <p style="margin:0.2rem 0 0; font-size:0.75rem; color:#6b7280;">@{{ cisoDetailUser?.username }} &bull; {{ cisoDetailUser?.email || $t('settings.noEmail') || 'E-posta yok' }}</p>
+          <h4 style="margin:0; color:var(--color-accent-text); font-size:1rem;">{{ cisoDetailUser?.fullName }} {{ $t('settings.userDetailTitle') || 'Kullanıcı Detayı' }}</h4>
+          <p style="margin:0.2rem 0 0; font-size:0.75rem; color:var(--text-secondary);">@{{ cisoDetailUser?.username }} &bull; {{ cisoDetailUser?.email || $t('settings.noEmail') || 'E-posta yok' }}</p>
         </div>
-        <button @click="cisoDetailModalOpen = false" style="background:transparent; border:1px solid rgba(255,255,255,0.1); color:#9ca3af; padding:0.3rem 0.75rem; border-radius:6px; cursor:pointer;">✕ {{ $t('settings.closeBtn') || 'Kapat' }}</button>
+        <button @click="cisoDetailModalOpen = false" style="background:transparent; border:1px solid rgba(255,255,255,0.1); color:var(--text-secondary); padding:0.3rem 0.75rem; border-radius:6px; cursor:pointer;">✕ {{ $t('settings.closeBtn') || 'Kapat' }}</button>
       </div>
       <div style="padding:1.25rem 1.5rem; overflow-y:auto; display:flex; flex-direction:column; gap:0.75rem;">
         <!-- Kullanıcı Bilgi Kartı -->
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:8px; padding:1rem; display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
-          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblFullName') || 'Ad Soyad' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:#fff;">{{ cisoDetailUser?.fullName }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblUsername') || 'Kullanıcı Adı' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:#fff;">@{{ cisoDetailUser?.username }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblEmail') || 'E-posta' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#34d399;">{{ cisoDetailUser?.email || '—' }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblRole') || 'Rol' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#a78bfa; font-weight:700;">{{ getRoleLabel(cisoDetailUser?.role) }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblStatus') || 'Durum' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem;" :style="{ color: cisoDetailUser?.status === 'active' ? '#34d399' : '#f87171' }">{{ cisoDetailUser?.status === 'active' ? ($t('settings.statusActive') || 'Aktif') : ($t('settings.statusPassive') || 'Pasif') }}</p></div>
-          <div><span style="font-size:0.68rem; color:#6b7280;">{{ $t('settings.lblRegDate') || 'Kayıt Tarihi' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:#9ca3af;">{{ cisoDetailUser?.createdAt ? new Date(cisoDetailUser.createdAt).toLocaleDateString('tr-TR') : '—' }}</p></div>
+          <div><span style="font-size:0.68rem; color:var(--text-secondary);">{{ $t('settings.lblFullName') || 'Ad Soyad' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:var(--text-primary);">{{ cisoDetailUser?.fullName }}</p></div>
+          <div><span style="font-size:0.68rem; color:var(--text-secondary);">{{ $t('settings.lblUsername') || 'Kullanıcı Adı' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; font-weight:700; color:var(--text-primary);">@{{ cisoDetailUser?.username }}</p></div>
+          <div><span style="font-size:0.68rem; color:var(--text-secondary);">{{ $t('settings.lblEmail') || 'E-posta' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:var(--color-success);">{{ cisoDetailUser?.email || '—' }}</p></div>
+          <div><span style="font-size:0.68rem; color:var(--text-secondary);">{{ $t('settings.lblRole') || 'Rol' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:var(--color-accent-text); font-weight:700;">{{ getRoleLabel(cisoDetailUser?.role) }}</p></div>
+          <div><span style="font-size:0.68rem; color:var(--text-secondary);">{{ $t('settings.lblStatus') || 'Durum' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem;" :style="{ color: cisoDetailUser?.status === 'active' ? 'var(--color-success)' : 'var(--color-danger)' }">{{ cisoDetailUser?.status === 'active' ? ($t('settings.statusActive') || 'Aktif') : ($t('settings.statusPassive') || 'Pasif') }}</p></div>
+          <div><span style="font-size:0.68rem; color:var(--text-secondary);">{{ $t('settings.lblRegDate') || 'Kayıt Tarihi' }}</span><p style="margin:0.1rem 0 0; font-size:0.82rem; color:var(--text-secondary);">{{ cisoDetailUser?.createdAt ? new Date(cisoDetailUser.createdAt).toLocaleDateString('tr-TR') : '—' }}</p></div>
         </div>
         
         <!-- İşlem Logları -->
         <div v-if="currentUserRole === 'ciso'">
-          <h5 style="margin:0 0 0.5rem; font-size:0.78rem; color:#9ca3af; font-weight:600;">{{ $t('settings.last50Actions') || 'SON 50 İŞLEM' }}</h5>
+          <h5 style="margin:0 0 0.5rem; font-size:0.78rem; color:var(--text-secondary); font-weight:600;">{{ $t('settings.last50Actions') || 'SON 50 İŞLEM' }}</h5>
           <div v-if="isLoadingCisoDetail" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">{{ $t('settings.loading') || 'Yükleniyor...' }}</div>
           <div v-else-if="cisoDetailLogs.length === 0" style="text-align:center; padding:1.5rem; color:#6b7280; font-size:0.8rem;">{{ $t('settings.noActionLogs') || 'Bu kullanıcıya ait kayıtlı işlem bulunamadı.' }}</div>
           <div v-else style="display:flex; flex-direction:column; gap:0.35rem; max-height:280px; overflow-y:auto; padding-right:0.5rem;">
@@ -547,14 +582,14 @@
             >
               <span style="font-size:0.85rem;">{{ getActionIcon(log.action) }}</span>
               <div>
-                <p style="margin:0; font-size:0.73rem; color:#fff; font-weight:600;">{{ getActionLabel(log.action) }}</p>
+                <p style="margin:0; font-size:0.73rem; color:var(--text-primary); font-weight:600;">{{ getActionLabel(log.action) }}</p>
                 <p style="margin:0.1rem 0 0; font-size:0.65rem; color:#6b7280;">{{ log.details || '—' }}</p>
               </div>
               <span style="font-size:0.62rem; color:#6b7280; white-space:nowrap;">{{ formatDetailDate(log.createdAt || log.created_at) }}</span>
             </div>
           </div>
         </div>
-        <div v-else style="background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.15); border-radius:8px; padding:0.85rem; text-align:center; color:#f87171; font-size:0.75rem;">
+        <div v-else style="background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.15); border-radius:8px; padding:0.85rem; text-align:center; color:var(--color-danger); font-size:0.75rem;">
           ⚠️ {{ $t('settings.auditLogCisoOnly') || 'Kullanıcının detaylı işlem geçmişi (Audit Logs) sadece CISO yetkisindedir.' }}
         </div>
       </div>
@@ -565,6 +600,7 @@
 <script setup>
 import { ref, watch, computed, onMounted } from 'vue'
 import { useToast } from 'vue-toastification'
+import { getTheme, setTheme, getAccent, setAccent, ACCENT_PALETTES } from '../utils/ThemeProvider'
 
 const props = defineProps({
   isOpen: {
@@ -576,6 +612,20 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const toast = useToast()
+
+// Tema & Accent Renk Yönetimi
+const settingsTheme = ref(getTheme())
+const settingsAccent = ref(getAccent())
+
+function onThemeChange(mode) {
+  setTheme(mode)
+  settingsTheme.value = mode
+}
+
+function onSettingsAccentChange(palette) {
+  setAccent(palette)
+  settingsAccent.value = palette
+}
 
 const rememberDevice = ref(localStorage.getItem('rememberDevice') || 'always')
 
@@ -1424,7 +1474,7 @@ onMounted(() => {
   width: 90%;
   max-width: 500px;
   height: 100%;
-  background: #0f172a;
+  background: var(--bg-card);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
   display: flex;
@@ -1448,7 +1498,7 @@ onMounted(() => {
 .btn-close-drawer {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #9ca3af;
+  color: var(--text-secondary);
   padding: 0.35rem 0.85rem;
   border-radius: 6px;
   cursor: pointer;
@@ -1457,7 +1507,7 @@ onMounted(() => {
 
 .btn-close-drawer:hover {
   background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .drawer-body {
@@ -1499,10 +1549,10 @@ onMounted(() => {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(16, 185, 129, 0.1);
 }
 .settings-drawer.theme--ciso h4 {
-  color: #34d399;
+  color: var(--color-success);
 }
 .settings-drawer.theme--ciso .btn-settings-save {
-  background: linear-gradient(135deg, #34d399, #059669);
+  background: linear-gradient(135deg, var(--color-success), #059669);
 }
 
 .drawer-header {
@@ -1522,13 +1572,13 @@ onMounted(() => {
 .header-title h3 {
   font-size: 1.05rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .btn-close-drawer {
   background: transparent;
   border: none;
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 1.1rem;
   cursor: pointer;
   padding: 0.2rem 0.5rem;
@@ -1548,7 +1598,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: rgba(30, 41, 59, 0.5);
+  background: var(--bg-card);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   padding: 1rem;
@@ -1593,17 +1643,17 @@ onMounted(() => {
 .profile-role-tag.role--ciso {
   background: rgba(16, 185, 129, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #34d399;
+  color: var(--color-success);
 }
 
 .profile-details h5 {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 0.9rem;
   font-weight: 800;
 }
 
 .profile-details p {
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 0.72rem;
 }
 
@@ -1614,7 +1664,7 @@ onMounted(() => {
 }
 
 .sub-profile-section {
-  background: rgba(30, 41, 59, 0.3);
+  background: var(--bg-card);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 8px;
   padding: 0.85rem;
@@ -1632,7 +1682,7 @@ onMounted(() => {
 
 .section-desc {
   font-size: 0.74rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
@@ -1651,7 +1701,7 @@ onMounted(() => {
 .form-group label {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 .form-group input, .role-select {
@@ -1659,19 +1709,19 @@ onMounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   padding: 0.55rem 0.85rem;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 0.8rem;
   outline: none;
   width: 100%;
 }
 
 .form-group input:focus, .role-select:focus {
-  border-color: #8b5cf6;
+  border-color: var(--color-accent-bg);
   background: rgba(15, 23, 42, 0.8);
 }
 
 .btn-settings-save {
-  color: #fff;
+  color: var(--text-primary);
   border: none;
   padding: 0.6rem;
   font-size: 0.78rem;
@@ -1707,7 +1757,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  background: rgba(30, 41, 59, 0.6);
+  background: var(--bg-secondary);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 6px;
   padding: 0.6rem 0.8rem;
@@ -1720,12 +1770,12 @@ onMounted(() => {
 
 .user-info-brief strong {
   font-size: 0.8rem;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .user-meta-sub {
   font-size: 0.68rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 .user-role-actions {
@@ -1749,7 +1799,7 @@ onMounted(() => {
 
 .perm-check-label input {
   cursor: pointer;
-  accent-color: #8b5cf6;
+  accent-color: var(--color-accent-bg);
 }
 
 .perm-check-label input:disabled {
@@ -1760,7 +1810,7 @@ onMounted(() => {
 .user-role-select {
   background: rgba(15, 23, 42, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #fff;
+  color: var(--text-primary);
   font-size: 0.68rem;
   padding: 0.2rem 0.45rem;
   border-radius: 4px;
@@ -1787,7 +1837,7 @@ onMounted(() => {
 }
 
 .approval-row-card {
-  background: rgba(30, 41, 59, 0.7);
+  background: var(--bg-secondary);
   border: 1px solid rgba(139, 92, 246, 0.15);
   border-radius: 6px;
   padding: 0.75rem;
@@ -1800,7 +1850,7 @@ onMounted(() => {
   font-size: 0.62rem;
   font-weight: 800;
   text-transform: uppercase;
-  color: #a78bfa;
+  color: var(--color-accent-text);
   background: rgba(139, 92, 246, 0.12);
   padding: 0.15rem 0.4;
   border-radius: 4px;
@@ -1833,25 +1883,25 @@ onMounted(() => {
 
 .status-badge.status--approved {
   background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
+  color: var(--color-success);
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .status-badge.status--rejected {
   background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  color: var(--color-danger);
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .status-badge.status--expired {
   background: rgba(156, 163, 175, 0.15);
-  color: #9ca3af;
+  color: var(--text-secondary);
   border: 1px solid rgba(156, 163, 175, 0.3);
 }
 
 .approval-meta-sub {
   font-size: 0.65rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 .btn-approval {
@@ -1864,14 +1914,14 @@ onMounted(() => {
 }
 
 .btn-approval--approve {
-  background: #10b981;
-  color: #fff;
+  background: var(--color-success-bg);
+  color: var(--text-primary);
 }
 
 .btn-approval--reject {
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 .password-input-wrapper {
@@ -1891,7 +1941,7 @@ onMounted(() => {
   right: 12px;
   background: transparent;
   border: none;
-  color: #a78bfa;
+  color: var(--color-accent-text);
   font-size: 1rem;
   cursor: pointer;
   padding: 4px;
@@ -1907,7 +1957,7 @@ onMounted(() => {
 .password-mismatch-banner {
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  color: var(--color-danger);
   font-size: 0.72rem;
   padding: 0.45rem 0.75rem;
   border-radius: 6px;
@@ -1947,7 +1997,7 @@ onMounted(() => {
 .mail-error-detail-banner {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #f87171;
+  color: var(--color-danger);
   font-size: 0.74rem;
   padding: 0.65rem 0.85rem;
   border-radius: 6px;
@@ -1970,7 +2020,7 @@ onMounted(() => {
   z-index: 12000;
 }
 .global-confirm-card {
-  background: #111827;
+  background: var(--bg-primary);
   border: 1px solid rgba(139, 92, 246, 0.25);
   border-radius: 12px;
   width: 100%;
@@ -1980,14 +2030,80 @@ onMounted(() => {
   text-align: center;
 }
 .global-confirm-card h4 {
-  color: #a78bfa;
+  color: var(--color-accent-text);
   font-size: 1.05rem;
   margin: 0 0 0.5rem 0;
 }
 .global-confirm-card p {
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 0.82rem;
   line-height: 1.4;
   margin: 0 0 1.25rem 0;
+}
+
+/* GÖRÜNÜM AYARLARI */
+.theme-toggle-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+.theme-choice-btn {
+  flex: 1;
+  padding: 0.6rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+.theme-choice-btn:hover {
+  border-color: var(--accent-primary, var(--color-accent-bg));
+  background: var(--accent-glow);
+}
+.theme-choice-btn.active {
+  border-color: var(--accent-primary, var(--color-accent-bg));
+  background: var(--accent-glow);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
+}
+.accent-palette-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+.accent-palette-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.65rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.accent-palette-btn:hover {
+  border-color: var(--dot-color);
+}
+.accent-palette-btn.active {
+  border-color: var(--dot-color);
+  background: var(--accent-glow);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--dot-color) 30%, transparent);
+}
+.accent-preview-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.accent-label {
+  font-size: 0.75rem;
 }
 </style>

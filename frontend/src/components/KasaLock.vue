@@ -2,8 +2,11 @@
   <Transition name="slide-up">
     <div v-if="isLocked" class="kasa-lock-overlay">
       
-      <!-- Sağ Üst Dil Seçim Menüsü (Kartın dışına alındı, kaymayı önler) -->
-      <div class="kasa-top-bar" style="position: absolute; top: 1.5rem; right: 2rem;">
+      <!-- Sağ Üst Dil ve Tema Seçim Menüsü -->
+      <div class="kasa-top-bar" style="position: absolute; top: 1.5rem; right: 2rem; display: flex; gap: 0.5rem; align-items: center;">
+        <button class="btn-theme-toggle" @click="onToggleTheme" :title="currentTheme === 'dark' ? 'Açık Tema' : 'Koyu Tema'" style="background: rgba(255,255,255,0.1); border: 1px solid var(--border, rgba(255,255,255,0.2)); color: var(--text-primary, var(--text-primary)); padding: 0.5rem 0.8rem; border-radius: 8px; cursor: pointer; backdrop-filter: blur(8px);">
+          {{ currentTheme === 'dark' ? '☀️' : '🌙' }}
+        </button>
         <NativeLangSelector />
       </div>
 
@@ -91,7 +94,7 @@
           </div>
 
           <div style="text-align: right; margin-top: -0.5rem; margin-bottom: 1rem; width: 100%;">
-            <button type="button" @click="openForgotPassword" style="background: transparent; border: none; color: #a78bfa; font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: underline; white-space: nowrap; text-align: right; max-width: 100%; line-height: 1.4;">
+            <button type="button" @click="openForgotPassword" style="background: transparent; border: none; color: var(--color-accent-text); font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: underline; white-space: nowrap; text-align: right; max-width: 100%; line-height: 1.4;">
               <span>{{ $t('auth.forgotPassword') || 'Şifremi Unuttum?' }}</span>
             </button>
           </div>
@@ -213,7 +216,7 @@
             ✅ {{ successMessage }}
           </div>
 
-          <div class="security-policy-info" style="font-size: 0.82rem; color: #c4b5fd; line-height: 1.4; margin-top: 0.5rem; margin-bottom: 0.8rem; background: rgba(139, 92, 246, 0.1); border-left: 3px solid #8b5cf6; padding: 0.6rem 0.8rem; border-radius: 4px;">
+          <div class="security-policy-info" style="font-size: 0.82rem; color: var(--color-accent-light); line-height: 1.4; margin-top: 0.5rem; margin-bottom: 0.8rem; background: rgba(139, 92, 246, 0.1); border-left: 3px solid var(--color-accent-bg); padding: 0.6rem 0.8rem; border-radius: 4px;">
             ℹ️ Güvenlik Politikası: Hem Standart hem de Yönetici (Admin) hesap başvuruları, sistem yöneticilerinin onayından geçmeden aktif hale gelmez.
           </div>
 
@@ -270,6 +273,14 @@
 <script setup>
 import { ref } from 'vue'
 import NativeLangSelector from './NativeLangSelector.vue'
+import { getTheme, setTheme } from '../utils/ThemeProvider'
+
+const currentTheme = ref(getTheme() || 'dark')
+function onToggleTheme() {
+  const newMode = currentTheme.value === 'dark' ? 'light' : 'dark'
+  setTheme(newMode)
+  currentTheme.value = newMode
+}
 
 const isLocked = ref(true)
 const activeTab = ref('login')
@@ -485,7 +496,7 @@ async function sendForgotPasswordEmail() {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+  background: radial-gradient(circle at center, var(--bg-card) 0%, var(--bg-card) 100%);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -495,7 +506,7 @@ async function sendForgotPasswordEmail() {
 }
 
 .kasa-lock-card {
-  background: rgba(30, 41, 59, 0.95);
+  background: var(--bg-primary);
   border: 1px solid rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(16px);
   border-radius: 20px;
@@ -538,14 +549,14 @@ async function sendForgotPasswordEmail() {
 }
 
 .lock-header h2 {
-  color: #f8fafc;
+  color: var(--text-primary);
   font-size: 1.4rem;
   font-weight: 700;
   margin: 0 0 0.4rem 0;
 }
 
 .lock-desc {
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   margin: 0;
 }
@@ -553,7 +564,7 @@ async function sendForgotPasswordEmail() {
 .lock-tabs {
   display: flex;
   gap: 0.5rem;
-  background: #0f172a;
+  background: var(--bg-card);
   padding: 0.3rem;
   border-radius: 12px;
   margin-bottom: 1.5rem;
@@ -564,7 +575,7 @@ async function sendForgotPasswordEmail() {
   flex: 1;
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--text-secondary);
   padding: 0.55rem 0.4rem;
   border-radius: 8px;
   font-size: 0.82rem;
@@ -575,7 +586,7 @@ async function sendForgotPasswordEmail() {
 
 .tab-btn.active {
   background: linear-gradient(135deg, #6366f1, #a855f7);
-  color: #fff;
+  color: var(--text-primary);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
@@ -592,15 +603,15 @@ async function sendForgotPasswordEmail() {
 }
 
 .form-group label {
-  color: #cbd5e1;
+  color: var(--text-secondary);
   font-size: 0.82rem;
   font-weight: 600;
 }
 
 .form-group input, .form-select {
-  background: #0f172a;
+  background: var(--bg-card);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: var(--text-primary);
   padding: 0.7rem 0.9rem;
   border-radius: 10px;
   font-size: 0.9rem;
@@ -616,7 +627,7 @@ async function sendForgotPasswordEmail() {
 .ciso-info-banner {
   background: rgba(168, 85, 247, 0.1);
   border: 1px solid rgba(168, 85, 247, 0.25);
-  color: #d8b4fe;
+  color: var(--color-accent-light);
   padding: 0.75rem;
   border-radius: 10px;
   font-size: 0.78rem;
@@ -643,7 +654,7 @@ async function sendForgotPasswordEmail() {
 
 .btn-unlock {
   background: linear-gradient(135deg, #6366f1, #a855f7);
-  color: #fff;
+  color: var(--text-primary);
   border: none;
   padding: 0.8rem;
   border-radius: 10px;
@@ -668,7 +679,7 @@ async function sendForgotPasswordEmail() {
 }
 
 .btn-register {
-  background: linear-gradient(135deg, #10b981, #06b6d4);
+  background: linear-gradient(135deg, var(--color-success-bg), #06b6d4);
 }
 
 .shake-anim {
@@ -705,7 +716,7 @@ async function sendForgotPasswordEmail() {
   z-index: 15000;
 }
 .forgot-modal-card {
-  background: #111827;
+  background: var(--bg-primary);
   border: 1px solid rgba(139, 92, 246, 0.3);
   border-radius: 14px;
   width: 100%;
@@ -723,13 +734,13 @@ async function sendForgotPasswordEmail() {
 }
 .forgot-header h4 {
   margin: 0;
-  color: #a78bfa;
+  color: var(--color-accent-text);
   font-size: 1.05rem;
 }
 .btn-close-forgot {
   background: transparent;
   border: none;
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 1rem;
   cursor: pointer;
 }
@@ -747,19 +758,19 @@ async function sendForgotPasswordEmail() {
   font-size: 0.8rem;
 }
 .hint-display-box strong {
-  color: #a78bfa;
+  color: var(--color-accent-text);
   display: block;
   margin-bottom: 0.25rem;
 }
 .hint-display-box p {
   margin: 0;
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 500;
 }
 .btn-forgot-action {
   background: rgba(139, 92, 246, 0.12);
   border: 1px solid rgba(139, 92, 246, 0.25);
-  color: #a78bfa;
+  color: var(--color-accent-text);
   padding: 0.65rem;
   font-weight: 700;
   font-size: 0.8rem;
@@ -768,17 +779,17 @@ async function sendForgotPasswordEmail() {
   transition: all 0.2s;
 }
 .btn-forgot-action:hover {
-  background: #8b5cf6;
-  color: #fff;
+  background: var(--color-accent-bg);
+  color: var(--text-primary);
 }
 .btn-forgot-action--email {
   background: rgba(99, 102, 241, 0.12);
   border: 1px solid rgba(99, 102, 241, 0.25);
-  color: #cbd5e1;
+  color: var(--text-secondary);
 }
 .btn-forgot-action--email:hover {
   background: #6366f1;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .password-input-wrapper {
@@ -798,7 +809,7 @@ async function sendForgotPasswordEmail() {
   right: 12px;
   background: transparent;
   border: none;
-  color: #a78bfa;
+  color: var(--color-accent-text);
   font-size: 1rem;
   cursor: pointer;
   padding: 4px;

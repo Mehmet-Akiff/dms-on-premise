@@ -374,6 +374,13 @@ function onSearchLoading(isLoading) {
   --accent-secondary: #3b82f6;
   --danger: #ef4444;
   --success: #22c55e;
+  --color-success: #34d399;
+  --color-success-bg: #10b981;
+  --color-danger: #f87171;
+  --color-danger-bg: #ef4444;
+  --color-accent-text: #a78bfa;
+  --color-accent-bg: #8b5cf6;
+  --color-accent-light: #c4b5fd;
   /* Chat-specific tokens */
   --chat-bg: #0b141a;
   --bubble-in: #1e293b;
@@ -382,26 +389,42 @@ function onSearchLoading(isLoading) {
 
 /* ============ AÇIK TEMA ============ */
 [data-theme="light"] {
-  --bg-primary: #f0f2f5;
+  --bg-primary: #f5f5f7;
   --bg-secondary: #ffffff;
-  --bg-card: #f8fafc;
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --accent: #2563eb;
-  --accent-glow: rgba(37, 99, 235, 0.12);
-  --border: #e2e8f0;
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-  --accent-primary: #7c3aed;
-  --accent-secondary: #2563eb;
-  --danger: #dc2626;
-  --success: #16a34a;
-  --chat-bg: #efeae2;
+  --bg-card: #ffffff;
+  --text-primary: #1d1d1f;
+  --text-secondary: #86868b;
+  --accent: #007aff;
+  --accent-glow: rgba(0, 122, 255, 0.08);
+  --accent-primary: #007aff;
+  --accent-secondary: #5856d6;
+  --border: #d2d2d7;
+  --radius: 14px;
+  --shadow: 0 4px 14px rgba(0,0,0,0.04), 0 1px 4px rgba(0,0,0,0.02);
+  --danger: #ff3b30;
+  --success: #34c759;
+  --color-success: #16a34a;
+  --color-success-bg: #22c55e;
+  --color-danger: #dc2626;
+  --color-danger-bg: #ef4444;
+  --color-accent-text: #4f46e5;
+  --color-accent-bg: #6366f1;
+  --color-accent-light: #818cf8;
+  --chat-bg: #f5f5f7;
   --bubble-in: #ffffff;
-  --bubble-out: #d9fdd3;
+  --bubble-out: #e5f0ff;
 }
 [data-theme="light"] body {
-  background-color: var(--bg-primary);
+  background: linear-gradient(-45deg, #fdfbfb, #e4ebf2, #f5f7fa, #dce4ed);
+  background-size: 400% 400%;
+  animation: appleLightAnim 15s ease infinite;
   color: var(--text-primary);
+}
+
+@keyframes appleLightAnim {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 * {
@@ -892,5 +915,273 @@ font {
     border-color: rgba(239, 68, 68, 0.8);
     box-shadow: 0 0 30px rgba(239, 68, 68, 0.35);
   }
+}
+
+/* ============================================================
+   AÇIK TEMA — Bileşen Override'ları
+   ============================================================ */
+
+/* Header */
+[data-theme="light"] .dms-header {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+/* Logo gradient */
+[data-theme="light"] .logo h1 {
+  background: linear-gradient(135deg, #6d28d9, #2563eb);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Header butonları */
+[data-theme="light"] .btn-settings-toggle {
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  color: #6d28d9;
+}
+[data-theme="light"] .btn-settings-toggle:hover {
+  background: #ede9fe;
+  border-color: #a78bfa;
+  box-shadow: 0 2px 10px rgba(109, 40, 217, 0.15);
+}
+[data-theme="light"] .btn-audit-toggle {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+[data-theme="light"] .btn-audit-toggle:hover {
+  background: #fde68a;
+  border-color: #f59e0b;
+}
+[data-theme="light"] .btn-theme-toggle {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+}
+[data-theme="light"] .btn-theme-toggle:hover {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+}
+
+/* Header status */
+[data-theme="light"] .header-status {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+/* Header rol badge */
+[data-theme="light"] .role-badge {
+  background: linear-gradient(135deg, #6d28d9, #7c3aed) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* Panel (sol panel + sağ panel + çekmece paneller + lang modal) */
+[data-theme="light"] .panel,
+[data-theme="light"] .settings-drawer,
+[data-theme="light"] .notifications-panel,
+[data-theme="light"] .users-panel,
+[data-theme="light"] .lang-modal-card,
+[data-theme="light"] .kasa-lock-card {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .kasa-lock-overlay {
+  background: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+[data-theme="light"] .settings-drawer *,
+[data-theme="light"] .notifications-panel *,
+[data-theme="light"] .users-panel *,
+[data-theme="light"] .lang-modal-card *,
+[data-theme="light"] .kasa-lock-card * {
+  border-color: var(--border);
+}
+
+[data-theme="light"] .lang-modal-header {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .lang-search-box {
+  background: rgba(255, 255, 255, 0.5) !important;
+}
+
+[data-theme="light"] .lang-search-box input {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .lang-item-card {
+  background: rgba(255, 255, 255, 0.5) !important;
+}
+
+[data-theme="light"] .lang-item-card.active {
+  background: rgba(0, 122, 255, 0.1) !important;
+  border-color: var(--accent) !important;
+}
+
+[data-theme="light"] .lang-item-card .native-name {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .lang-item-card .english-name {
+  color: var(--text-secondary) !important;
+}
+
+/* Arama inputları */
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: #0f172a !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02) !important;
+}
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  border-color: #a78bfa !important;
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.15) !important;
+}
+
+/* Doküman tablosu */
+[data-theme="light"] table {
+  color: #0f172a;
+}
+[data-theme="light"] th {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+[data-theme="light"] td {
+  border-bottom: 1px solid #f1f5f9 !important;
+  color: #1e293b !important;
+}
+[data-theme="light"] tr:hover td {
+  background: #f8fafc !important;
+}
+
+/* Dashboard stat kartları */
+[data-theme="light"] .stat-card,
+[data-theme="light"] .dashboard-stat-card {
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(16px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(150%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.03) !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] .stat-card:hover,
+[data-theme="light"] .dashboard-stat-card:hover {
+  background: rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.06) !important;
+  transform: translateY(-2px);
+}
+[data-theme="light"] .stat-card .stat-value,
+[data-theme="light"] .stat-card h2,
+[data-theme="light"] .stat-card h3 {
+  color: #0f172a !important;
+}
+[data-theme="light"] .stat-card .stat-label,
+[data-theme="light"] .stat-card p {
+  color: #64748b !important;
+}
+
+/* Yükleme alanı */
+[data-theme="light"] .upload-zone,
+[data-theme="light"] .dropzone {
+  background: #fafbfc !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+[data-theme="light"] .upload-zone:hover,
+[data-theme="light"] .dropzone:hover {
+  border-color: #a78bfa !important;
+  background: #f5f3ff !important;
+}
+
+/* Butonlar (Genel) */
+[data-theme="light"] .btn-primary,
+[data-theme="light"] button[type="submit"] {
+  background: linear-gradient(135deg, #6d28d9, #4f46e5) !important;
+  color: #fff !important;
+  border: none !important;
+}
+[data-theme="light"] .btn-primary:hover {
+  box-shadow: 0 4px 16px rgba(109, 40, 217, 0.3) !important;
+}
+
+/* Etiketler / Badge'ler */
+[data-theme="light"] .badge,
+[data-theme="light"] .tag {
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+/* Footer */
+[data-theme="light"] .dms-footer p {
+  color: #94a3b8;
+}
+
+/* Scrollbar light */
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Alert paneli */
+[data-theme="light"] .email-collision-alert {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+[data-theme="light"] .alert-text strong {
+  color: #dc2626;
+}
+
+/* Select / Dropdown */
+[data-theme="light"] select option {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Filtreleme & Arama barı */
+[data-theme="light"] .search-container,
+[data-theme="light"] .filter-bar {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+/* Kategori dağılım çubuğu */
+[data-theme="light"] .category-bar,
+[data-theme="light"] .chart-container,
+[data-theme="light"] .category-section {
+  background: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.03) !important;
 }
 </style>

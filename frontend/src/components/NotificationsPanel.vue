@@ -33,7 +33,7 @@
             <span class="type-badge" :class="'type--' + req.type.toLowerCase()">
               {{ getRequestTypeLabel(req.type) }}
             </span>
-            <span v-if="unreadIds.includes(req.id)" class="new-alert-dot" style="background:#10b981; color:#fff; font-size:0.6rem; font-weight:800; padding:0.15rem 0.4rem; border-radius:4px; box-shadow:0 0 8px #10b981; animation: blink 1s infinite; text-transform:uppercase; letter-spacing:0.5px;">YENİ</span>
+            <span v-if="unreadIds.includes(req.id)" class="new-alert-dot" style="background:var(--color-success-bg); color:var(--text-primary); font-size:0.6rem; font-weight:800; padding:0.15rem 0.4rem; border-radius:4px; box-shadow:0 0 8px var(--color-success-bg); animation: blink 1s infinite; text-transform:uppercase; letter-spacing:0.5px;">YENİ</span>
           </div>
           <span class="status-badge" :class="'status--' + req.status">
             {{ getStatusLabel(req.status) }}
@@ -78,7 +78,7 @@
               
               <!-- Arayüz İmzası Eksikse -->
               <div v-if="!(req.approvalsReceived || []).some(s => s.includes('Arayüz'))" style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.02); padding:0.4rem; border-radius:6px;">
-                <span style="font-size:0.72rem; color:#9ca3af;">🖥️ 1. Aşama: Sistem Arayüzü Onayı</span>
+                <span style="font-size:0.72rem; color:var(--text-secondary);">🖥️ 1. Aşama: Sistem Arayüzü Onayı</span>
                 <button 
                   class="btn-action btn-action--approve" 
                   :disabled="isProcessing[req.id]"
@@ -88,15 +88,15 @@
                   Arayüzden Onayla
                 </button>
               </div>
-              <div v-else style="font-size:0.7rem; color:#10b981; display:flex; align-items:center; gap:0.25rem; background:rgba(16,185,129,0.05); padding:0.4rem; border-radius:6px;">
+              <div v-else style="font-size:0.7rem; color:var(--color-success-bg); display:flex; align-items:center; gap:0.25rem; background:rgba(16,185,129,0.05); padding:0.4rem; border-radius:6px;">
                 <span>✅ Arayüz Onayı Tamamlandı</span>
               </div>
 
               <!-- E-posta İmzası Eksikse (OTP Kodu Giriş Alanı) -->
               <div v-if="!(req.approvalsReceived || []).some(s => s.includes('E-posta'))" style="display:flex; flex-direction:column; gap:0.4rem; background:rgba(255,255,255,0.02); padding:0.5rem; border-radius:6px; border:1px solid rgba(139,92,246,0.15);">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span style="font-size:0.72rem; color:#9ca3af;">📧 2. Aşama: E-posta Onay Kodu</span>
-                  <span style="font-size:0.65rem; color:#8b5cf6;">(Kod e-postanıza gönderilmiştir)</span>
+                  <span style="font-size:0.72rem; color:var(--text-secondary);">📧 2. Aşama: E-posta Onay Kodu</span>
+                  <span style="font-size:0.65rem; color:var(--color-accent-bg);">(Kod e-postanıza gönderilmiştir)</span>
                 </div>
                 <div style="display:flex; gap:0.4rem; align-items:center;">
                   <input 
@@ -104,7 +104,7 @@
                     type="text" 
                     placeholder="6 Haneli Güvenlik Kodu"
                     maxlength="6"
-                    style="flex:1; height:32px; font-size:0.75rem; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:#fff; text-align:center; font-weight:700; outline:none;"
+                    style="flex:1; height:32px; font-size:0.75rem; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text-primary); text-align:center; font-weight:700; outline:none;"
                   />
                   <button 
                     class="btn-action btn-action--approve" 
@@ -116,7 +116,7 @@
                   </button>
                 </div>
               </div>
-              <div v-else style="font-size:0.7rem; color:#10b981; display:flex; align-items:center; gap:0.25rem; background:rgba(16,185,129,0.05); padding:0.4rem; border-radius:6px;">
+              <div v-else style="font-size:0.7rem; color:var(--color-success-bg); display:flex; align-items:center; gap:0.25rem; background:rgba(16,185,129,0.05); padding:0.4rem; border-radius:6px;">
                 <span>✅ E-posta Güvenlik Kodu Doğrulandı</span>
               </div>
 
@@ -358,7 +358,7 @@ onMounted(() => {
 .notifications-header h3 {
   font-size: 1.15rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .panel-desc {
@@ -374,7 +374,7 @@ onMounted(() => {
   justify-content: center;
   padding: 3rem 1.5rem;
   text-align: center;
-  background: rgba(30, 41, 59, 0.3);
+  background: var(--bg-card);
   border: 1px dashed var(--border);
   border-radius: var(--radius);
 }
@@ -387,7 +387,7 @@ onMounted(() => {
 .empty-state h5 {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
@@ -403,7 +403,7 @@ onMounted(() => {
 }
 
 .notification-card {
-  background: rgba(30, 41, 59, 0.45);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.15rem;
@@ -424,12 +424,12 @@ onMounted(() => {
 }
 
 .card--approved {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid var(--color-success-bg);
   background: rgba(16, 185, 129, 0.03);
 }
 
 .card--rejected {
-  border-left: 4px solid #ef4444;
+  border-left: 4px solid var(--color-danger-bg);
   background: rgba(239, 68, 68, 0.03);
 }
 
@@ -442,7 +442,7 @@ onMounted(() => {
 .type-badge {
   font-size: 0.7rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   background: rgba(255, 255, 255, 0.06);
   padding: 0.25rem 0.55rem;
   border-radius: 4px;
@@ -452,9 +452,9 @@ onMounted(() => {
 
 .type--standard_user_creation { color: #38bdf8; }
 .type--admin_creation { color: #f472b6; }
-.type--name_change { color: #a78bfa; }
+.type--name_change { color: var(--color-accent-text); }
 .type--username_change { color: #fbbf24; }
-.type--mode_change { color: #34d399; }
+.type--mode_change { color: var(--color-success); }
 
 .status-badge {
   font-size: 0.68rem;
@@ -471,23 +471,23 @@ onMounted(() => {
 
 .status--approved {
   background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
+  color: var(--color-success);
 }
 
 .status--rejected {
   background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 .status--expired {
   background: rgba(156, 163, 175, 0.15);
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 .req-description {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #fff;
+  color: var(--text-primary);
   line-height: 1.45;
 }
 
@@ -531,23 +531,23 @@ onMounted(() => {
 .btn-action--reject {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 .btn-action--reject:hover:not(:disabled) {
-  background: #ef4444;
-  color: #fff;
+  background: var(--color-danger-bg);
+  color: var(--text-primary);
 }
 
 .btn-action--approve {
   background: rgba(16, 185, 129, 0.1);
   border: 1px solid rgba(16, 185, 129, 0.25);
-  color: #34d399;
+  color: var(--color-success);
 }
 
 .btn-action--approve:hover:not(:disabled) {
-  background: #10b981;
-  color: #fff;
+  background: var(--color-success-bg);
+  color: var(--text-primary);
 }
 
 .btn-action:disabled {

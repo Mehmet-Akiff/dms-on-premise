@@ -10,6 +10,9 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
+// Global oda için sabit UUID (DB'de room_id UUID tipinde)
+const GLOBAL_ROOM_ID = '00000000-0000-0000-0000-000000000001';
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = '/app/uploads/chat';
@@ -79,7 +82,7 @@ router.get('/history/:target', async (req, res) => {
     if (target === 'global') {
       messages = await Message.findAll({
         where: {
-          room_id: 'global',
+          room_id: GLOBAL_ROOM_ID,
           ...deliveredCondition
         },
         include: [
@@ -123,25 +126,30 @@ router.get('/history/:target', async (req, res) => {
 });
 
 // ============================================================
-// POST /api/chat/send — Not gönderme (Tek PC modu / asenkron)
+// POST /api/chat/send — Standalone Mod (Tek PC) için Not/Mesaj Gönderimi
 // ============================================================
 router.post('/send', async (req, res) => {
   try {
-    const { receiverId, roomId, content, scheduledAt } = req.body;
+    const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType } = req.body;
     const senderId = req.user.id;
 
-    if (!content || (!receiverId && !roomId)) {
+    if (!content && !mediaUrl && (!receiverId && !roomId)) {
       return res.status(400).json({ error: 'Eksik parametreler.' });
     }
 
     const isScheduled = scheduledAt && new Date(scheduledAt) > new Date();
 
+    // 'global' string'ini gerçek UUID'ye çevir
+    const resolvedRoomId = roomId === 'global' ? GLOBAL_ROOM_ID : (roomId || null);
+
     const newMessage = await Message.create({
       sender_id: senderId,
       receiver_id: receiverId || null,
-      room_id: roomId || null,
-      content: content,
+      room_id: resolvedRoomId,
+      content: content || '',
       type: 'note',
+      media_url: mediaUrl || null,
+      media_type: mediaType || null,
       scheduled_at: isScheduled ? new Date(scheduledAt) : null,
       is_delivered: !isScheduled,
     });
@@ -186,8 +194,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'Dosya yüklenemedi.' });
     }
-    // URL olarak /api/chat/media/... üzerinden erişim sağlayabiliriz veya statik path
-    const mediaUrl = `/uploads/chat/${req.file.filename}`;
+    // URL olarak /api/chat/media/... üzerinden erişim sağlayabiliriz
+    const mediaUrl = `/api/chat/media/${req.file.filename}`;
     
     // MimeType üzerinden 'image', 'audio', 'document' ayrımı
     let mediaType = 'document';

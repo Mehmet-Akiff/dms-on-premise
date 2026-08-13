@@ -1,7 +1,7 @@
 <template>
-  <div class="chat-drawer-wrapper" :class="{ 'drawer-open': isOpen }">
+  <div class="chat-drawer-wrapper" :class="{ 'drawer-open': isOpen }" @click.self="closeDrawer">
     <div class="drawer-overlay" @click="closeDrawer"></div>
-    <div class="chat-drawer">
+    <div class="chat-drawer" :data-theme="chatThemeMode">
       <!-- Header -->
       <div class="drawer-header">
         <div class="header-title">
@@ -9,14 +9,25 @@
           <h3>{{ systemMode === 'standalone' ? 'Not Panosu' : 'Kurum İçi İletişim' }}</h3>
           <span class="mode-badge" :class="systemMode">{{ systemMode === 'standalone' ? 'Tek PC' : 'Ağ' }}</span>
         </div>
-        <button class="btn-close-drawer" @click="closeDrawer">✕</button>
+        <div class="header-right">
+          <span v-if="isConnected" class="connection-badge connected">● Bağlı</span>
+          <span v-else-if="systemMode === 'network'" class="connection-badge disconnected">● Bağlantı yok</span>
+          <!-- Chat Panel Tema Ayarı -->
+          <button class="btn-chat-theme" @click="toggleChatTheme" :title="chatThemeMode === 'dark' ? 'Açık Tema' : 'Koyu Tema'">
+            {{ chatThemeMode === 'dark' ? '☀️' : '🌙' }}
+          </button>
+          <button class="btn-close-drawer" @click="closeDrawer">✕</button>
+        </div>
       </div>
 
       <div class="chat-layout">
         <!-- Sidebar / Kişiler -->
         <div class="chat-sidebar">
           <div class="sidebar-search">
-            <input type="text" placeholder="Kişi ara..." v-model="searchQuery" class="search-input" />
+            <div class="search-wrapper">
+              <span class="search-icon">🔍</span>
+              <input type="text" placeholder="Kişi ara..." v-model="searchQuery" class="search-input" />
+            </div>
           </div>
           <ul class="room-list">
             <li class="room-item" :class="{ active: activeChat === 'global' }" @click="selectChat('global')">
@@ -29,7 +40,7 @@
             <li v-for="user in filteredUsers" :key="user.id" class="room-item" :class="{ active: activeChat === user.id }" @click="selectChat(user.id)">
               <div class="room-avatar">
                 {{ user.fullName ? user.fullName.charAt(0).toUpperCase() : user.username.charAt(0).toUpperCase() }}
-                <span v-if="user.status === 'active'" class="online-dot"></span>
+                <span v-if="systemMode === 'network' && user.status === 'active'" class="online-dot"></span>
               </div>
               <div class="room-info">
                 <span class="room-name">{{ user.fullName || user.username }}</span>
@@ -39,7 +50,7 @@
         </div>
 
         <!-- Main Chat Area -->
-        <div class="chat-main">
+        <div class="chat-main" @click="closeAllPopups">
           <!-- Aktif sohbet başlığı -->
           <div class="chat-top-bar">
             <div class="chat-top-avatar" :class="{'global-avatar': activeChat === 'global'}">
@@ -47,7 +58,7 @@
             </div>
             <div class="chat-top-info">
               <span class="chat-target-name">{{ activeChatLabel }}</span>
-              <span class="chat-status" v-if="activeChat !== 'global'">Çevrimiçi</span>
+              <span class="chat-status" v-if="systemMode === 'network' && activeChat !== 'global'">Çevrimiçi</span>
             </div>
           </div>
 
@@ -64,12 +75,13 @@
           <div class="messages-container" ref="messagesContainer">
             <div v-if="deliveredMessages.length === 0" class="no-messages">
               <div class="empty-state-icon">💬</div>
-              {{ systemMode === 'standalone' ? 'Henüz not yok. İlk notu siz bırakın.' : 'Henüz mesaj yok. İlk mesajı siz gönderin.' }}
+              <p>{{ systemMode === 'standalone' ? 'Henüz not yok. İlk notu siz bırakın.' : 'Henüz mesaj yok. İlk mesajı siz gönderin.' }}</p>
             </div>
             
             <div v-for="(msg, index) in deliveredMessages" :key="msg.id || index" 
                  class="message-wrapper"
-                 :class="{ 'message-self': isMine(msg), 'message-deleted': msg.is_deleted }">
+                 :class="{ 'message-self': isMine(msg), 'message-deleted': msg.is_deleted }"
+                 @contextmenu.prevent="openContextMenu($event, msg)">
               
               <div class="message-bubble">
                 <!-- Silinen mesaj gösterimi -->
@@ -78,25 +90,6 @@
                 </div>
 
                 <template v-else>
-                  <!-- Action Buttons (Hover) -->
-                  <div class="message-actions" v-if="isMine(msg)">
-                    <div class="quick-reactions" v-if="systemMode === 'network'">
-                      <span @click="addReaction(msg.id, '👍')">👍</span>
-                      <span @click="addReaction(msg.id, '❤️')">❤️</span>
-                      <span @click="addReaction(msg.id, '😂')">😂</span>
-                    </div>
-                    <button v-if="canEdit(msg)" class="btn-msg-action edit" @click="startEdit(msg)" title="Düzenle">✏️</button>
-                    <button class="btn-msg-action delete" @click="confirmDeleteMessage(msg)" title="Sil">🗑️</button>
-                  </div>
-                  <!-- Others' reaction trigger -->
-                  <div class="reaction-trigger" v-else-if="systemMode === 'network'">
-                    <div class="quick-reactions">
-                      <span @click="addReaction(msg.id, '👍')">👍</span>
-                      <span @click="addReaction(msg.id, '❤️')">❤️</span>
-                      <span @click="addReaction(msg.id, '😂')">😂</span>
-                    </div>
-                  </div>
-
                   <div class="message-sender" v-if="!isMine(msg) && activeChat === 'global'">
                     {{ msg.sender?.fullName || msg.senderName || msg.sender?.username || 'Bilinmeyen' }}
                   </div>
@@ -112,7 +105,7 @@
 
                   <!-- Inline Edit Mode -->
                   <div v-if="editingMessageId === msg.id" class="inline-edit-box">
-                    <input v-model="editContent" class="edit-input" @keyup.enter="saveEdit(msg.id)" @keyup.escape="cancelEdit" />
+                    <input v-model="editContent" class="edit-input" @keyup.enter="saveEdit(msg.id)" @keyup.escape="cancelEdit" ref="editInputRef" />
                     <div class="edit-actions">
                       <button class="btn-edit-save" @click="saveEdit(msg.id)">✓ Kaydet</button>
                       <button class="btn-edit-cancel" @click="cancelEdit">✕ İptal</button>
@@ -135,7 +128,7 @@
 
                 <!-- Reactions Display -->
                 <div class="reactions-display" v-if="msg.reactions && msg.reactions.length > 0 && !msg.is_deleted">
-                  <span v-for="(count, emoji) in aggregateReactions(msg.reactions)" :key="emoji" class="reaction-badge" @click="addReaction(msg.id, emoji)">
+                  <span v-for="(count, emoji) in aggregateReactions(msg.reactions)" :key="emoji" class="reaction-badge" @click="addReaction(msg.id, emoji)" :title="`${emoji} ile tepki ver/kaldır`">
                     {{ emoji }} {{ count }}
                   </span>
                 </div>
@@ -143,7 +136,42 @@
             </div>
           </div>
 
-          <!-- Emoji Picker Panel -->
+          <!-- Context Menu (Right Click) -->
+          <Teleport to="body">
+            <div v-if="contextMenu.visible" class="context-menu-overlay" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu">
+              <div class="context-menu" :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }" @click.stop>
+                <!-- Quick Reactions Row -->
+                <div class="ctx-reactions-row">
+                  <span v-for="emoji in quickReactionEmojis" :key="emoji" class="ctx-reaction-btn" @click="addReactionFromCtx(emoji)" :title="emoji">
+                    {{ emoji }}
+                  </span>
+                  <span class="ctx-reaction-btn ctx-more-emoji" @click.stop="showReactionPicker = !showReactionPicker" title="Daha fazla emoji">➕</span>
+                </div>
+
+                <!-- Extended Emoji Picker -->
+                <div v-if="showReactionPicker" class="ctx-emoji-picker">
+                  <div class="ctx-emoji-grid">
+                    <span v-for="emoji in allReactionEmojis" :key="emoji" class="ctx-emoji-item" @click="addReactionFromCtx(emoji)">{{ emoji }}</span>
+                  </div>
+                </div>
+
+                <div class="ctx-divider"></div>
+
+                <!-- Action Items -->
+                <button v-if="contextMenu.isMine && contextMenu.canEdit" class="ctx-item" @click="startEditFromCtx">
+                  <span class="ctx-icon">✏️</span> Düzenle
+                </button>
+                <button class="ctx-item" @click="copyMessageContent">
+                  <span class="ctx-icon">📋</span> Kopyala
+                </button>
+                <button v-if="contextMenu.isMine" class="ctx-item ctx-danger" @click="deleteFromCtx">
+                  <span class="ctx-icon">🗑️</span> Sil
+                </button>
+              </div>
+            </div>
+          </Teleport>
+
+          <!-- Emoji Picker Panel (for composing messages) -->
           <div v-if="showEmojiPicker" class="emoji-picker-panel">
             <div class="emoji-grid">
               <span v-for="emoji in emojis" :key="emoji" class="emoji-item" @click="insertEmoji(emoji)">{{ emoji }}</span>
@@ -162,17 +190,17 @@
           <!-- Audio Recording UI -->
           <div v-if="isRecording" class="audio-recording-box">
             <div class="recording-pulse"></div>
-            <span>Ses kaydediliyor... ({{ recordingTime }}s)</span>
+            <span class="recording-text">Ses kaydediliyor... ({{ recordingTime }}s)</span>
             <div class="recording-actions">
-              <button class="btn-stop-record" @click="stopRecording">Durdur & Gönder</button>
-              <button class="btn-cancel-record" @click="cancelRecording">İptal</button>
+              <button class="btn-stop-record" @click="stopRecording">✓ Gönder</button>
+              <button class="btn-cancel-record" @click="cancelRecording">✕ İptal</button>
             </div>
           </div>
 
           <!-- Input Area -->
           <div class="chat-input-area" v-if="!isRecording">
             <form @submit.prevent="handleSend" class="chat-form">
-              <button type="button" class="btn-emoji-toggle" @click="showEmojiPicker = !showEmojiPicker" title="Emoji">😊</button>
+              <button type="button" class="btn-emoji-toggle" @click.stop="showEmojiPicker = !showEmojiPicker" title="Emoji">😊</button>
               
               <input type="file" ref="fileInput" @change="onFileSelected" style="display: none" />
               <button type="button" class="btn-attach" @click="$refs.fileInput.click()" title="Dosya Ekle">📎</button>
@@ -250,6 +278,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { io as socketIoClient } from 'socket.io-client'
+import { getChatTheme, setChatTheme } from '../../utils/ThemeProvider'
 import ConfirmModal from '../ConfirmModal.vue'
 
 const props = defineProps({
@@ -272,6 +301,14 @@ const searchQuery = ref('')
 const activeChat = ref('global')
 const systemMode = ref('standalone')
 
+// Chat Panel Tema
+const chatThemeMode = ref(getChatTheme())
+function toggleChatTheme() {
+  const next = chatThemeMode.value === 'dark' ? 'light' : 'dark'
+  chatThemeMode.value = next
+  setChatTheme(next)
+}
+
 // Emoji & Schedule & Media
 const showEmojiPicker = ref(false)
 const showScheduler = ref(false)
@@ -292,6 +329,27 @@ const audioChunks = ref([])
 const recordingTime = ref(0)
 let recordInterval = null
 
+// Context Menu State
+const contextMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  messageId: null,
+  isMine: false,
+  canEdit: false,
+  content: ''
+})
+const showReactionPicker = ref(false)
+
+const quickReactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+const allReactionEmojis = [
+  '👍','👎','❤️','🔥','😂','😮','😢','😡','🎉','🤔',
+  '👏','🙏','💪','✅','❌','⭐','💯','🚀','👀','💡',
+  '📌','🔒','⚠️','💬','🤝','😎','🥳','😇','🤩','😤',
+  '💀','🫡','🤗','😴','🥲','😈','💜','💙','💚','🧡',
+  '🤷','🫠','😏','🤭','🫣','🤐','😬','🫶'
+]
+
 const emojis = [
   '😊','😂','❤️','👍','🎉','🔥','😎','🤔','👋','✅',
   '⚠️','📌','💡','📎','📁','🔒','🔑','📊','📝','💬',
@@ -308,14 +366,14 @@ const currentMessages = computed(() => {
   return messages.value[activeChat.value] || []
 })
 
-// Sadece iletilmiş mesajlar
+// Sadece iletilmiş mesajlar (is_delivered undefined/null/true hepsi geçer, sadece false filtrelenir)
 const deliveredMessages = computed(() => {
-  return currentMessages.value.filter(m => m.is_delivered)
+  return currentMessages.value.filter(m => m.is_delivered !== false)
 })
 
 // Bekleyen zamanlanmış mesajlar
 const pendingMessages = computed(() => {
-  return currentMessages.value.filter(m => !m.is_delivered && isMine(m))
+  return currentMessages.value.filter(m => m.is_delivered === false && isMine(m))
 })
 
 const activeChatLabel = computed(() => {
@@ -337,7 +395,13 @@ function isMine(msg) {
 function closeDrawer() {
   showEmojiPicker.value = false
   showScheduler.value = false
+  closeContextMenu()
   emit('close')
+}
+
+function closeAllPopups(e) {
+  showEmojiPicker.value = false
+  if (contextMenu.value.visible) closeContextMenu()
 }
 
 function formatTime(timestamp) {
@@ -355,7 +419,10 @@ function formatScheduleDisplay(dtLocal) {
 function scrollToBottom() {
   nextTick(() => {
     if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      messagesContainer.value.scrollTo({
+        top: messagesContainer.value.scrollHeight,
+        behavior: 'smooth'
+      })
     }
   })
 }
@@ -383,7 +450,70 @@ function clearMedia() {
   if (fileInput.value) fileInput.value.value = ''
 }
 
+// ============================================================
+// Context Menu
+// ============================================================
+function openContextMenu(event, msg) {
+  if (msg.is_deleted) return
+  
+  const mine = isMine(msg)
+  const canEditMsg = mine && canEdit(msg)
+
+  // Position the menu, clamping to viewport
+  let x = event.clientX
+  let y = event.clientY
+  const menuWidth = 220
+  const menuHeight = 280
+  if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 8
+  if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 8
+  
+  contextMenu.value = {
+    visible: true,
+    x,
+    y,
+    messageId: msg.id,
+    isMine: mine,
+    canEdit: canEditMsg,
+    content: msg.content || ''
+  }
+  showReactionPicker.value = false
+}
+
+function closeContextMenu() {
+  contextMenu.value.visible = false
+  showReactionPicker.value = false
+}
+
+function addReactionFromCtx(emoji) {
+  addReaction(contextMenu.value.messageId, emoji)
+  closeContextMenu()
+}
+
+function startEditFromCtx() {
+  const msgId = contextMenu.value.messageId
+  const chatId = activeChat.value
+  const msg = (messages.value[chatId] || []).find(m => m.id === msgId)
+  if (msg) startEdit(msg)
+  closeContextMenu()
+}
+
+function copyMessageContent() {
+  if (contextMenu.value.content) {
+    navigator.clipboard.writeText(contextMenu.value.content).catch(() => {})
+  }
+  closeContextMenu()
+}
+
+function deleteFromCtx() {
+  const msgId = contextMenu.value.messageId
+  closeContextMenu()
+  deleteTargetId.value = msgId
+  showDeleteConfirm.value = true
+}
+
+// ============================================================
 // Audio Recording
+// ============================================================
 async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -395,10 +525,13 @@ async function startRecording() {
     }
     
     mediaRecorder.value.onstop = async () => {
-      const audioBlob = new Blob(audioChunks.value, { type: 'audio/webm' })
       stream.getTracks().forEach(track => track.stop())
       isRecording.value = false
       clearInterval(recordInterval)
+      // İptal edildiyse gönderme (audioChunks boşaltılır)
+      if (audioChunks.value.length === 0) return
+      const audioBlob = new Blob(audioChunks.value, { type: 'audio/webm' })
+      if (audioBlob.size < 100) return // Çok kısa/boş kayıt
       await uploadAndSendMedia(audioBlob, 'ses_kaydi.webm')
     }
     
@@ -418,9 +551,9 @@ function stopRecording() {
 }
 
 function cancelRecording() {
+  audioChunks.value = [] // Önce boşalt, sonra durdur → onstop göndermeyi atlayacak
   if (mediaRecorder.value && isRecording.value) {
     mediaRecorder.value.stop()
-    audioChunks.value = [] // clear so onstop doesn't send
   }
   isRecording.value = false
   clearInterval(recordInterval)
@@ -430,6 +563,7 @@ function selectChat(id) {
   activeChat.value = id
   showEmojiPicker.value = false
   showScheduler.value = false
+  closeContextMenu()
   if (!messages.value[id] || messages.value[id].length === 0) {
     fetchMessageHistory(id)
   }
@@ -468,7 +602,7 @@ async function fetchMessageHistory(targetId) {
       }
     }
   } catch (error) {
-    // Sessiz hata yakalama — ağ kesintilerinde kullanıcıyı rahatsız etme
+    // Sessiz hata yakalama
   }
 }
 
@@ -499,7 +633,7 @@ function parseToken() {
     currentUserId.value = payload.id || ''
     currentUserFullName.value = payload.fullName || payload.username || ''
   } catch (e) {
-    // Token parse hatası — oturum geçersiz olabilir
+    // Token parse hatası
   }
 }
 
@@ -524,20 +658,23 @@ function initSocket() {
     isConnected.value = false
   })
 
+  // Global oda UUID'si — backend UUID gönderir, frontend 'global' key'i kullanır
+  const GLOBAL_ROOM_ID = '00000000-0000-0000-0000-000000000001'
+
   socket.value.on('receive_message', (data) => {
     let chatId = 'global'
-    if (data.receiver_id) {
+    if (data.room_id) {
+      // Global oda UUID'sini 'global' key'ine çevir
+      chatId = data.room_id === GLOBAL_ROOM_ID ? 'global' : data.room_id
+    } else if (data.receiver_id) {
       chatId = data.sender_id === currentUserId.value ? data.receiver_id : data.sender_id
-    } else if (data.room_id) {
-      chatId = data.room_id
     }
     
     if (!messages.value[chatId]) messages.value[chatId] = []
     
-    // Duplikasyon kontrolü: aynı ID zaten varsa güncelle (zamanlanmış mesaj teslimi)
+    // Duplikasyon kontrolü: aynı ID zaten varsa güncelle
     const existingIdx = messages.value[chatId].findIndex(m => m.id === data.id)
     if (existingIdx !== -1) {
-      // Vue reaktivitesi için splice kullan (index ataması reaktif değil)
       messages.value[chatId].splice(existingIdx, 1, data)
     } else {
       messages.value[chatId].push(data)
@@ -572,8 +709,9 @@ function initSocket() {
 
 // Reactions
 function addReaction(messageId, emoji) {
-  if (systemMode.value !== 'network' || !socket.value) return
-  socket.value.emit('add_reaction', { messageId, emoji })
+  if (systemMode.value === 'network' && socket.value) {
+    socket.value.emit('add_reaction', { messageId, emoji })
+  }
 }
 
 function aggregateReactions(reactionsArr) {
@@ -713,6 +851,7 @@ async function uploadAndSendMedia(fileObj, filenameOverride = null) {
       const data = await res.json()
       if (data.success) {
         await executeSend(newMessage.value.trim(), data.url, data.type)
+        newMessage.value = ''
       }
     }
   } catch (err) {
@@ -772,7 +911,6 @@ async function executeSend(content, mediaUrl = null, mediaType = null) {
     socket.value.emit('send_message', msgData, (response) => {
       if (response && response.success && response.data) {
         // Gönderenin kendi mesajını callback'ten lokale ekle
-        // (backend artık broadcast.to kullanıyor, gönderen broadcast almaz)
         const chatId = msgData.receiverId || msgData.roomId || 'global'
         if (!messages.value[chatId]) messages.value[chatId] = []
         const exists = messages.value[chatId].some(m => m.id === response.data.id)
@@ -854,7 +992,7 @@ onUnmounted(() => {
 
 <style scoped>
 /* ============================================================
-   DMS KURUMSAL CHAT TEMASI — CSS Değişkenleri ile Tema Uyumlu
+   DMS KURUMSAL CHAT TEMASI — Modern Glassmorphism UX
    ============================================================ */
 
 /* BASE DRAWER */
@@ -865,250 +1003,495 @@ onUnmounted(() => {
   transition: visibility 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .chat-drawer-wrapper.drawer-open { pointer-events: auto; visibility: visible; }
-.drawer-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s ease; }
+.drawer-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+  opacity: 0; transition: opacity 0.3s ease;
+}
 .chat-drawer-wrapper.drawer-open .drawer-overlay { opacity: 1; }
 .chat-drawer {
-  position: relative; width: 100%; max-width: 900px; height: 100%;
-  background: var(--bg-primary); box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+  position: relative; width: 100%; max-width: 920px; height: 100%;
+  background: var(--bg-primary); box-shadow: -10px 0 40px rgba(0,0,0,0.5);
   transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex; flex-direction: column;
 }
 .chat-drawer-wrapper.drawer-open .chat-drawer { transform: translateX(0); }
 
-/* HEADER — Kurumsal gradient */
+/* HEADER */
 .drawer-header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 0.8rem 1.5rem;
+  padding: 0.75rem 1.25rem;
   background: linear-gradient(135deg, var(--accent-primary, #8b5cf6), var(--accent-secondary, #3b82f6));
-  color: white; border-bottom: 1px solid rgba(255,255,255,0.1);
+  color: white; border-bottom: none;
 }
-.header-title { display: flex; align-items: center; gap: 0.75rem; }
-.header-title h3 { margin: 0; font-size: 1.1rem; font-weight: 600; color: white; }
-.mode-badge { font-size: 0.65rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 99px; text-transform: uppercase; background: rgba(255,255,255,0.2); }
-.btn-close-drawer { background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; transition: transform 0.2s; }
-.btn-close-drawer:hover { transform: rotate(90deg); }
+.header-title { display: flex; align-items: center; gap: 0.6rem; }
+.header-title h3 { margin: 0; font-size: 1.05rem; font-weight: 700; color: white; letter-spacing: -0.01em; }
+.mode-badge {
+  font-size: 0.6rem; font-weight: 800; padding: 0.15rem 0.5rem; border-radius: 99px;
+  text-transform: uppercase; background: rgba(255,255,255,0.2); letter-spacing: 0.5px;
+}
+.header-right { display: flex; align-items: center; gap: 0.75rem; }
+.connection-badge {
+  font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 99px;
+}
+.connection-badge.connected { background: rgba(34, 197, 94, 0.2); color: #bbf7d0; }
+.connection-badge.disconnected { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+.btn-chat-theme {
+  background: rgba(255,255,255,0.15); border: none; color: white;
+  font-size: 1rem; cursor: pointer; transition: all 0.2s;
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-chat-theme:hover { background: rgba(255,255,255,0.3); }
+.btn-close-drawer {
+  background: rgba(255,255,255,0.15); border: none; color: white;
+  font-size: 1rem; cursor: pointer; transition: all 0.2s;
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-close-drawer:hover { background: rgba(255,255,255,0.3); transform: rotate(90deg); }
 
 /* LAYOUT & SIDEBAR */
 .chat-layout { display: flex; flex: 1; overflow: hidden; background: var(--bg-primary); }
 .chat-sidebar {
-  width: 300px; background: var(--bg-secondary); border-right: 1px solid var(--border);
+  width: 280px; background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
 }
-.sidebar-search { padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); }
-.search-input { width: 100%; padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card, var(--bg-primary)); outline: none; font-size: 0.9rem; color: var(--text-primary); }
+.sidebar-search { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+.search-wrapper { position: relative; }
+.search-icon {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  font-size: 0.85rem; opacity: 0.5; pointer-events: none;
+}
+.search-input {
+  width: 100%; padding: 0.5rem 0.75rem 0.5rem 2rem; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--bg-primary);
+  outline: none; font-size: 0.85rem; color: var(--text-primary);
+  transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--accent-primary, #8b5cf6); }
 .room-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
 .room-item {
-  display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1rem;
-  border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s;
+  display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer;
+  transition: all 0.15s ease;
 }
-.room-item:hover, .room-item.active { background: var(--accent-glow); }
+.room-item:hover { background: var(--accent-glow); }
+.room-item.active {
+  background: var(--accent-glow);
+  border-left: 3px solid var(--accent-primary, #8b5cf6);
+}
 .room-avatar {
-  width: 48px; height: 48px; border-radius: 50%; background: var(--bg-card, #1e293b);
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--bg-card, #1e293b);
   display: flex; justify-content: center; align-items: center;
-  font-size: 1.2rem; font-weight: bold; color: var(--text-secondary); position: relative; flex-shrink:0;
+  font-size: 1.1rem; font-weight: bold; color: var(--text-secondary);
+  position: relative; flex-shrink: 0;
 }
-.global-avatar { background: var(--accent-primary, #8b5cf6); color: white; }
-.online-dot { position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px; background: var(--success, #22c55e); border-radius: 50%; border: 2px solid var(--bg-secondary); }
+.global-avatar {
+  background: linear-gradient(135deg, var(--accent-primary, #8b5cf6), var(--accent-secondary, #3b82f6));
+  color: white;
+}
+.online-dot {
+  position: absolute; bottom: 1px; right: 1px;
+  width: 11px; height: 11px; background: var(--success, #22c55e);
+  border-radius: 50%; border: 2px solid var(--bg-secondary);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+}
 .room-info { display: flex; flex-direction: column; overflow: hidden; }
-.room-name { font-weight: 500; color: var(--text-primary); font-size: 1rem; }
-.room-preview { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-name { font-weight: 600; color: var(--text-primary); font-size: 0.92rem; }
+.room-preview {
+  font-size: 0.75rem; color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* MAIN CHAT AREA */
-.chat-main { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); position: relative; }
+.chat-main {
+  flex: 1; display: flex; flex-direction: column;
+  background: var(--chat-bg); position: relative;
+}
 .chat-main::before {
-  content: ""; position: absolute; top:0; left:0; width:100%; height:100%;
-  opacity: 0.03; pointer-events: none;
-  background-image: repeating-linear-gradient(45deg, var(--border) 0, var(--border) 1px, transparent 0, transparent 50%);
-  background-size: 16px 16px;
+  content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  opacity: 0.02; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23999' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 
 .chat-top-bar {
-  padding: 0.6rem 1rem; background: var(--bg-secondary); border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 1rem; z-index: 2;
+  padding: 0.55rem 1rem; background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 0.75rem; z-index: 2;
 }
 .chat-top-avatar {
-  width: 40px; height: 40px; border-radius: 50%; background: var(--bg-card); color: var(--text-secondary);
-  display: flex; justify-content: center; align-items: center; font-weight: bold;
+  width: 38px; height: 38px; border-radius: 50%; background: var(--bg-card);
+  color: var(--text-secondary);
+  display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 1rem;
 }
 .chat-top-info { display: flex; flex-direction: column; }
-.chat-target-name { font-size: 1rem; font-weight: 500; color: var(--text-primary); }
-.chat-status { font-size: 0.8rem; color: var(--success, #22c55e); }
+.chat-target-name { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); }
+.chat-status { font-size: 0.75rem; color: var(--success, #22c55e); }
 
 /* STICKY BANNER */
 .scheduled-sticky-banner {
-  position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 10;
-  background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); color: var(--text-primary);
-  padding: 0.5rem 1rem; border-radius: 8px; box-shadow: var(--shadow);
-  display: flex; align-items: center; gap: 1rem; font-size: 0.85rem;
+  position: absolute; top: 55px; left: 50%; transform: translateX(-50%); z-index: 10;
+  background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25);
+  color: var(--text-primary); backdrop-filter: blur(8px);
+  padding: 0.4rem 0.8rem; border-radius: 10px; box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 0.75rem; font-size: 0.82rem;
 }
 .btn-view-scheduled {
-  background: var(--accent-primary, #8b5cf6); border: none; color: white; padding: 0.3rem 0.6rem;
-  border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.8rem;
+  background: var(--accent-primary, #8b5cf6); border: none; color: white;
+  padding: 0.25rem 0.6rem; border-radius: 6px; font-weight: bold;
+  cursor: pointer; font-size: 0.75rem; transition: transform 0.15s;
 }
+.btn-view-scheduled:hover { transform: scale(1.05); }
 
 /* MESSAGES */
-.messages-container { flex: 1; overflow-y: auto; padding: 2rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 2; }
-.no-messages { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: var(--text-secondary); font-size: 0.95rem; }
-.empty-state-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
+.messages-container {
+  flex: 1; overflow-y: auto; padding: 1.5rem 1.5rem 1.5rem 1.5rem;
+  display: flex; flex-direction: column; gap: 0.35rem; z-index: 2;
+  scroll-behavior: smooth;
+}
+.no-messages {
+  flex: 1; display: flex; flex-direction: column; justify-content: center;
+  align-items: center; color: var(--text-secondary); font-size: 0.9rem; gap: 0.5rem;
+}
+.empty-state-icon { font-size: 3rem; opacity: 0.2; }
 
-.message-wrapper { display: flex; flex-direction: column; align-items: flex-start; max-width: 65%; position: relative; }
+.message-wrapper {
+  display: flex; flex-direction: column; align-items: flex-start;
+  max-width: 70%; position: relative;
+  animation: msgSlideIn 0.25s ease-out;
+}
+@keyframes msgSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .message-self { align-self: flex-end; align-items: flex-end; }
-.message-deleted .message-bubble { opacity: 0.6; }
+.message-deleted .message-bubble { opacity: 0.5; }
 .message-bubble {
-  background: var(--bubble-in); padding: 0.4rem 0.6rem 0.5rem 0.6rem;
-  border-radius: 7.5px; box-shadow: 0 1px 0.5px rgba(11,20,26,.13);
+  background: var(--bubble-in); padding: 0.45rem 0.65rem 0.35rem;
+  border-radius: 12px 12px 12px 4px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
   position: relative; display: flex; flex-direction: column;
-  min-width: 100px; color: var(--text-primary);
+  min-width: 80px; color: var(--text-primary);
+  transition: box-shadow 0.15s;
 }
-.message-self .message-bubble { background: var(--bubble-out); }
+.message-self .message-bubble {
+  background: var(--bubble-out);
+  border-radius: 12px 12px 4px 12px;
+}
+.message-bubble:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 
-/* Message Actions (Edit/Delete on hover) */
-.message-actions {
-  position: absolute; top: -15px; right: -50px;
-  background: var(--bg-secondary); border: 1px solid var(--border);
-  border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  display: none; align-items: center; padding: 0.15rem 0.25rem; z-index: 10; gap: 0.1rem;
+.message-sender {
+  font-size: 0.72rem; color: var(--accent-primary, #8b5cf6);
+  font-weight: 700; margin-bottom: 0.15rem;
 }
-.message-self .message-actions { right: auto; left: -50px; }
-.message-wrapper:hover .message-actions { display: flex; }
-.btn-msg-action {
-  background: none; border: none; cursor: pointer; padding: 0.15rem 0.25rem;
-  font-size: 0.85rem; border-radius: 4px; transition: background 0.15s;
-}
-.btn-msg-action:hover { background: var(--accent-glow); }
-
-/* Reactions Trigger */
-.reaction-trigger {
-  position: absolute; top: -15px; right: -40px; background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  display: none; align-items: center; padding: 0.2rem; z-index: 10;
-}
-.message-self .reaction-trigger { right: auto; left: -40px; }
-.message-wrapper:hover .reaction-trigger { display: flex; }
-.quick-reactions span { cursor: pointer; padding: 0.2rem; transition: transform 0.2s; display: inline-block; }
-.quick-reactions span:hover { transform: scale(1.3); }
-
-.message-sender { font-size: 0.75rem; color: var(--accent, #38bdf8); font-weight: 500; margin-bottom: 0.2rem; }
-.message-content { font-size: 0.95rem; line-height: 1.3; word-break: break-word; }
+.message-content { font-size: 0.92rem; line-height: 1.35; word-break: break-word; }
 
 /* Deleted message */
 .deleted-message-content {
-  font-size: 0.88rem; color: var(--text-secondary); font-style: italic;
-  display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0;
+  font-size: 0.85rem; color: var(--text-secondary); font-style: italic;
+  display: flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0;
 }
-.deleted-icon { font-size: 0.85rem; }
 
 /* Edited tag */
-.edited-tag { font-size: 0.6rem; color: var(--text-secondary); font-style: italic; margin-left: 0.25rem; }
+.edited-tag { font-size: 0.58rem; color: var(--text-secondary); font-style: italic; margin-left: 0.2rem; }
 
 /* Inline Edit */
 .inline-edit-box { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.2rem 0; }
 .edit-input {
-  width: 100%; padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.9rem;
-  border: 1px solid var(--accent-primary, #8b5cf6); outline: none;
+  width: 100%; padding: 0.4rem 0.6rem; border-radius: 8px; font-size: 0.88rem;
+  border: 1.5px solid var(--accent-primary, #8b5cf6); outline: none;
   background: var(--bg-primary); color: var(--text-primary);
 }
 .edit-actions { display: flex; gap: 0.3rem; justify-content: flex-end; }
 .btn-edit-save {
   background: var(--accent-primary, #8b5cf6); color: white; border: none;
-  padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+  padding: 0.25rem 0.55rem; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+  transition: transform 0.1s;
 }
+.btn-edit-save:hover { transform: scale(1.05); }
 .btn-edit-cancel {
   background: transparent; color: var(--danger, #ef4444); border: 1px solid var(--danger, #ef4444);
-  padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+  padding: 0.25rem 0.55rem; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
 }
 
 /* MEDIA */
 .message-media { margin-bottom: 0.3rem; max-width: 100%; }
-.media-image { max-width: 100%; border-radius: 6px; cursor: pointer; object-fit: cover; max-height: 250px; }
-.media-audio { height: 40px; outline: none; width: 250px; }
-.media-document {
-  display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.05);
-  padding: 0.7rem; border-radius: 6px; text-decoration: none; color: var(--text-primary); font-weight: 500; font-size: 0.9rem;
+.media-image {
+  max-width: 100%; border-radius: 8px; cursor: pointer;
+  object-fit: cover; max-height: 250px; transition: transform 0.2s;
 }
+.media-image:hover { transform: scale(1.02); }
+.media-audio { height: 36px; outline: none; width: 240px; border-radius: 20px; }
+.media-document {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: rgba(0,0,0,0.05); padding: 0.6rem; border-radius: 8px;
+  text-decoration: none; color: var(--text-primary); font-weight: 500; font-size: 0.88rem;
+  transition: background 0.15s;
+}
+.media-document:hover { background: rgba(0,0,0,0.1); }
 
-.message-meta { display: flex; align-items: center; justify-content: flex-end; gap: 0.25rem; margin-top: 0.2rem; margin-bottom: -0.2rem; float: right; margin-left: 1rem;}
-.message-time { font-size: 0.65rem; color: var(--text-secondary); }
+.message-meta {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 0.2rem; margin-top: 0.15rem; float: right; margin-left: 0.8rem;
+}
+.message-time { font-size: 0.62rem; color: var(--text-secondary); }
 .read-receipt { color: var(--text-secondary); display: flex; align-items: center; }
 .read-receipt.read { color: var(--accent, #38bdf8); }
 
 .reactions-display {
-  display: flex; flex-wrap: wrap; gap: 0.2rem; position: absolute; bottom: -12px; left: 10px;
-  background: var(--bg-secondary); padding: 2px 6px; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.15); border: 1px solid var(--border);
+  display: flex; flex-wrap: wrap; gap: 0.15rem; position: absolute; bottom: -14px; left: 8px;
+  background: var(--bg-secondary); padding: 2px 5px; border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15); border: 1px solid var(--border);
 }
-.message-self .reactions-display { left: auto; right: 10px; }
-.reaction-badge { font-size: 0.75rem; cursor: pointer; user-select: none; }
+.message-self .reactions-display { left: auto; right: 8px; }
+.reaction-badge {
+  font-size: 0.72rem; cursor: pointer; user-select: none;
+  padding: 0 2px; transition: transform 0.15s;
+}
+.reaction-badge:hover { transform: scale(1.2); }
+
+/* ============================================================
+   CONTEXT MENU (Right Click)
+   ============================================================ */
+.context-menu-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 100000; background: transparent;
+}
+.context-menu {
+  position: fixed; z-index: 100001;
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 14px; padding: 0.35rem;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+  min-width: 200px;
+  backdrop-filter: blur(12px);
+  animation: ctxOpen 0.15s ease-out;
+}
+@keyframes ctxOpen {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.ctx-reactions-row {
+  display: flex; gap: 0.15rem; padding: 0.35rem 0.25rem;
+  justify-content: center;
+}
+.ctx-reaction-btn {
+  font-size: 1.3rem; cursor: pointer; padding: 0.2rem 0.3rem;
+  border-radius: 8px; transition: all 0.15s; display: inline-block;
+}
+.ctx-reaction-btn:hover { background: var(--accent-glow); transform: scale(1.25); }
+.ctx-more-emoji { font-size: 1rem; opacity: 0.6; }
+
+.ctx-emoji-picker {
+  padding: 0.35rem; max-height: 180px; overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+.ctx-emoji-grid { display: flex; flex-wrap: wrap; gap: 0.15rem; }
+.ctx-emoji-item {
+  font-size: 1.2rem; cursor: pointer; padding: 0.2rem 0.25rem;
+  border-radius: 6px; transition: all 0.1s;
+}
+.ctx-emoji-item:hover { background: var(--accent-glow); transform: scale(1.15); }
+
+.ctx-divider { height: 1px; background: var(--border); margin: 0.25rem 0.35rem; }
+
+.ctx-item {
+  display: flex; align-items: center; gap: 0.6rem; width: 100%;
+  padding: 0.55rem 0.75rem; border: none; background: transparent;
+  color: var(--text-primary); font-size: 0.85rem; font-weight: 500;
+  cursor: pointer; border-radius: 8px; transition: background 0.12s;
+  text-align: left;
+}
+.ctx-item:hover { background: var(--accent-glow); }
+.ctx-item.ctx-danger { color: var(--danger, #ef4444); }
+.ctx-item.ctx-danger:hover { background: rgba(239, 68, 68, 0.1); }
+.ctx-icon { font-size: 1rem; width: 22px; text-align: center; }
 
 /* BOTTOM INPUT AREA */
-.chat-input-area { background: var(--bg-secondary); padding: 0.6rem 1rem; z-index: 2; display: flex; flex-direction: column; border-top: 1px solid var(--border);}
-.chat-form { display: flex; align-items: center; gap: 0.6rem; }
+.chat-input-area {
+  background: var(--bg-secondary); padding: 0.5rem 0.8rem;
+  z-index: 2; display: flex; flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+.chat-form { display: flex; align-items: center; gap: 0.5rem; }
 .btn-emoji-toggle, .btn-attach, .btn-schedule-toggle {
-  background: none; border: none; font-size: 1.4rem; color: var(--text-secondary); cursor: pointer; padding: 0.3rem; transition: color 0.2s;
+  background: none; border: none; font-size: 1.3rem;
+  color: var(--text-secondary); cursor: pointer; padding: 0.3rem;
+  transition: all 0.2s; border-radius: 8px;
+}
+.btn-emoji-toggle:hover, .btn-attach:hover, .btn-schedule-toggle:hover {
+  color: var(--accent-primary, #8b5cf6); background: var(--accent-glow);
 }
 .btn-schedule-toggle.active { color: var(--accent-primary, #8b5cf6); }
 .chat-input {
-  flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1rem; font-size: 0.95rem;
+  flex: 1; border: 1px solid var(--border); border-radius: 12px;
+  padding: 0.6rem 1rem; font-size: 0.92rem;
   background: var(--bg-primary); outline: none; color: var(--text-primary);
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.chat-input:focus { border-color: var(--accent-primary, #8b5cf6); }
+.chat-input:focus {
+  border-color: var(--accent-primary, #8b5cf6);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
 .btn-send, .btn-mic {
-  background: var(--accent-primary, #8b5cf6); border: none; border-radius: 50%; width: 44px; height: 44px;
-  display: flex; justify-content: center; align-items: center; color: white; cursor: pointer; transition: transform 0.2s;
+  background: var(--accent-primary, #8b5cf6); border: none; border-radius: 50%;
+  width: 42px; height: 42px;
+  display: flex; justify-content: center; align-items: center;
+  color: white; cursor: pointer; transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
 }
-.btn-send:hover, .btn-mic:hover { transform: scale(1.05); }
+.btn-send:hover, .btn-mic:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4); }
 
 /* MEDIA PREVIEW & AUDIO RECORDING UI */
 .media-preview-box, .audio-recording-box {
-  background: var(--bg-secondary); padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 0.5rem;
-  display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  background: var(--bg-secondary); padding: 0.65rem 0.8rem; border-radius: 10px;
+  margin-bottom: 0.4rem;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   border: 1px solid var(--border);
 }
-.preview-content { display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary); font-weight: 500;}
-.btn-clear-media { background: var(--bg-card); border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; color: var(--text-secondary);}
+.preview-content { display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary); font-weight: 500; font-size: 0.88rem; }
+.btn-clear-media {
+  background: var(--bg-card); border: none; border-radius: 50%;
+  width: 26px; height: 26px; cursor: pointer; color: var(--text-secondary);
+  transition: background 0.15s;
+}
+.btn-clear-media:hover { background: rgba(239,68,68,0.15); color: var(--danger); }
 
-.recording-pulse { width: 12px; height: 12px; background: #ef4444; border-radius: 50%; animation: pulse 1s infinite; margin-right: 1rem;}
-@keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
-.recording-actions { display: flex; gap: 0.5rem; }
-.btn-stop-record { background: var(--accent-primary); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-weight: bold;}
-.btn-cancel-record { background: transparent; color: #ef4444; border: none; padding: 0.4rem; cursor: pointer;}
+.recording-pulse {
+  width: 12px; height: 12px; background: #ef4444; border-radius: 50%;
+  animation: pulse 1s infinite; margin-right: 0.75rem;
+}
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+.recording-text { font-size: 0.88rem; color: var(--text-primary); font-weight: 500; }
+.recording-actions { display: flex; gap: 0.4rem; }
+.btn-stop-record {
+  background: var(--success, #22c55e); color: white; border: none;
+  padding: 0.35rem 0.7rem; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.8rem;
+  transition: transform 0.1s;
+}
+.btn-stop-record:hover { transform: scale(1.05); }
+.btn-cancel-record {
+  background: transparent; color: #ef4444; border: 1px solid rgba(239,68,68,0.3);
+  padding: 0.35rem 0.6rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.8rem;
+}
 
 /* SCHEDULER & EMOJI DRAWER */
-.scheduler-drawer { background: var(--bg-secondary); margin-top: 0.5rem; border-radius: 8px; padding: 0.5rem; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border);}
-.schedule-input { border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; outline: none; background: var(--bg-primary); color: var(--text-primary); }
-.btn-schedule-confirm { background: var(--accent-primary); color: white; border: none; padding: 0.35rem 0.7rem; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem; }
-.emoji-picker-panel { background: var(--bg-secondary); padding: 0.5rem; border-top: 1px solid var(--border); z-index: 2;}
-.emoji-grid { display: flex; flex-wrap: wrap; gap: 0.2rem; }
-.emoji-item { font-size: 1.5rem; cursor: pointer; padding: 0.2rem; border-radius: 4px; }
-.emoji-item:hover { background: var(--accent-glow); }
-.schedule-indicator { font-size: 0.82rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;}
-.btn-clear-schedule { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.8rem; font-weight: 600;}
+.scheduler-drawer {
+  background: var(--bg-primary); margin-top: 0.4rem; border-radius: 10px;
+  padding: 0.4rem 0.6rem; display: flex; justify-content: space-between;
+  align-items: center; border: 1px solid var(--border);
+}
+.schedule-input {
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.35rem 0.5rem;
+  outline: none; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.85rem;
+}
+.btn-schedule-confirm {
+  background: var(--accent-primary); color: white; border: none;
+  padding: 0.3rem 0.6rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.78rem;
+}
+.emoji-picker-panel {
+  background: var(--bg-secondary); padding: 0.5rem;
+  border-top: 1px solid var(--border); z-index: 2;
+}
+.emoji-grid { display: flex; flex-wrap: wrap; gap: 0.15rem; }
+.emoji-item {
+  font-size: 1.4rem; cursor: pointer; padding: 0.2rem;
+  border-radius: 6px; transition: all 0.1s;
+}
+.emoji-item:hover { background: var(--accent-glow); transform: scale(1.15); }
+.schedule-indicator {
+  font-size: 0.8rem; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.btn-clear-schedule {
+  background: none; border: none; color: var(--danger);
+  cursor: pointer; font-size: 0.78rem; font-weight: 700;
+}
 
 /* SCHEDULED MODAL */
 .scheduled-modal-overlay {
-  position: absolute; top:0; left:0; width:100%; height:100%;
-  background: rgba(0,0,0,0.6); z-index: 100; display: flex; justify-content: center; align-items: center;
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); z-index: 100;
+  display: flex; justify-content: center; align-items: center;
+  backdrop-filter: blur(4px);
 }
 .scheduled-modal {
-  background: var(--bg-secondary); width: 400px; border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.3); overflow: hidden; display: flex; flex-direction: column;
-  border: 1px solid var(--border);
+  background: var(--bg-secondary); width: 400px; border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35); overflow: hidden;
+  display: flex; flex-direction: column; border: 1px solid var(--border);
 }
 .modal-header {
   background: linear-gradient(135deg, var(--accent-primary, #8b5cf6), var(--accent-secondary, #3b82f6));
-  color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; font-weight: bold;
+  color: white; padding: 0.8rem 1rem;
+  display: flex; justify-content: space-between; align-items: center; font-weight: bold;
 }
-.modal-header button { background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;}
-.modal-body { padding: 1rem; max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;}
-.pending-item { background: var(--bg-card, var(--bg-primary)); padding: 0.8rem; border-radius: 8px; border-left: 4px solid #fb923c;}
-.pending-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; }
-.pending-time { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;}
-.pending-content { font-size: 0.9rem; color: var(--text-primary);}
+.modal-header h3 { font-size: 0.95rem; margin: 0; }
+.modal-header button {
+  background: rgba(255,255,255,0.15); border: none; color: white;
+  cursor: pointer; font-size: 1rem; width: 28px; height: 28px;
+  border-radius: 6px; display: flex; align-items: center; justify-content: center;
+}
+.modal-body {
+  padding: 0.8rem; max-height: 400px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 0.4rem;
+}
+.pending-item {
+  background: var(--bg-card, var(--bg-primary)); padding: 0.7rem;
+  border-radius: 10px; border-left: 4px solid #fb923c;
+}
+.pending-item-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;
+}
+.pending-time { font-size: 0.72rem; color: var(--text-secondary); font-weight: 700; }
+.pending-content { font-size: 0.88rem; color: var(--text-primary); }
 .btn-delete-scheduled {
-  background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #ef4444; font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.5rem;
+  background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444; font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.45rem;
   border-radius: 6px; cursor: pointer; transition: all 0.2s;
 }
 .btn-delete-scheduled:hover { background: rgba(239, 68, 68, 0.2); }
-.no-pending { text-align: center; color: var(--text-secondary); padding: 2rem 0; font-style: italic;}
+.no-pending {
+  text-align: center; color: var(--text-secondary); padding: 1.5rem 0; font-style: italic;
+}
+
+/* Chat-specific Independent Themes */
+.chat-drawer[data-theme="light"] {
+  --bg-primary: #f5f5f7;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --text-primary: #1d1d1f;
+  --text-secondary: #86868b;
+  --accent: #6366f1;
+  --accent-glow: rgba(99, 102, 241, 0.15);
+  --border: #d2d2d7;
+  --chat-bg: #f5f5f7;
+  --bubble-in: #ffffff;
+  --bubble-out: #e0e7ff;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px) saturate(180%);
+}
+
+.chat-drawer[data-theme="dark"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --accent: #8b5cf6;
+  --accent-glow: rgba(139, 92, 246, 0.15);
+  --border: #334155;
+  --chat-bg: #0f172a;
+  --bubble-in: #1e293b;
+  --bubble-out: #1e3a5f;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(24px) saturate(180%);
+}
 </style>

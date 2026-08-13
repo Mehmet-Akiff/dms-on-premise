@@ -102,7 +102,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 .confirm-message {
   font-size: 0.85rem;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary, var(--text-secondary));
   line-height: 1.5;
   margin: 0 0 1.5rem 0;
 }
@@ -116,7 +116,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .btn-cancel {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
   padding: 0.55rem 1.25rem;
   font-size: 0.82rem;
   font-weight: 600;
@@ -140,7 +140,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   color: white;
 }
 .btn-confirm.danger {
-  background: #ef4444;
+  background: var(--color-danger-bg);
 }
 .btn-confirm.danger:hover {
   background: #dc2626;

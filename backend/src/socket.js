@@ -7,6 +7,9 @@ const { logCisoAction } = require('./utils/cisoLogger');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_dms_key_2026';
 
+// Global oda için sabit UUID (DB'de room_id UUID tipinde)
+const GLOBAL_ROOM_ID = '00000000-0000-0000-0000-000000000001';
+
 let io;
 
 module.exports = {
@@ -43,8 +46,8 @@ module.exports = {
       // 1. Kullanıcıyı kendi özel odasına ekle
       socket.join(socket.user.id);
       
-      // 2. Tüm kullanıcıları otomatik olarak 'global' odasına ekle (BUG FIX)
-      socket.join('global');
+      // 2. Tüm kullanıcıları otomatik olarak global odasına ekle
+      socket.join(GLOBAL_ROOM_ID);
 
       // 3. Olay: Mesaj Gönderme
       socket.on('send_message', async (data, callback) => {
@@ -58,11 +61,14 @@ module.exports = {
 
           const isScheduled = scheduledAt && new Date(scheduledAt) > new Date();
 
+          // 'global' string'ini gerçek UUID'ye çevir
+          const resolvedRoomId = roomId === 'global' ? GLOBAL_ROOM_ID : (roomId || null);
+
           // Veritabanına kaydet
           const newMessage = await Message.create({
             sender_id: socket.user.id,
             receiver_id: receiverId || null,
-            room_id: roomId || null,
+            room_id: resolvedRoomId,
             content: content || '',
             type: 'message',
             media_url: mediaUrl || null,
@@ -107,7 +113,7 @@ module.exports = {
           // Karşı tarafa veya odaya ilet
           if (roomId === 'global') {
             // Global odaya broadcast (gönderen HARİÇ herkese, gönderen callback'ten alır)
-            socket.broadcast.to('global').emit('receive_message', populatedMessage);
+            socket.broadcast.to(GLOBAL_ROOM_ID).emit('receive_message', populatedMessage);
           } else if (receiverId) {
             // Birebir mesaj: karşı tarafa ve kendi diğer sekmelerine
             io.to(receiverId).emit('receive_message', populatedMessage);

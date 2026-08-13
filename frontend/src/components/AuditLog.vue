@@ -16,8 +16,8 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:0.5rem;">
-        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: #34d399;" @click="exportLogs('csv')" :title="$t('audit.downloadCsv')">📥 CSV İndir</button>
-        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: #34d399;" @click="exportLogs('json')" :title="$t('audit.downloadJson')">📥 JSON İndir</button>
+        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: var(--color-success);" @click="exportLogs('csv')" :title="$t('audit.downloadCsv')">📥 CSV İndir</button>
+        <button class="filter-clear-btn" style="padding:0.4rem 0.8rem; font-size:0.75rem; border:1px solid rgba(52, 211, 153, 0.3); background: rgba(52, 211, 153, 0.08); color: var(--color-success);" @click="exportLogs('json')" :title="$t('audit.downloadJson')">📥 JSON İndir</button>
         <span class="audit-badge" v-if="totalCount > 0">{{ totalCount }} kayıt</span>
       </div>
     </div>
@@ -410,7 +410,7 @@ onMounted(() => {
 .filter-clear-btn {
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #f87171;
+  color: var(--color-danger);
   padding: 0.45rem 0.85rem;
   font-size: 0.78rem;
   font-weight: 600;
@@ -587,19 +587,19 @@ onMounted(() => {
 
 .action--force_delete {
   background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
+  color: var(--color-danger);
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .action--restore {
   background: rgba(139, 92, 246, 0.1);
-  color: #a78bfa;
+  color: var(--color-accent-text);
   border: 1px solid rgba(139, 92, 246, 0.2);
 }
 
 .action--bulk_delete {
   background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  color: var(--color-danger-bg);
   border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
@@ -611,7 +611,7 @@ onMounted(() => {
 
 .action--logout {
   background: rgba(148, 163, 184, 0.1);
-  color: #94a3b8;
+  color: var(--text-secondary);
   border: 1px solid rgba(148, 163, 184, 0.2);
 }
 

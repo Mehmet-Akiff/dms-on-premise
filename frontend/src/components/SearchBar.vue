@@ -291,7 +291,7 @@ watch(query, (newVal) => {
 
 .ai-toggle-btn.active {
   background: linear-gradient(135deg, rgba(167, 139, 250, 0.15), rgba(139, 92, 246, 0.2));
-  color: #c4b5fd;
+  color: var(--color-accent-light);
   border-color: rgba(167, 139, 250, 0.6);
   box-shadow: 0 0 10px rgba(167, 139, 250, 0.1);
 }
@@ -300,13 +300,13 @@ watch(query, (newVal) => {
   opacity: 0.7;
 }
 .ai-toggle-btn.active .ai-sparkle-icon {
-  color: #c4b5fd;
+  color: var(--color-accent-light);
   animation: pulse-glow 2s infinite alternate;
 }
 
 @keyframes pulse-glow {
-  0% { transform: scale(1); filter: drop-shadow(0 0 1px #a78bfa); }
-  100% { transform: scale(1.1); filter: drop-shadow(0 0 4px #a78bfa); }
+  0% { transform: scale(1); filter: drop-shadow(0 0 1px var(--color-accent-text)); }
+  100% { transform: scale(1.1); filter: drop-shadow(0 0 4px var(--color-accent-text)); }
 }
 
 .search-input-group {
@@ -369,7 +369,7 @@ watch(query, (newVal) => {
 
 .search-clear-btn:hover {
   opacity: 1;
-  color: #ef4444;
+  color: var(--color-danger-bg);
 }
 
 .search-submit {
@@ -399,7 +399,7 @@ watch(query, (newVal) => {
 
 .search-submit.ai-submit {
   background: linear-gradient(135deg, rgba(167, 139, 250, 0.25), rgba(139, 92, 246, 0.2));
-  color: #c4b5fd;
+  color: var(--color-accent-light);
   border-color: rgba(167, 139, 250, 0.5);
 }
 
@@ -425,7 +425,7 @@ watch(query, (newVal) => {
 
 .search-spinner.ai-spinner {
   border-color: rgba(167, 139, 250, 0.2);
-  border-top-color: #c4b5fd;
+  border-top-color: var(--color-accent-light);
 }
 
 @keyframes spin-s {
@@ -449,7 +449,7 @@ watch(query, (newVal) => {
   align-items: center;
   gap: 0.35rem;
   font-size: 0.75rem;
-  color: #c4b5fd;
+  color: var(--color-accent-light);
 }
 
 .sparkle-gold {
@@ -479,7 +479,7 @@ watch(query, (newVal) => {
 }
 
 .ai-chip--exclude .ai-chip-label {
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 .ai-chip--exclude .ai-chip-value {
@@ -487,7 +487,7 @@ watch(query, (newVal) => {
 }
 
 .ai-chip-label {
-  color: #a78bfa;
+  color: var(--color-accent-text);
   opacity: 0.85;
 }
 

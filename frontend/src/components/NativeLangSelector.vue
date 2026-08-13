@@ -14,8 +14,9 @@
     </button>
 
     <!-- Dil Seçim Modalı (Arama Barı Destekli Bütün Dünya Dilleri) -->
-    <div v-if="isOpen" class="lang-modal-overlay" @click.self="isOpen = false">
-      <div class="lang-modal-card">
+    <Teleport to="body">
+      <div v-if="isOpen" class="lang-modal-overlay" @click.self="isOpen = false">
+        <div class="lang-modal-card">
         <div class="lang-modal-header">
           <div class="header-title-box">
             <span class="globe-icon">🌐</span>
@@ -58,7 +59,8 @@
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 

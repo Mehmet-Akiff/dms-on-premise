@@ -69,7 +69,7 @@
 
     <!-- Dosya Etiketleri (Yüklemeden Önce) -->
     <div v-if="selectedFile && !isUploading" class="upload-tags-section" style="margin: 0.5rem 0; text-align: left; display: flex; flex-direction: column; gap: 0.35rem;">
-      <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">{{ $t('upload.tagsLabel') || 'Etiketler (Enter veya Virgül ile ekleyin)' }}</label>
+      <label style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">{{ $t('upload.tagsLabel') || 'Etiketler (Enter veya Virgül ile ekleyin)' }}</label>
       <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; align-items: center;">
         <span 
           v-for="(tag, idx) in tags" 
@@ -77,7 +77,7 @@
           style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.68rem; font-weight: 700; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 0.15rem 0.45rem; border-radius: 4px;"
         >
           {{ tag }}
-          <button type="button" @click="removeTag(idx)" style="background: transparent; border: none; color: #f87171; font-weight: 700; cursor: pointer; font-size: 0.65rem; padding: 0;">✕</button>
+          <button type="button" @click="removeTag(idx)" style="background: transparent; border: none; color: var(--color-danger); font-weight: 700; cursor: pointer; font-size: 0.65rem; padding: 0;">✕</button>
         </span>
         <input 
           v-model="tagInput" 
@@ -85,15 +85,15 @@
           :placeholder="$t('upload.tagsPlaceholder') || 'Etiket ekleyin...'" 
           @keydown.enter.prevent="addTag"
           @keydown.comma.prevent="addTag"
-          style="flex: 1; border: none; background: transparent; outline: none; color: #fff; font-size: 0.78rem; min-width: 100px; padding: 0.1rem;"
+          style="flex: 1; border: none; background: transparent; outline: none; color: var(--text-primary); font-size: 0.78rem; min-width: 100px; padding: 0.1rem;"
         />
       </div>
     </div>
 
     <!-- Belge Hassasiyet Seviyesi -->
     <div v-if="selectedFile && !isUploading" class="upload-sensitivity-section" style="margin: 0.5rem 0; text-align: left; display: flex; flex-direction: column; gap: 0.35rem;">
-      <label style="font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">{{ $t('upload.sensitivityLabel') || 'Belge Hassasiyeti' }}</label>
-      <select v-model="sensitivity" style="width: 100%; padding: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 0.78rem; outline: none; cursor: pointer;">
+      <label style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">{{ $t('upload.sensitivityLabel') || 'Belge Hassasiyeti' }}</label>
+      <select v-model="sensitivity" style="width: 100%; padding: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.78rem; outline: none; cursor: pointer;">
         <option value="public">{{ $t('upload.sensitivityPublic') || '🟢 Herkese Açık (Standart, Admin, CISO görebilir)' }}</option>
         <option value="medium">{{ $t('upload.sensitivityMedium') || '🟡 Orta Hassas (Sadece Admin ve CISO görebilir)' }}</option>
         <option value="high">{{ $t('upload.sensitivityHigh') || '🔴 En Hassas (Sadece Admin görebilir)' }}</option>
@@ -452,8 +452,8 @@ function formatSize(bytes) {
 }
 
 .preview-remove:hover {
-  border-color: #ef4444;
-  color: #ef4444;
+  border-color: var(--color-danger-bg);
+  color: var(--color-danger-bg);
   background: rgba(239, 68, 68, 0.1);
 }
 
@@ -468,7 +468,7 @@ function formatSize(bytes) {
   border: none;
   border-radius: var(--radius);
   background: linear-gradient(135deg, var(--accent), #818cf8);
-  color: #fff;
+  color: var(--text-primary);
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;

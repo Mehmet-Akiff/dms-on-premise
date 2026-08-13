@@ -73,9 +73,9 @@
                   class="btn-delete-user" 
                   @click="deleteUser(user)"
                   :title="$t('common.delete')"
-                  style="padding: 0.25rem 0.6rem; font-size: 0.68rem; background: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); color: #fff; border-radius: 6px; cursor: pointer; font-weight: 700; transition: all 0.2s;"
+                  style="padding: 0.25rem 0.6rem; font-size: 0.68rem; background: var(--color-danger-bg); border: 1px solid rgba(239, 68, 68, 0.4); color: var(--text-primary); border-radius: 6px; cursor: pointer; font-weight: 700; transition: all 0.2s;"
                   onmouseover="this.style.background='#dc2626'"
-                  onmouseout="this.style.background='#ef4444'"
+                  onmouseout="this.style.background='var(--color-danger-bg)'"
                 >
                   🗑 {{ $t('common.delete') || 'Sil' }}
                 </button>
@@ -341,7 +341,7 @@ onMounted(() => {
 .users-header h3 {
   font-size: 1.15rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .panel-desc {
@@ -357,14 +357,14 @@ onMounted(() => {
   justify-content: center;
   padding: 3rem 1.5rem;
   text-align: center;
-  background: rgba(30, 41, 59, 0.3);
+  background: var(--bg-card);
   border: 1px dashed var(--border);
   border-radius: var(--radius);
 }
 
 .users-table-wrap {
   overflow-x: auto;
-  background: rgba(30, 41, 59, 0.25);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
@@ -409,7 +409,7 @@ onMounted(() => {
   border-radius: 50%;
   background: rgba(139, 92, 246, 0.15);
   border: 1.5px solid rgba(139, 92, 246, 0.3);
-  color: #a78bfa;
+  color: var(--color-accent-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -423,7 +423,7 @@ onMounted(() => {
 }
 
 .user-fullname {
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -444,7 +444,7 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.role--ciso { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+.role--ciso { background: rgba(16, 185, 129, 0.12); color: var(--color-success); border: 1px solid rgba(16, 185, 129, 0.25); }
 .role--admin { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
 .role--user { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
 
@@ -488,7 +488,7 @@ onMounted(() => {
 .btn-detail {
   background: rgba(99, 102, 241, 0.15);
   border: 1px solid rgba(99, 102, 241, 0.3);
-  color: #a78bfa;
+  color: var(--color-accent-text);
   padding: 0.3rem 0.75rem;
   font-size: 0.72rem;
   font-weight: 700;
@@ -499,7 +499,7 @@ onMounted(() => {
 
 .btn-detail:hover {
   background: #6366f1;
-  color: #fff;
+  color: var(--text-primary);
   box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
 }
 
@@ -521,7 +521,7 @@ onMounted(() => {
 }
 
 .detail-modal-card {
-  background: #111827;
+  background: var(--bg-primary);
   border: 1px solid rgba(99, 102, 241, 0.3);
   border-radius: 14px;
   width: 100%;
@@ -543,7 +543,7 @@ onMounted(() => {
 
 .modal-header h4 {
   margin: 0;
-  color: #a78bfa;
+  color: var(--color-accent-text);
   font-size: 1rem;
 }
 
@@ -556,7 +556,7 @@ onMounted(() => {
 .btn-close {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #9ca3af;
+  color: var(--text-secondary);
   padding: 0.3rem 0.75rem;
   border-radius: 6px;
   cursor: pointer;
@@ -595,17 +595,17 @@ onMounted(() => {
   margin-top: 0.15rem;
   font-size: 0.82rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .role-text {
-  color: #a78bfa;
+  color: var(--color-accent-text);
 }
 
 .detail-logs-section h5 {
   margin: 0 0 0.6rem;
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-weight: 700;
   letter-spacing: 0.5px;
 }
@@ -648,7 +648,7 @@ onMounted(() => {
 .log-action {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .log-desc {
