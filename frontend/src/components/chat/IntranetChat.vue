@@ -325,6 +325,7 @@ function toggleChatTheme() {
 }
 
 // Emoji & Schedule & Media
+const showEmojiPicker = ref(false)
 const selectedFile = ref(null)
 const isRecording = ref(false)
 const recordingTime = ref(0)
@@ -1597,31 +1598,31 @@ onUnmounted(() => {
 /* Chat-specific Independent Themes */
 .chat-drawer[data-theme="light"] {
   --bg-primary: #f5f5f7;
-  --bg-secondary: var(--text-primary);
-  --bg-card: var(--text-primary);
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
   --text-primary: #1d1d1f;
   --text-secondary: #86868b;
-  --accent: #6366f1;
+  --accent: var(--color-accent-bg, #6366f1);
   --accent-glow: rgba(99, 102, 241, 0.15);
   --border: #d2d2d7;
   --chat-bg: #f5f5f7;
-  --bubble-in: var(--text-primary);
+  --bubble-in: #ffffff;
   --bubble-out: #e0e7ff;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(24px) saturate(180%);
 }
 
 .chat-drawer[data-theme="dark"] {
-  --bg-primary: var(--bg-card);
-  --bg-secondary: var(--bg-card);
-  --bg-card: var(--bg-card);
-  --text-primary: var(--text-primary);
-  --text-secondary: var(--text-secondary);
-  --accent: var(--color-accent-bg);
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --accent: var(--color-accent-bg, #8b5cf6);
   --accent-glow: rgba(139, 92, 246, 0.15);
   --border: #334155;
-  --chat-bg: var(--bg-card);
-  --bubble-in: var(--bg-card);
+  --chat-bg: #0f172a;
+  --bubble-in: #1e293b;
   --bubble-out: #1e3a5f;
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(24px) saturate(180%);
