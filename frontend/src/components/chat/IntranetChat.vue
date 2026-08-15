@@ -50,7 +50,15 @@
         </div>
 
         <!-- Main Chat Area -->
-        <div class="chat-main" @click="closeAllPopups">
+        <div class="chat-main" @click="closeAllPopups" @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+          <!-- Sürükle-Bırak Katmanı (Drag & Drop Overlay) -->
+          <div v-if="isDragging" class="drag-drop-overlay">
+            <div class="drag-drop-box">
+              <div class="drag-drop-icon">📎</div>
+              <div class="drag-drop-title">Dosyayı Buraya Bırakın</div>
+              <div class="drag-drop-sub">Güvenli dosya transferi için sohbet alanına bırakın</div>
+            </div>
+          </div>
           <!-- Aktif sohbet başlığı -->
           <div class="chat-top-bar">
             <div class="chat-top-avatar" :class="{'global-avatar': activeChat === 'global'}">
@@ -94,13 +102,35 @@
                     {{ msg.sender?.fullName || msg.senderName || msg.sender?.username || 'Bilinmeyen' }}
                   </div>
                   
-                  <!-- Media Content -->
-                  <div v-if="msg.media_url" class="message-media">
-                    <img v-if="msg.media_type === 'image'" :src="getAuthMediaUrl(msg.media_url)" class="media-image" alt="Image" @click="openImage(msg.media_url)" />
-                    <audio v-else-if="msg.media_type === 'audio'" :src="getAuthMediaUrl(msg.media_url)" controls class="media-audio" preload="metadata" @loadedmetadata="onAudioLoaded"></audio>
-                    <a v-else href="#" @click.prevent="downloadMedia(msg.media_url, 'download')" class="media-document">
-                      📎 Dosyayı İndir
-                    </a>
+                  <!-- Media & Document Content -->
+                  <div v-if="msg.media_url || msg.file_url" class="message-media">
+                    <img v-if="(msg.media_type || msg.file_type) === 'image'" 
+                         :src="getAuthMediaUrl(msg.media_url || msg.file_url)" 
+                         class="media-image" 
+                         alt="Görsel" 
+                         @click="openImage(msg.media_url || msg.file_url)" />
+                    <audio v-else-if="(msg.media_type || msg.file_type) === 'audio'" 
+                           :src="getAuthMediaUrl(msg.media_url || msg.file_url)" 
+                           controls 
+                           class="media-audio" 
+                           preload="metadata" 
+                           @loadedmetadata="onAudioLoaded"></audio>
+                    <div v-else class="file-card-preview" @click="downloadMedia(msg.media_url || msg.file_url, 'download')">
+                      <div class="file-card-icon">
+                        {{ getFileIcon(msg.file_name || msg.media_url, msg.media_type || msg.file_type) }}
+                      </div>
+                      <div class="file-card-info">
+                        <div class="file-card-name" :title="msg.file_name || 'Dosya'">
+                          {{ msg.file_name || getFileNameFromUrl(msg.media_url || msg.file_url) }}
+                        </div>
+                        <div class="file-card-size" v-if="msg.file_size">
+                          {{ formatFileSize(msg.file_size) }}
+                        </div>
+                      </div>
+                      <button class="file-card-download-btn" title="İndir">
+                        📥
+                      </button>
+                    </div>
                   </div>
 
                   <!-- Inline Edit Mode -->
@@ -195,6 +225,21 @@
               <button class="btn-stop-record" @click="stopRecording">✓ Gönder</button>
               <button class="btn-cancel-record" @click="cancelRecording">✕ İptal</button>
             </div>
+          </div>
+
+          <!-- Progress Bar & Error Banner -->
+          <div v-if="isUploading" class="upload-progress-container">
+            <div class="upload-progress-info">
+              <span class="upload-progress-icon">⏳</span>
+              <span class="upload-progress-text">Dosya yükleniyor... %{{ uploadProgress }}</span>
+            </div>
+            <div class="upload-progress-bar-bg">
+              <div class="upload-progress-bar-fill" :style="{ width: uploadProgress + '%' }"></div>
+            </div>
+          </div>
+          <div v-if="uploadError" class="upload-error-banner">
+            <span>⚠️ {{ uploadError }}</span>
+            <button @click="uploadError = ''" class="btn-close-banner">✕</button>
           </div>
 
           <!-- Input Area -->
@@ -327,6 +372,11 @@ function toggleChatTheme() {
 // Emoji & Schedule & Media
 const showEmojiPicker = ref(false)
 const selectedFile = ref(null)
+const isUploading = ref(false)
+const uploadProgress = ref(0)
+const uploadError = ref('')
+const isDragging = ref(false)
+let dragCounter = 0
 const isRecording = ref(false)
 const recordingTime = ref(0)
 const scheduledTime = ref('')
@@ -470,6 +520,67 @@ function onFileSelected(event) {
 function clearMedia() {
   selectedFile.value = null
   if (fileInput.value) fileInput.value.value = ''
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || isNaN(bytes)) return ''
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function getFileIcon(filename, type) {
+  if (type === 'image') return '🖼️'
+  if (type === 'audio') return '🎵'
+  const ext = (filename || '').split('.').pop().toLowerCase()
+  if (['pdf'].includes(ext)) return '📄'
+  if (['doc', 'docx'].includes(ext)) return '📝'
+  if (['xls', 'xlsx'].includes(ext)) return '📊'
+  if (['ppt', 'pptx'].includes(ext)) return '📊'
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '📦'
+  if (['txt', 'log'].includes(ext)) return '📑'
+  return '📎'
+}
+
+function getFileNameFromUrl(url) {
+  if (!url) return 'Dosya'
+  return url.split('/').pop() || 'Dosya'
+}
+
+function onDragEnter(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  dragCounter++
+  if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+    isDragging.value = true
+  }
+}
+
+function onDragOver(e) {
+  e.preventDefault()
+  e.stopPropagation()
+}
+
+function onDragLeave(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  dragCounter--
+  if (dragCounter <= 0) {
+    dragCounter = 0
+    isDragging.value = false
+  }
+}
+
+function onDrop(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  dragCounter = 0
+  isDragging.value = false
+
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    const file = e.dataTransfer.files[0]
+    uploadAndSendMedia(file)
+  }
 }
 
 // ============================================================
@@ -965,40 +1076,76 @@ async function uploadAndSendMedia(fileObj, filenameOverride = null) {
   const formData = new FormData()
   formData.append('file', fileObj, filenameOverride || fileObj.name)
 
-  try {
-    const res = await fetch('/api/chat/upload', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: formData
-    })
-    if (res.ok) {
-      const data = await res.json()
-      if (data.success) {
-        await executeSend(newMessage.value.trim(), data.url, data.type)
-        newMessage.value = ''
+  isUploading.value = true
+  uploadProgress.value = 0
+  uploadError.value = ''
+
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/chat/upload', true)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        uploadProgress.value = Math.round((e.loaded / e.total) * 100)
       }
     }
-  } catch (err) {
-    // Medya yükleme hatası sessizce yakalandı
-  }
+
+    xhr.onload = async () => {
+      isUploading.value = false
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          if (data.success) {
+            await executeSend(newMessage.value.trim(), data.url, data.type, data.name, data.size)
+            newMessage.value = ''
+            clearMedia()
+          } else {
+            uploadError.value = data.error || 'Dosya yüklenemedi.'
+          }
+        } catch (err) {
+          uploadError.value = 'Sunucu yanıtı işlenemedi.'
+        }
+      } else {
+        try {
+          const errData = JSON.parse(xhr.responseText)
+          uploadError.value = errData.error || `Yükleme hatası (${xhr.status})`
+        } catch {
+          uploadError.value = `Yükleme başarısız oldu (${xhr.status})`
+        }
+      }
+      resolve()
+    }
+
+    xhr.onerror = () => {
+      isUploading.value = false
+      uploadError.value = 'Ağ hatası: Dosya yüklenemedi.'
+      resolve()
+    }
+
+    xhr.send(formData)
+  })
 }
 
 async function handleSend() {
   if (selectedFile.value) {
     const file = selectedFile.value
-    clearMedia()
     await uploadAndSendMedia(file)
   } else if (newMessage.value.trim()) {
     await executeSend(newMessage.value.trim())
   }
 }
 
-async function executeSend(content, mediaUrl = null, mediaType = null) {
+async function executeSend(content, mediaUrl = null, mediaType = null, fileName = null, fileSize = null) {
   const msgData = {
     content,
     scheduledAt: scheduledTime.value || null,
     mediaUrl,
-    mediaType
+    mediaType,
+    fileName: fileName || (selectedFile.value ? selectedFile.value.name : null),
+    fileSize: fileSize || (selectedFile.value ? selectedFile.value.size : null),
+    fileUrl: mediaUrl,
+    fileType: mediaType
   }
 
   if (activeChat.value === 'global') {
@@ -1706,5 +1853,162 @@ onUnmounted(() => {
   --bubble-out: #1e3a5f;
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(24px) saturate(180%);
+}
+/* DRAG & DROP OVERLAY */
+.drag-drop-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: fadeIn 0.2s ease;
+}
+.drag-drop-box {
+  border: 3px dashed var(--accent-primary, #8b5cf6);
+  border-radius: 16px;
+  padding: 2.5rem 3.5rem;
+  text-align: center;
+  background: var(--bg-card);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.drag-drop-icon {
+  font-size: 3.5rem;
+  margin-bottom: 0.5rem;
+  animation: bounce 1s infinite alternate;
+}
+.drag-drop-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+.drag-drop-sub {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+@keyframes bounce {
+  from { transform: translateY(0); }
+  to { transform: translateY(-8px); }
+}
+
+/* FILE CARD PREVIEW */
+.file-card-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  max-width: 280px;
+}
+.file-card-preview:hover {
+  background: rgba(0, 0, 0, 0.2);
+  border-color: var(--accent-primary, #8b5cf6);
+  transform: translateY(-1px);
+}
+.file-card-icon {
+  font-size: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.file-card-info {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.file-card-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-card-size {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 0.1rem;
+}
+.file-card-download-btn {
+  background: var(--accent-glow);
+  color: var(--accent-primary, #8b5cf6);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.file-card-download-btn:hover {
+  background: var(--accent-primary, #8b5cf6);
+  color: #fff;
+}
+
+/* UPLOAD PROGRESS BAR */
+.upload-progress-container {
+  padding: 0.5rem 1rem;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.upload-progress-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.upload-progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.upload-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary, #8b5cf6), #3b82f6);
+  transition: width 0.2s ease;
+  border-radius: 3px;
+}
+
+/* UPLOAD ERROR BANNER */
+.upload-error-banner {
+  padding: 0.5rem 1rem;
+  background: rgba(220, 38, 38, 0.15);
+  border-top: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.btn-close-banner {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 0.9rem;
 }
 </style>

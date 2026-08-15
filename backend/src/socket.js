@@ -52,9 +52,11 @@ module.exports = {
       // 3. Olay: Mesaj Gönderme
       socket.on('send_message', async (data, callback) => {
         try {
-          const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType } = data;
+          const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType, fileName, fileSize, fileType, fileUrl } = data;
+          const finalMediaUrl = mediaUrl || fileUrl || null;
+          const finalMediaType = mediaType || fileType || null;
           
-          if (!content && !mediaUrl && (!receiverId && !roomId)) {
+          if (!content && !finalMediaUrl && (!receiverId && !roomId)) {
             if(callback) callback({ error: 'Eksik parametreler.' });
             return;
           }
@@ -71,8 +73,12 @@ module.exports = {
             room_id: resolvedRoomId,
             content: content || '',
             type: 'message',
-            media_url: mediaUrl || null,
-            media_type: mediaType || null,
+            media_url: finalMediaUrl,
+            media_type: finalMediaType,
+            file_url: finalMediaUrl,
+            file_name: fileName || null,
+            file_type: finalMediaType,
+            file_size: fileSize || null,
             scheduled_at: isScheduled ? new Date(scheduledAt) : null,
             is_delivered: !isScheduled,
           });
@@ -93,7 +99,7 @@ module.exports = {
             `${socket.user.fullName || socket.user.username} -> ${targetLabel} (${isScheduled ? 'Zamanlanmış' : 'Anlık'} mesaj)`
           );
 
-          // CISO LOG: Tam içerik (sadece CISO erişebilir)
+          // CISO LOG: Tam içerik ve Dosya Transfer detayları
           logCisoAction('MESAJ_ICERIK_DETAY', {
             senderId: socket.user.id,
             senderName: socket.user.fullName || socket.user.username,
@@ -103,6 +109,20 @@ module.exports = {
             scheduledAt: scheduledAt || null,
             messageId: newMessage.id,
           });
+
+          if (finalMediaUrl) {
+            logCisoAction('DOSYA_TRANSFERI', {
+              senderId: socket.user.id,
+              senderName: socket.user.fullName || socket.user.username,
+              targetId: receiverId || roomId,
+              targetType: roomId ? 'room' : 'user',
+              fileName: fileName || 'Dosya',
+              fileSize: fileSize || null,
+              fileType: finalMediaType,
+              mediaUrl: finalMediaUrl,
+              messageId: newMessage.id
+            });
+          }
 
           // Zamanlanmış mesajlar anında gönderilmez
           if (isScheduled) {

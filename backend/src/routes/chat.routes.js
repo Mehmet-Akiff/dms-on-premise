@@ -13,20 +13,21 @@ const { v4: uuidv4 } = require('uuid');
 // Global oda için sabit UUID (DB'de room_id UUID tipinde)
 const GLOBAL_ROOM_ID = '00000000-0000-0000-0000-000000000001';
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = '/app/uploads/chat';
-    if (!fs.existsSync(dir)){
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${uuidv4()}${ext}`);
+const DANGEROUS_EXTENSIONS = ['.exe', '.bat', '.cmd', '.sh', '.vbs', '.js', '.jar', '.msi', '.ps1', '.com', '.scr', '.hta'];
+
+const fileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (DANGEROUS_EXTENSIONS.includes(ext)) {
+    return cb(new Error('Güvenlik uyarısı: Bu dosya formatının (.exe, .bat vb.) yüklenmesine yetkili CISO politikaları gereği izin verilmemektedir.'), false);
   }
+  cb(null, true);
+};
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB Max
+  fileFilter
 });
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 // Tüm chat rotaları korumalıdır
 router.use(verifyToken);
 
@@ -187,34 +188,66 @@ router.post('/send', async (req, res) => {
 });
 
 // ============================================================
-// POST /api/chat/upload — Chat Medya Yükleme
+// POST /api/chat/upload — Chat Medya/Dosya Yükleme (50MB Sınır + CISO Koruma)
 // ============================================================
-router.post('/upload', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Dosya yüklenemedi.' });
+router.post('/upload', (req, res) => {
+  upload.single('file')(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'Dosya boyutu maksimum 50MB sınırını aşamaz.' });
+      }
+      return res.status(400).json({ error: `Yükleme hatası: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ error: err.message });
     }
-    // URL olarak /api/chat/media/... üzerinden erişim sağlayabiliriz
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Lütfen yüklenecek geçerli bir dosya seçin.' });
+    }
+
     const mediaUrl = `/api/chat/media/${req.file.filename}`;
     
-    // MimeType üzerinden 'image', 'audio', 'document' ayrımı
     let mediaType = 'document';
-    if (req.file.mimetype.startsWith('image/')) mediaType = 'image';
-    else if (req.file.mimetype.startsWith('audio/') || req.file.mimetype.startsWith('video/')) mediaType = 'audio';
+    const mime = req.file.mimetype || '';
+    if (mime.startsWith('image/')) mediaType = 'image';
+    else if (mime.startsWith('audio/') || mime.startsWith('video/')) mediaType = 'audio';
 
-    res.json({ success: true, url: mediaUrl, type: mediaType, name: req.file.originalname });
-  } catch (error) {
-    console.error('[CHAT_UPLOAD_ERR] Dosya yüklenemedi:', error);
-    res.status(500).json({ error: 'Sunucu hatası oluştu.' });
-  }
+    // CISO Transfer Güvenlik Logu
+    logCisoAction('DOSYA_YUKLENDI', {
+      userId: req.user ? req.user.id : null,
+      userName: req.user ? (req.user.fullName || req.user.username) : 'Bilinmiyor',
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mimeType: mime,
+      mediaUrl
+    }, req.ip);
+
+    res.json({
+      success: true,
+      url: mediaUrl,
+      file_url: mediaUrl,
+      type: mediaType,
+      file_type: mediaType,
+      name: req.file.originalname,
+      file_name: req.file.originalname,
+      size: req.file.size,
+      file_size: req.file.size
+    });
+  });
 });
 
 // ============================================================
-// GET /api/chat/media/:filename — Medya Erişim (CISO Koruması eklenebilir, şimdilik JWT korumalı)
+// GET /api/chat/media/:filename — Medya/Dosya İndirme & İnceleme (JWT & CISO Korumalı)
 // ============================================================
 router.get('/media/:filename', (req, res) => {
   const filePath = path.join('/app/uploads/chat', req.params.filename);
   if (fs.existsSync(filePath)) {
+    logCisoAction('DOSYA_INDIRILDI', {
+      userId: req.user ? req.user.id : null,
+      userName: req.user ? (req.user.fullName || req.user.username) : 'Anonim',
+      filename: req.params.filename
+    }, req.ip);
+
     res.sendFile(filePath);
   } else {
     res.status(404).json({ error: 'Dosya bulunamadı.' });

@@ -52,6 +52,22 @@ const Message = sequelize.define('Message', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  file_url: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  file_name: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  file_type: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  file_size: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+  },
   is_edited: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
