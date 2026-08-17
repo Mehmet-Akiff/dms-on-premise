@@ -62,9 +62,14 @@ Thumbs.db
 uploads/
 shared-uploads/
 
-# ---------- Logs ----------
+# ---------- Logs & Runtime Data ----------
 logs/
+user_logs/
 *.log
+*.jsonl
+*.sqlite
+*.sqlite3
+*.db
 
 # ---------- Build Artifacts ----------
 *.tar
