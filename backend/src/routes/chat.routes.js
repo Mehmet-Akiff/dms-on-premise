@@ -690,6 +690,27 @@ router.post('/message/:id/archive', async (req, res) => {
       console.warn('[ARCHIVE_META_WARN]', metaErr.message);
     }
 
+    // AI OCR & Sınıflandırma Kuyruğuna Ekle (Görsel ve PDF'ler için)
+    const isProcessable = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'].includes(ext);
+    if (isProcessable) {
+      try {
+        const { ProcessingJob } = require('../models');
+        const job = await ProcessingJob.create({
+          documentId: archiveDoc.id,
+          jobStatus: 'QUEUED',
+          startedAt: new Date(),
+        });
+        const documentRoutes = require('./document.routes');
+        if (documentRoutes.processDocumentWithAI) {
+          documentRoutes.processDocumentWithAI(archiveDoc, job).catch((err) => {
+            console.warn('[ARCHIVE_AI_PROCESSING_WARN]', err.message);
+          });
+        }
+      } catch (jobErr) {
+        console.warn('[ARCHIVE_JOB_CREATE_WARN]', jobErr.message);
+      }
+    }
+
     // CISO LOG
     logCisoAction('DOSYA_ARSIVLENDI', {
       userId: currentUserId,
@@ -706,7 +727,7 @@ router.post('/message/:id/archive', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Dosya başarıyla E-Arşiv\'e aktarıldı.',
+      message: 'Dosya başarıyla E-Arşiv\'e aktarıldı ve işleme alındı.',
       archiveId: archiveDoc.id
     });
   } catch (error) {

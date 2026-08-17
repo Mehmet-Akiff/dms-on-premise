@@ -1634,4 +1634,6 @@ router.put('/:id', verifyToken, requireWritePermission, async (req, res) => {
   }
 });
 
+router.processDocumentWithAI = processDocumentWithAI;
+
 module.exports = router;

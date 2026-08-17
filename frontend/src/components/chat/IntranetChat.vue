@@ -494,7 +494,13 @@ const currentMessages = computed(() => {
 
 // Sadece iletilmiş mesajlar (is_delivered undefined/null/true hepsi geçer, sadece false filtrelenir)
 const deliveredMessages = computed(() => {
-  return currentMessages.value.filter(m => m.is_delivered !== false)
+  const now = Date.now()
+  return currentMessages.value.map(m => {
+    if (m.expires_at && new Date(m.expires_at).getTime() <= now && !m.is_expired) {
+      return { ...m, is_expired: true, content: '[Bu içeriğin süresi doldu]', media_url: null, file_url: null }
+    }
+    return m
+  }).filter(m => m.is_delivered !== false)
 })
 
 // Bekleyen zamanlanmış mesajlar
@@ -801,9 +807,8 @@ function selectChat(id) {
   showEmojiPicker.value = false
   showScheduler.value = false
   closeContextMenu()
-  if (!messages.value[id] || messages.value[id].length === 0) {
-    fetchMessageHistory(id)
-  }
+  revealedMessages.value = {}
+  fetchMessageHistory(id)
   scrollToBottom()
 }
 
@@ -1373,16 +1378,19 @@ async function revealViewOnce(msg) {
     if (res.ok) {
       const result = await res.json()
       if (result.success && result.data) {
-        revealedMessages.value[msg.id] = true
-        // Medya içeriyorsa aç
+        // Medya varsa aç
         if (result.data.media_url || result.data.file_url) {
           downloadMedia(result.data.media_url || result.data.file_url, 'view')
+        } else if (result.data.content) {
+          toast.info(`🔒 Gizli Mesaj: "${result.data.content}"`, { timeout: 12000 })
         }
+        // Lokalde anında imha edilmiş olarak işaretle
+        updateLocalMessage(msg.id, { is_expired: true, content: '[Bu mesaj görüntülendi ve imha edildi]', media_url: null, file_url: null })
       }
     } else {
       const err = await res.json().catch(() => null)
       toast.error(err?.error || 'Bu içerik süresi dolduğu için imha edilmiş.')
-      updateLocalMessage(msg.id, { is_expired: true, content: '[Bu içeriğin süresi doldu]' })
+      updateLocalMessage(msg.id, { is_expired: true, content: '[Bu içeriğin süresi doldu]', media_url: null, file_url: null })
     }
   } catch (e) {
     toast.error('İçerik açılırken bağlantı hatası oluştu.')
