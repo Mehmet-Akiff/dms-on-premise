@@ -160,10 +160,15 @@ router.get('/history/:target', async (req, res) => {
 // ============================================================
 router.post('/send', async (req, res) => {
   try {
-    const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType, isViewOnce, expiresIn } = req.body;
+    const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType, fileName, fileSize, fileType, fileUrl, isViewOnce, expiresIn } = req.body;
     const senderId = req.user.id;
 
-    if (!content && !mediaUrl && (!receiverId && !roomId)) {
+    const finalMediaUrl = mediaUrl || fileUrl || null;
+    const finalMediaType = mediaType || fileType || null;
+    const finalFileName = fileName || req.body.file_name || null;
+    const finalFileSize = fileSize || req.body.file_size || null;
+
+    if (!content && !finalMediaUrl && (!receiverId && !roomId)) {
       return res.status(400).json({ error: 'Eksik parametreler.' });
     }
 
@@ -178,8 +183,12 @@ router.post('/send', async (req, res) => {
       room_id: resolvedRoomId,
       content: content || '',
       type: 'note',
-      media_url: mediaUrl || null,
-      media_type: mediaType || null,
+      media_url: finalMediaUrl,
+      media_type: finalMediaType,
+      file_url: finalMediaUrl,
+      file_name: finalFileName,
+      file_type: finalMediaType,
+      file_size: finalFileSize,
       scheduled_at: isScheduled ? new Date(scheduledAt) : null,
       is_delivered: !isScheduled,
       is_view_once: isViewOnce || false,
@@ -666,11 +675,16 @@ router.post('/message/:id/archive', async (req, res) => {
     else if (ext === '.txt') mimeType = 'text/plain';
     else if (ext === '.zip') mimeType = 'application/zip';
 
+    // Orijinal dosya adını ve başlığı eksiksiz koru
+    const rawName = msg.file_name || (msg.content && msg.content.includes('.') ? msg.content : null);
+    const originalName = rawName || `Chat_Belge_${msg.id.slice(0, 8)}${ext || '.bin'}`;
+    const docTitle = originalName.replace(/\.[^/.]+$/, ""); // Uzantısız estetik başlık
+
     // Document tablosuna kayıt ekle
     const { DocumentMetadata } = require('../models');
     const archiveDoc = await Document.create({
-      title: msg.file_name || filename,
-      originalName: msg.file_name || filename,
+      title: docTitle || originalName,
+      originalName: originalName,
       mimeType,
       filePath: `/app/uploads/${archiveFilename}`,
       status: 'COMPLETED',
@@ -679,12 +693,12 @@ router.post('/message/:id/archive', async (req, res) => {
       sensitivity: 'public',
     });
 
-    // DocumentMetadata kaydı ekle
+    // DocumentMetadata kaydı ekle (orijinal ad ve aktarım detayı)
     try {
       await DocumentMetadata.create({
         document_id: archiveDoc.id,
-        extracted_text: `Chat üzerinden aktarılan dosya: ${msg.file_name || filename}`,
-        comments: [`Chat modülünden aktarıldı (Gönderen: ${msg.sender?.fullName || msg.sender?.username || 'Bilinmiyor'})`],
+        extracted_text: `Chat üzerinden aktarılan dosya: ${originalName}`,
+        comments: [`Chat modülünden aktarıldı (Orijinal Adı: ${originalName}, Gönderen: ${msg.sender?.fullName || msg.sender?.username || 'Bilinmiyor'})`],
       });
     } catch (metaErr) {
       console.warn('[ARCHIVE_META_WARN]', metaErr.message);
