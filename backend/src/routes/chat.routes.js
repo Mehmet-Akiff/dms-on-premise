@@ -23,6 +23,20 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = '/app/uploads/chat';
+    if (!fs.existsSync(dir)){
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${uuidv4()}${ext}`);
+  }
+});
+
 const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB Max
