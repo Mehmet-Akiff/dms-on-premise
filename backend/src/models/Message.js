@@ -68,6 +68,18 @@ const Message = sequelize.define('Message', {
     type: DataTypes.BIGINT,
     allowNull: true,
   },
+  is_view_once: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  expires_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  is_expired: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
   is_edited: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,

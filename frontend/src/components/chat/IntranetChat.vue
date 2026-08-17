@@ -97,9 +97,20 @@
                   <span class="deleted-icon">🚫</span> Bu mesaj silindi.
                 </div>
 
+                <!-- Süresi dolmuş mesaj gösterimi -->
+                <div v-else-if="msg.is_expired" class="expired-message-content">
+                  <span class="expired-icon">⏱️</span> Bu içeriğin süresi doldu.
+                </div>
+
                 <template v-else>
                   <div class="message-sender" v-if="!isMine(msg) && activeChat === 'global'">
                     {{ msg.sender?.fullName || msg.senderName || msg.sender?.username || 'Bilinmeyen' }}
+                  </div>
+
+                  <!-- Süreli / View-Once Uyarı Etiketi -->
+                  <div v-if="msg.is_view_once || msg.expires_at" class="ephemeral-badge">
+                    <span v-if="msg.is_view_once">👁️ 1 Kez Görüntülenebilir</span>
+                    <span v-else-if="msg.expires_at">⏱️ {{ formatExpiryLabel(msg.expires_at) }}</span>
                   </div>
                   
                   <!-- Media & Document Content -->
@@ -131,6 +142,14 @@
                         📥
                       </button>
                     </div>
+
+                    <!-- E-Arşive Kaydet Butonu -->
+                    <button v-if="(msg.media_url || msg.file_url) && !msg.is_view_once && !msg.is_expired" 
+                            class="btn-archive-file" 
+                            @click.stop="archiveToEArsiv(msg)" 
+                            title="E-Arşiv'e Kaydet">
+                      📁 E-Arşive Kaydet
+                    </button>
                   </div>
 
                   <!-- Inline Edit Mode -->
@@ -259,6 +278,7 @@
               />
               
               <button type="button" class="btn-schedule-toggle" @click="toggleScheduler" title="Zamanlanmış Gönderim" :class="{ active: scheduledTime }">⏰</button>
+              <button type="button" class="btn-privacy-toggle" @click.stop="showPrivacyPicker = !showPrivacyPicker" title="Süre/Gizlilik" :class="{ active: ephemeralMode }">⏱️</button>
               
               <!-- Gönder veya Ses Kaydet Butonu -->
               <button v-if="newMessage.trim() || selectedFile" type="submit" class="btn-send">
@@ -278,6 +298,29 @@
                 ⏰ Gönderim: {{ formatScheduleDisplay(scheduledTime) }}
                 <button @click="scheduledTime = ''" class="btn-clear-schedule">İptal</button>
               </div>
+            </div>
+
+            <!-- Gizlilik / Süreli Mesaj Seçici -->
+            <div v-if="showPrivacyPicker" class="privacy-picker-panel">
+              <div class="privacy-picker-title">⏱️ Süre / Gizlilik Modu</div>
+              <div class="privacy-options">
+                <button :class="['privacy-opt', { active: ephemeralMode === '' }]" @click="setEphemeralMode('')">
+                  🔓 Normal
+                </button>
+                <button :class="['privacy-opt', { active: ephemeralMode === 'view_once' }]" @click="setEphemeralMode('view_once')">
+                  👁️ 1 Kez Görüntülenebilir
+                </button>
+                <button :class="['privacy-opt', { active: ephemeralMode === '1h' }]" @click="setEphemeralMode('1h')">
+                  ⏳ 1 Saat Sonra İmha
+                </button>
+                <button :class="['privacy-opt', { active: ephemeralMode === '24h' }]" @click="setEphemeralMode('24h')">
+                  🕐 24 Saat Sonra İmha
+                </button>
+              </div>
+            </div>
+            <div v-if="ephemeralMode" class="ephemeral-indicator">
+              {{ ephemeralModeLabel }}
+              <button @click="ephemeralMode = ''" class="btn-clear-schedule">İptal</button>
             </div>
           </div>
         </div>
@@ -382,6 +425,8 @@ const recordingTime = ref(0)
 const scheduledTime = ref('')
 const showScheduler = ref(false)
 const showScheduledModal = ref(false)
+const showPrivacyPicker = ref(false)
+const ephemeralMode = ref('') // '', 'view_once', '1h', '24h'
 
 // Scheduled Edit Refs
 const editingScheduledId = ref(null)
@@ -850,6 +895,11 @@ function initSocket() {
     const { messageId } = data
     updateLocalMessage(messageId, { is_deleted: true, content: '', media_url: null, media_type: null })
   })
+
+  socket.value.on('message_expired', (data) => {
+    const { messageId } = data
+    updateLocalMessage(messageId, { is_expired: true, content: '[Bu mesajın süresi doldu]', media_url: null, media_type: null, file_url: null })
+  })
 }
 
 // Reactions
@@ -1145,7 +1195,9 @@ async function executeSend(content, mediaUrl = null, mediaType = null, fileName 
     fileName: fileName || (selectedFile.value ? selectedFile.value.name : null),
     fileSize: fileSize || (selectedFile.value ? selectedFile.value.size : null),
     fileUrl: mediaUrl,
-    fileType: mediaType
+    fileType: mediaType,
+    isViewOnce: ephemeralMode.value === 'view_once',
+    expiresIn: ephemeralMode.value === '1h' ? 3600000 : (ephemeralMode.value === '24h' ? 86400000 : null)
   }
 
   if (activeChat.value === 'global') {
@@ -1257,6 +1309,59 @@ function getAuthMediaUrl(url) {
 
 function openImage(url) {
   downloadMedia(url, 'view')
+}
+
+// ============================================================
+// Gizlilik / Süreli Mesaj Yardımcıları
+// ============================================================
+function setEphemeralMode(mode) {
+  ephemeralMode.value = mode
+  showPrivacyPicker.value = false
+}
+
+const ephemeralModeLabel = computed(() => {
+  if (ephemeralMode.value === 'view_once') return '👁️ 1 Kez Görüntülenebilir'
+  if (ephemeralMode.value === '1h') return '⏳ 1 Saat Sonra İmha'
+  if (ephemeralMode.value === '24h') return '🕐 24 Saat Sonra İmha'
+  return ''
+})
+
+function formatExpiryLabel(expiresAt) {
+  if (!expiresAt) return ''
+  const expDate = new Date(expiresAt)
+  const now = new Date()
+  const diff = expDate - now
+  if (diff <= 0) return 'Süresi doldu'
+  const hours = Math.floor(diff / 3600000)
+  const minutes = Math.floor((diff % 3600000) / 60000)
+  if (hours > 0) return `${hours}sa ${minutes}dk sonra imha`
+  return `${minutes}dk sonra imha`
+}
+
+// ============================================================
+// E-Arşiv Aktarma
+// ============================================================
+async function archiveToEArsiv(msg) {
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/chat/message/${msg.id}/archive`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (res.ok) {
+      const data = await res.json()
+      if (data.success) {
+        toast.success('📁 Dosya başarıyla E-Arşiv\'e aktarıldı.')
+      } else {
+        toast.error(data.error || 'E-Arşiv aktarımı başarısız oldu.')
+      }
+    } else {
+      const errData = await res.json().catch(() => null)
+      toast.error(errData?.error || 'E-Arşiv aktarımı sırasında hata oluştu.')
+    }
+  } catch (err) {
+    toast.error('Ağ hatası: E-Arşiv aktarımı gerçekleştirilemedi.')
+  }
 }
 
 // Standalone modda her 15 saniyede bir mesajları yenile (polling)
@@ -2010,5 +2115,126 @@ onUnmounted(() => {
   color: var(--danger);
   cursor: pointer;
   font-size: 0.9rem;
+}
+
+/* EXPIRED MESSAGE */
+.expired-message-content {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  opacity: 0.7;
+}
+.expired-icon { font-size: 1.1rem; }
+
+/* EPHEMERAL BADGE */
+.ephemeral-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(239, 68, 68, 0.12));
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  margin-bottom: 0.3rem;
+}
+
+/* E-ARCHIVE BUTTON */
+.btn-archive-file {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  margin-top: 0.4rem;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  border-radius: 8px;
+  color: #22c55e;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-archive-file:hover {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.5);
+  transform: translateY(-1px);
+}
+
+/* PRIVACY PICKER */
+.btn-privacy-toggle {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+.btn-privacy-toggle:hover { background: var(--accent-glow); }
+.btn-privacy-toggle.active { background: rgba(245, 158, 11, 0.2); }
+
+.privacy-picker-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem;
+  margin-top: 0.4rem;
+  animation: fadeIn 0.2s ease;
+}
+.privacy-picker-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 0.4rem;
+}
+.privacy-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.privacy-opt {
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.privacy-opt:hover {
+  background: var(--accent-glow);
+  border-color: var(--accent-primary, #8b5cf6);
+}
+.privacy-opt.active {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.15));
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.ephemeral-indicator {
+  font-size: 0.8rem;
+  color: #f59e0b;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

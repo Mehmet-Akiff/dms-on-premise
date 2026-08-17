@@ -4,6 +4,8 @@ const { Op } = require('sequelize');
 const { Message, User } = require('./models');
 const { logAction } = require('./utils/auditLogger');
 const { logCisoAction } = require('./utils/cisoLogger');
+const fs = require('fs');
+const path = require('path');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_dms_key_2026';
 
@@ -52,7 +54,7 @@ module.exports = {
       // 3. Olay: Mesaj Gönderme
       socket.on('send_message', async (data, callback) => {
         try {
-          const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType, fileName, fileSize, fileType, fileUrl } = data;
+          const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType, fileName, fileSize, fileType, fileUrl, isViewOnce, expiresIn } = data;
           const finalMediaUrl = mediaUrl || fileUrl || null;
           const finalMediaType = mediaType || fileType || null;
           
@@ -81,6 +83,8 @@ module.exports = {
             file_size: fileSize || null,
             scheduled_at: isScheduled ? new Date(scheduledAt) : null,
             is_delivered: !isScheduled,
+            is_view_once: isViewOnce || false,
+            expires_at: expiresIn ? new Date(Date.now() + expiresIn) : null,
           });
 
           // Gönderici bilgisini çek
@@ -320,6 +324,59 @@ module.exports = {
         }
       }
     }, 30000);
+
+    // ============================================================
+    // Süreli Mesaj İmha Cron'u (her 60 saniyede bir)
+    // ============================================================
+    setInterval(async () => {
+      try {
+        const now = new Date();
+        const expiredMessages = await Message.findAll({
+          where: {
+            expires_at: { [Op.lte]: now },
+            is_expired: false,
+          }
+        });
+
+        for (const msg of expiredMessages) {
+          msg.is_expired = true;
+          msg.content = '[Bu mesajın süresi doldu]';
+          await msg.save();
+
+          // Fiziksel dosyayı diskten sil (CISO kuralı)
+          const fileUrl = msg.media_url || msg.file_url;
+          if (fileUrl) {
+            const filename = fileUrl.split('/').pop();
+            const filePath = path.join('/app/uploads/chat', filename);
+            try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
+          }
+
+          // CISO LOG: İmha kaydı
+          logCisoAction('SURELI_ICERIK_IMHA', {
+            messageId: msg.id,
+            senderId: msg.sender_id,
+            fileName: msg.file_name || null,
+            expiresAt: msg.expires_at,
+            reason: 'Süre dolumu (otomatik imha)'
+          });
+
+          // Kullanıcılara bildir
+          const expireUpdate = { messageId: msg.id, is_expired: true };
+          if (!msg.receiver_id && (!msg.room_id || msg.room_id === GLOBAL_ROOM_ID)) {
+            io.to(GLOBAL_ROOM_ID).emit('message_expired', expireUpdate);
+          } else if (msg.receiver_id) {
+            io.to(msg.receiver_id).emit('message_expired', expireUpdate);
+            io.to(msg.sender_id).emit('message_expired', expireUpdate);
+          } else if (msg.room_id) {
+            io.to(msg.room_id).emit('message_expired', expireUpdate);
+          }
+        }
+      } catch (err) {
+        if (err.message && !err.message.includes('no such table')) {
+          console.error('[EPHEMERAL_CRON_ERR]', err.message);
+        }
+      }
+    }, 60000);
 
     return io;
   },

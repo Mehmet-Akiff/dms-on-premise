@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Op } = require('sequelize');
-const { Message, User, SystemSettings } = require('../models');
+const { Message, User, SystemSettings, Document } = require('../models');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { logAction } = require('../utils/auditLogger');
 const { logCisoAction } = require('../utils/cisoLogger');
@@ -131,7 +131,7 @@ router.get('/history/:target', async (req, res) => {
 // ============================================================
 router.post('/send', async (req, res) => {
   try {
-    const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType } = req.body;
+    const { receiverId, roomId, content, scheduledAt, mediaUrl, mediaType, isViewOnce, expiresIn } = req.body;
     const senderId = req.user.id;
 
     if (!content && !mediaUrl && (!receiverId && !roomId)) {
@@ -153,6 +153,8 @@ router.post('/send', async (req, res) => {
       media_type: mediaType || null,
       scheduled_at: isScheduled ? new Date(scheduledAt) : null,
       is_delivered: !isScheduled,
+      is_view_once: isViewOnce || false,
+      expires_at: expiresIn ? new Date(Date.now() + expiresIn) : null,
     });
 
     const populatedMessage = await Message.findByPk(newMessage.id, {
@@ -239,19 +241,46 @@ router.post('/upload', (req, res) => {
 // ============================================================
 // GET /api/chat/media/:filename — Medya/Dosya İndirme & İnceleme (JWT & CISO Korumalı)
 // ============================================================
-router.get('/media/:filename', (req, res) => {
+router.get('/media/:filename', async (req, res) => {
   const filePath = path.join('/app/uploads/chat', req.params.filename);
-  if (fs.existsSync(filePath)) {
-    logCisoAction('DOSYA_INDIRILDI', {
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Dosya bulunamadı.' });
+  }
+
+  // View-once kontrolü: Bu dosyaya ait mesajı bul
+  const mediaPath = `/api/chat/media/${req.params.filename}`;
+  const msg = await Message.findOne({ where: { [Op.or]: [{ media_url: mediaPath }, { file_url: mediaPath }] } });
+
+  if (msg && msg.is_expired) {
+    return res.status(410).json({ error: 'Bu içerik süresi dolduğu için artık erişilemez.' });
+  }
+
+  logCisoAction('DOSYA_INDIRILDI', {
+    userId: req.user ? req.user.id : null,
+    userName: req.user ? (req.user.fullName || req.user.username) : 'Anonim',
+    filename: req.params.filename
+  }, req.ip);
+
+  // View-once: İlk görüntülemeden sonra imha et
+  if (msg && msg.is_view_once && !msg.is_expired && msg.sender_id !== (req.user ? req.user.id : null)) {
+    msg.is_expired = true;
+    await msg.save();
+
+    logCisoAction('SURELI_ICERIK_IMHA', {
       userId: req.user ? req.user.id : null,
-      userName: req.user ? (req.user.fullName || req.user.username) : 'Anonim',
-      filename: req.params.filename
+      userName: req.user ? (req.user.fullName || req.user.username) : 'Bilinmiyor',
+      messageId: msg.id,
+      fileName: msg.file_name || req.params.filename,
+      reason: '1 kez görüntüleme hakkı kullanıldı'
     }, req.ip);
 
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ error: 'Dosya bulunamadı.' });
+    // Fiziksel dosyayı sil (CISO kuralı: üstveri logda kalır)
+    setTimeout(() => {
+      try { fs.unlinkSync(filePath); } catch(e) {}
+    }, 5000);
   }
+
+  res.sendFile(filePath);
 });
 
 // ============================================================
@@ -486,6 +515,79 @@ router.post('/message/:id/reaction', async (req, res) => {
   } catch (error) {
     console.error('[CHAT_API_ERR] Reaksiyon eklenemedi:', error);
     res.status(500).json({ error: 'Reaksiyon işlenirken sunucu hatası.' });
+  }
+});
+
+// ============================================================
+// POST /api/chat/message/:id/archive — Chat dosyasını E-Arşive aktar
+// ============================================================
+router.post('/message/:id/archive', async (req, res) => {
+  try {
+    const messageId = req.params.id;
+    const currentUserId = req.user.id;
+
+    const msg = await Message.findByPk(messageId, {
+      include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'fullName'] }]
+    });
+    if (!msg) return res.status(404).json({ error: 'Mesaj bulunamadı.' });
+
+    const fileUrl = msg.media_url || msg.file_url;
+    if (!fileUrl) return res.status(400).json({ error: 'Bu mesajda arşivlenecek dosya bulunmamaktadır.' });
+
+    // Chat uploads dizinindeki dosya yolunu çıkar
+    const filename = fileUrl.split('/').pop();
+    const sourcePath = path.join('/app/uploads/chat', filename);
+    if (!fs.existsSync(sourcePath)) {
+      return res.status(404).json({ error: 'Dosya sunucuda bulunamadı.' });
+    }
+
+    // Hedef: Ana doküman arşiv dizinine kopyala
+    const archiveDir = '/app/uploads/documents';
+    if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
+    const archiveFilename = `${uuidv4()}${path.extname(filename)}`;
+    const destPath = path.join(archiveDir, archiveFilename);
+    fs.copyFileSync(sourcePath, destPath);
+
+    // Dosya uzantısından mimeType belirle
+    const ext = path.extname(filename).toLowerCase();
+    let mimeType = 'application/pdf';
+    if (['.png'].includes(ext)) mimeType = 'image/png';
+    else if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
+
+    // Document tablosuna kayıt ekle
+    const archiveDoc = await Document.create({
+      title: msg.file_name || filename,
+      originalName: msg.file_name || filename,
+      mimeType,
+      filePath: `/uploads/documents/${archiveFilename}`,
+      status: 'COMPLETED',
+      userId: currentUserId,
+      tags: ['chat-arsiv'],
+      sensitivity: 'internal',
+    });
+
+    // CISO LOG
+    logCisoAction('DOSYA_ARSIVLENDI', {
+      userId: currentUserId,
+      userName: req.user.fullName || req.user.username,
+      sourceMessageId: messageId,
+      sourceFileName: msg.file_name || filename,
+      archiveDocId: archiveDoc.id,
+      senderName: msg.sender?.fullName || msg.sender?.username || 'Bilinmiyor',
+    }, req.ip);
+
+    // GENEL LOG
+    logAction(req, 'DOSYA_E_ARSIVE_AKTARILDI', null, null,
+      `${req.user.fullName || req.user.username} chat dosyasını E-Arşiv'e aktardı (Mesaj ID: ${messageId})`);
+
+    res.json({
+      success: true,
+      message: 'Dosya başarıyla E-Arşiv\'e aktarıldı.',
+      archiveId: archiveDoc.id
+    });
+  } catch (error) {
+    console.error('[CHAT_API_ERR] E-Arşiv aktarımı başarısız:', error);
+    res.status(500).json({ error: 'E-Arşiv aktarımı sırasında sunucu hatası oluştu.' });
   }
 });
 
