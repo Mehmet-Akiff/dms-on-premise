@@ -109,61 +109,72 @@
 
                   <!-- Süreli / View-Once Uyarı Etiketi -->
                   <div v-if="msg.is_view_once || msg.expires_at" class="ephemeral-badge">
-                    <span v-if="msg.is_view_once">👁️ 1 Kez Görüntülenebilir</span>
+                    <span v-if="msg.is_view_once">👁️ 1 Kez Görüntülenebilir {{ isMine(msg) ? '(Gönderildi)' : '' }}</span>
                     <span v-else-if="msg.expires_at">⏱️ {{ formatExpiryLabel(msg.expires_at) }}</span>
                   </div>
+
+                  <!-- 1 Kez Görüntülenebilir Kilitli Kutu (Alıcı henüz açmadıysa) -->
+                  <div v-if="msg.is_view_once && !isMine(msg) && !revealedMessages[msg.id]" class="view-once-locked-box" @click="revealViewOnce(msg)">
+                    <div class="view-once-icon">👁️</div>
+                    <div class="view-once-title">1 Kez Görüntülenebilir Gizli İçerik</div>
+                    <div class="view-once-sub">Görüntülemek için tıklayın (açıldıktan sonra imha edilir)</div>
+                    <button class="btn-reveal-view-once" @click.stop="revealViewOnce(msg)">İçeriği Aç</button>
+                  </div>
                   
-                  <!-- Media & Document Content -->
-                  <div v-if="msg.media_url || msg.file_url" class="message-media">
-                    <img v-if="(msg.media_type || msg.file_type) === 'image'" 
-                         :src="getAuthMediaUrl(msg.media_url || msg.file_url)" 
-                         class="media-image" 
-                         alt="Görsel" 
-                         @click="openImage(msg.media_url || msg.file_url)" />
-                    <audio v-else-if="(msg.media_type || msg.file_type) === 'audio'" 
+                  <!-- Normal & Açılmış İçerik -->
+                  <template v-else>
+                    <!-- Media & Document Content -->
+                    <div v-if="msg.media_url || msg.file_url" class="message-media">
+                      <img v-if="(msg.media_type || msg.file_type) === 'image'" 
                            :src="getAuthMediaUrl(msg.media_url || msg.file_url)" 
-                           controls 
-                           class="media-audio" 
-                           preload="metadata" 
-                           @loadedmetadata="onAudioLoaded"></audio>
-                    <div v-else class="file-card-preview" @click="downloadMedia(msg.media_url || msg.file_url, 'download')">
-                      <div class="file-card-icon">
-                        {{ getFileIcon(msg.file_name || msg.media_url, msg.media_type || msg.file_type) }}
-                      </div>
-                      <div class="file-card-info">
-                        <div class="file-card-name" :title="msg.file_name || 'Dosya'">
-                          {{ msg.file_name || getFileNameFromUrl(msg.media_url || msg.file_url) }}
+                           class="media-image" 
+                           alt="Görsel" 
+                           @click="openImage(msg.media_url || msg.file_url)" />
+                      <audio v-else-if="(msg.media_type || msg.file_type) === 'audio'" 
+                             :src="getAuthMediaUrl(msg.media_url || msg.file_url)" 
+                             controls 
+                             class="media-audio" 
+                             preload="metadata" 
+                             @loadedmetadata="onAudioLoaded"></audio>
+                      <div v-else class="file-card-preview" @click="downloadMedia(msg.media_url || msg.file_url, 'download')">
+                        <div class="file-card-icon">
+                          {{ getFileIcon(msg.file_name || msg.media_url, msg.media_type || msg.file_type) }}
                         </div>
-                        <div class="file-card-size" v-if="msg.file_size">
-                          {{ formatFileSize(msg.file_size) }}
+                        <div class="file-card-info">
+                          <div class="file-card-name" :title="msg.file_name || 'Dosya'">
+                            {{ msg.file_name || getFileNameFromUrl(msg.media_url || msg.file_url) }}
+                          </div>
+                          <div class="file-card-size" v-if="msg.file_size">
+                            {{ formatFileSize(msg.file_size) }}
+                          </div>
                         </div>
+                        <button class="file-card-download-btn" title="İndir">
+                          📥
+                        </button>
                       </div>
-                      <button class="file-card-download-btn" title="İndir">
-                        📥
+
+                      <!-- E-Arşive Kaydet Butonu -->
+                      <button v-if="(msg.media_url || msg.file_url) && !msg.is_view_once && !msg.is_expired" 
+                              class="btn-archive-file" 
+                              @click.stop="archiveToEArsiv(msg)" 
+                              title="E-Arşiv'e Kaydet">
+                        📁 E-Arşive Kaydet
                       </button>
                     </div>
 
-                    <!-- E-Arşive Kaydet Butonu -->
-                    <button v-if="(msg.media_url || msg.file_url) && !msg.is_view_once && !msg.is_expired" 
-                            class="btn-archive-file" 
-                            @click.stop="archiveToEArsiv(msg)" 
-                            title="E-Arşiv'e Kaydet">
-                      📁 E-Arşive Kaydet
-                    </button>
-                  </div>
-
-                  <!-- Inline Edit Mode -->
-                  <div v-if="editingMessageId === msg.id" class="inline-edit-box">
-                    <input v-model="editContent" class="edit-input" @keyup.enter="saveEdit(msg.id)" @keyup.escape="cancelEdit" ref="editInputRef" />
-                    <div class="edit-actions">
-                      <button class="btn-edit-save" @click="saveEdit(msg.id)">✓ Kaydet</button>
-                      <button class="btn-edit-cancel" @click="cancelEdit">✕ İptal</button>
+                    <!-- Inline Edit Mode -->
+                    <div v-if="editingMessageId === msg.id" class="inline-edit-box">
+                      <input v-model="editContent" class="edit-input" @keyup.enter="saveEdit(msg.id)" @keyup.escape="cancelEdit" ref="editInputRef" />
+                      <div class="edit-actions">
+                        <button class="btn-edit-save" @click="saveEdit(msg.id)">✓ Kaydet</button>
+                        <button class="btn-edit-cancel" @click="cancelEdit">✕ İptal</button>
+                      </div>
                     </div>
-                  </div>
-                  <!-- Normal Content -->
-                  <div class="message-content" v-else-if="msg.content">
-                    {{ msg.content }}
-                  </div>
+                    <!-- Normal Content -->
+                    <div class="message-content" v-else-if="msg.content">
+                      {{ msg.content }}
+                    </div>
+                  </template>
                 </template>
                 
                 <div class="message-meta">
@@ -555,9 +566,42 @@ function toggleScheduler() {
   showEmojiPicker.value = false
 }
 
+const DANGEROUS_EXTENSIONS = [
+  '.exe', '.apk', '.bat', '.cmd', '.sh', '.vbs', '.js', '.jar', '.msi', 
+  '.ps1', '.com', '.scr', '.hta', '.dll', '.bin', '.iso', '.deb', '.rpm', 
+  '.appimage', '.pif', '.reg', '.wsf', '.cpl', '.action', '.command'
+]
+
+function validateSelectedFile(file) {
+  if (!file) return false
+
+  // 1. Boyut Sınırı (Maksimum 50MB)
+  const maxSize = 50 * 1024 * 1024
+  if (file.size > maxSize) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1)
+    toast.error(`🚫 Dosya Boyutu Sınırı: Seçilen dosya (${sizeMb} MB) izin verilen 50 MB sınırını aşıyor.`)
+    return false
+  }
+
+  // 2. Güvenlik Protokolü: Çalıştırılabilir / Zararlı kod format engeli
+  const fileName = file.name.toLowerCase()
+  const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : ''
+  if (DANGEROUS_EXTENSIONS.includes(ext)) {
+    toast.error(`🚨 Güvenlik Protokolü Engeli: Çalıştırılabilir veya gizli komut barındırabilecek (${ext}) dosya formatlarının kapalı ağ güvenliği gereği transferine izin verilmemektedir!`)
+    return false
+  }
+
+  return true
+}
+
 function onFileSelected(event) {
   const file = event.target.files[0]
   if (file) {
+    if (!validateSelectedFile(file)) {
+      if (fileInput.value) fileInput.value.value = ''
+      selectedFile.value = null
+      return
+    }
     selectedFile.value = file
   }
 }
@@ -624,6 +668,9 @@ function onDrop(e) {
 
   if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
     const file = e.dataTransfer.files[0]
+    if (!validateSelectedFile(file)) {
+      return
+    }
     uploadAndSendMedia(file)
   }
 }
@@ -1314,6 +1361,34 @@ function openImage(url) {
 // ============================================================
 // Gizlilik / Süreli Mesaj Yardımcıları
 // ============================================================
+const revealedMessages = ref({})
+
+async function revealViewOnce(msg) {
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/chat/message/${msg.id}/view-once`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (res.ok) {
+      const result = await res.json()
+      if (result.success && result.data) {
+        revealedMessages.value[msg.id] = true
+        // Medya içeriyorsa aç
+        if (result.data.media_url || result.data.file_url) {
+          downloadMedia(result.data.media_url || result.data.file_url, 'view')
+        }
+      }
+    } else {
+      const err = await res.json().catch(() => null)
+      toast.error(err?.error || 'Bu içerik süresi dolduğu için imha edilmiş.')
+      updateLocalMessage(msg.id, { is_expired: true, content: '[Bu içeriğin süresi doldu]' })
+    }
+  } catch (e) {
+    toast.error('İçerik açılırken bağlantı hatası oluştu.')
+  }
+}
+
 function setEphemeralMode(mode) {
   ephemeralMode.value = mode
   showPrivacyPicker.value = false
@@ -2236,5 +2311,55 @@ onUnmounted(() => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* VIEW ONCE BOX */
+.view-once-locked-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.8rem 1.1rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px dashed rgba(245, 158, 11, 0.4);
+  border-radius: 10px;
+  margin: 0.4rem 0;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.view-once-locked-box:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  transform: translateY(-1px);
+}
+.view-once-icon {
+  font-size: 1.5rem;
+}
+.view-once-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f59e0b;
+}
+.view-once-sub {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  max-width: 250px;
+  line-height: 1.25;
+}
+.btn-reveal-view-once {
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.9rem;
+  background: #f59e0b;
+  color: #000;
+  font-weight: 700;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.btn-reveal-view-once:hover {
+  background: #d97706;
 }
 </style>

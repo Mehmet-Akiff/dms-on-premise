@@ -25,9 +25,6 @@ const Document = sequelize.define('documents', {
     type: DataTypes.STRING(100),
     allowNull: false,
     field: 'mime_type',
-    validate: {
-      isIn: [['application/pdf', 'image/png', 'image/jpeg']],
-    },
   },
   filePath: {
     type: DataTypes.STRING(1000),

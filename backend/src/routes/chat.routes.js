@@ -13,12 +13,16 @@ const { v4: uuidv4 } = require('uuid');
 // Global oda için sabit UUID (DB'de room_id UUID tipinde)
 const GLOBAL_ROOM_ID = '00000000-0000-0000-0000-000000000001';
 
-const DANGEROUS_EXTENSIONS = ['.exe', '.bat', '.cmd', '.sh', '.vbs', '.js', '.jar', '.msi', '.ps1', '.com', '.scr', '.hta'];
+const DANGEROUS_EXTENSIONS = [
+  '.exe', '.apk', '.bat', '.cmd', '.sh', '.vbs', '.js', '.jar', '.msi', 
+  '.ps1', '.com', '.scr', '.hta', '.dll', '.bin', '.iso', '.deb', '.rpm', 
+  '.appimage', '.pif', '.reg', '.wsf', '.cpl', '.action', '.command'
+];
 
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
   if (DANGEROUS_EXTENSIONS.includes(ext)) {
-    return cb(new Error('Güvenlik uyarısı: Bu dosya formatının (.exe, .bat vb.) yüklenmesine yetkili CISO politikaları gereği izin verilmemektedir.'), false);
+    return cb(new Error('Güvenlik Protokolü Engeli: Çalıştırılabilir ve zararlı kod içerebilecek (.exe, .apk, .bat, .sh vb.) dosyaların kapalı ağ transferi yasaktır.'), false);
   }
   cb(null, true);
 };
@@ -131,6 +135,17 @@ router.get('/history/:target', async (req, res) => {
         order: [['created_at', 'ASC']],
         limit: 200
       });
+    }
+
+    // Süresi dolmuş mesajları kontrol et ve güncelle
+    for (const msg of messages) {
+      if (msg.expires_at && new Date(msg.expires_at) <= now && !msg.is_expired) {
+        msg.is_expired = true;
+        msg.content = '[Bu içeriğin süresi doldu]';
+        msg.media_url = null;
+        msg.file_url = null;
+        await msg.save();
+      }
     }
 
     res.json({ success: true, data: messages });
@@ -533,6 +548,79 @@ router.post('/message/:id/reaction', async (req, res) => {
 });
 
 // ============================================================
+// POST /api/chat/message/:id/view-once — Tek Seferlik Mesajı Aç & İmha Et
+// ============================================================
+router.post('/message/:id/view-once', async (req, res) => {
+  try {
+    const messageId = req.params.id;
+    const currentUserId = req.user.id;
+    const msg = await Message.findByPk(messageId);
+    if (!msg) return res.status(404).json({ error: 'Mesaj bulunamadı.' });
+
+    if (!msg.is_view_once) {
+      return res.status(400).json({ error: 'Bu mesaj tek seferlik değil.' });
+    }
+
+    if (msg.is_expired) {
+      return res.status(410).json({ error: 'Bu içerik süresi dolduğu veya daha önce görüntülendiği için imha edildi.' });
+    }
+
+    // Gönderen dışındaki alıcı görüntülediğinde imha et
+    if (msg.sender_id !== currentUserId) {
+      msg.is_expired = true;
+      await msg.save();
+
+      const fileUrl = msg.media_url || msg.file_url;
+      if (fileUrl) {
+        const filename = fileUrl.split('/').pop();
+        const filePath = path.join('/app/uploads/chat', filename);
+        setTimeout(() => {
+          try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
+        }, 10000);
+      }
+
+      logCisoAction('SURELI_ICERIK_IMHA', {
+        userId: currentUserId,
+        userName: req.user.fullName || req.user.username,
+        messageId: msg.id,
+        fileName: msg.file_name || null,
+        reason: '1 Kez Görüntüleme hakkı kullanıldı (Alıcı tarafından açıldı)'
+      }, req.ip);
+
+      try {
+        const socketModule = require('../socket');
+        const io = socketModule.getIo();
+        const expireUpdate = { messageId: msg.id, is_expired: true };
+        if (msg.room_id) io.to(msg.room_id).emit('message_expired', expireUpdate);
+        if (msg.receiver_id) {
+          io.to(msg.receiver_id).emit('message_expired', expireUpdate);
+          io.to(msg.sender_id).emit('message_expired', expireUpdate);
+        }
+      } catch (e) {}
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: msg.id,
+        content: msg.content,
+        media_url: msg.media_url,
+        media_type: msg.media_type,
+        file_url: msg.file_url,
+        file_name: msg.file_name,
+        file_type: msg.file_type,
+        file_size: msg.file_size,
+        is_view_once: msg.is_view_once,
+        is_expired: true
+      }
+    });
+  } catch (error) {
+    console.error('[CHAT_API_ERR] View-once açılamadı:', error);
+    res.status(500).json({ error: 'İçerik açılırken sunucu hatası.' });
+  }
+});
+
+// ============================================================
 // POST /api/chat/message/:id/archive — Chat dosyasını E-Arşive aktar
 // ============================================================
 router.post('/message/:id/archive', async (req, res) => {
@@ -555,8 +643,8 @@ router.post('/message/:id/archive', async (req, res) => {
       return res.status(404).json({ error: 'Dosya sunucuda bulunamadı.' });
     }
 
-    // Hedef: Ana doküman arşiv dizinine kopyala
-    const archiveDir = '/app/uploads/documents';
+    // Hedef: Ana doküman yükleme dizini (/app/uploads) - Önizleme ve indirme ile tam uyumlu
+    const archiveDir = '/app/uploads';
     if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
     const archiveFilename = `${uuidv4()}${path.extname(filename)}`;
     const destPath = path.join(archiveDir, archiveFilename);
@@ -564,21 +652,43 @@ router.post('/message/:id/archive', async (req, res) => {
 
     // Dosya uzantısından mimeType belirle
     const ext = path.extname(filename).toLowerCase();
-    let mimeType = 'application/pdf';
-    if (['.png'].includes(ext)) mimeType = 'image/png';
-    else if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
+    let mimeType = 'application/octet-stream';
+    if (ext === '.pdf') mimeType = 'application/pdf';
+    else if (ext === '.png') mimeType = 'image/png';
+    else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+    else if (ext === '.webp') mimeType = 'image/webp';
+    else if (ext === '.gif') mimeType = 'image/gif';
+    else if (ext === '.svg') mimeType = 'image/svg+xml';
+    else if (ext === '.docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    else if (ext === '.doc') mimeType = 'application/msword';
+    else if (ext === '.xlsx') mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    else if (ext === '.xls') mimeType = 'application/vnd.ms-excel';
+    else if (ext === '.txt') mimeType = 'text/plain';
+    else if (ext === '.zip') mimeType = 'application/zip';
 
     // Document tablosuna kayıt ekle
+    const { DocumentMetadata } = require('../models');
     const archiveDoc = await Document.create({
       title: msg.file_name || filename,
       originalName: msg.file_name || filename,
       mimeType,
-      filePath: `/uploads/documents/${archiveFilename}`,
+      filePath: `/app/uploads/${archiveFilename}`,
       status: 'COMPLETED',
       userId: currentUserId,
       tags: ['chat-arsiv'],
-      sensitivity: 'internal',
+      sensitivity: 'public',
     });
+
+    // DocumentMetadata kaydı ekle
+    try {
+      await DocumentMetadata.create({
+        document_id: archiveDoc.id,
+        extracted_text: `Chat üzerinden aktarılan dosya: ${msg.file_name || filename}`,
+        comments: [`Chat modülünden aktarıldı (Gönderen: ${msg.sender?.fullName || msg.sender?.username || 'Bilinmiyor'})`],
+      });
+    } catch (metaErr) {
+      console.warn('[ARCHIVE_META_WARN]', metaErr.message);
+    }
 
     // CISO LOG
     logCisoAction('DOSYA_ARSIVLENDI', {
@@ -601,7 +711,7 @@ router.post('/message/:id/archive', async (req, res) => {
     });
   } catch (error) {
     console.error('[CHAT_API_ERR] E-Arşiv aktarımı başarısız:', error);
-    res.status(500).json({ error: 'E-Arşiv aktarımı sırasında sunucu hatası oluştu.' });
+    res.status(500).json({ error: `E-Arşiv aktarımı sırasında hata: ${error.message}` });
   }
 });
 

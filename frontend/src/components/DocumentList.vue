@@ -540,10 +540,18 @@
                     style="width: 100%; height: 500px; border: none;"
                   ></iframe>
                   <img 
-                    v-else 
+                    v-else-if="isImage(selectedDoc.mimeType || selectedDoc.mime_type, selectedDoc.originalName || selectedDoc.original_name)" 
                     :src="'/uploads/' + getFileName(selectedDoc.filePath)" 
                     style="max-width: 100%; max-height: 500px; object-fit: contain;" 
                   />
+                  <div v-else class="non-image-doc-preview" style="padding: 2.5rem 1.5rem; text-align: center; color: var(--text-primary); display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
+                    <div style="font-size: 3.5rem; margin-bottom: 0.5rem;">📄</div>
+                    <div style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">{{ selectedDoc.title || selectedDoc.originalName }}</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem;">Bu dosya türü için doğrudan tarayıcı önizlemesi desteklenmemektedir.</div>
+                    <button class="action-link-btn" style="padding: 0.55rem 1.25rem; background: var(--accent-primary, #8b5cf6); color: white; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem;" @click="downloadFile(selectedDoc)">
+                      📥 Dosyayı İndir
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -667,6 +675,15 @@ function getFileName(filePath) {
 
 function isPdf(mime) {
   return mime && mime.toLowerCase().includes('pdf');
+}
+
+function isImage(mime, filename) {
+  if (mime && (mime.toLowerCase().includes('image') || mime.toLowerCase().includes('png') || mime.toLowerCase().includes('jpeg') || mime.toLowerCase().includes('jpg') || mime.toLowerCase().includes('webp') || mime.toLowerCase().includes('gif') || mime.toLowerCase().includes('svg') || mime.toLowerCase().includes('bmp'))) return true;
+  if (filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    return ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(ext);
+  }
+  return false;
 }
 
 function copyFilePath(path) {
