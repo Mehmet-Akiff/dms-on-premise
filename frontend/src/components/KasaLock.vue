@@ -401,6 +401,7 @@ async function handleRegister() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: regUsername.value,
+        fullName: regFullName.value,
         full_name: regFullName.value,
         email: regEmail.value,
         password: regPassword.value,

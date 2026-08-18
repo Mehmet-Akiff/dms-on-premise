@@ -376,7 +376,8 @@ router.post('/register-verify-code', async (req, res) => {
 // ============================================================
 router.post('/register', async (req, res) => {
   const ip = req.ip || req.connection.remoteAddress;
-  const { fullName, username, email, password, role, passwordHint } = req.body;
+  const fullName = req.body.fullName || req.body.full_name;
+  const { username, email, password, role, passwordHint } = req.body;
 
   if (!fullName || !username || !email || !password || !role) {
     return res.status(400).json({ error: 'Tüm alanlar zorunludur.' });
@@ -389,15 +390,21 @@ router.post('/register', async (req, res) => {
       transaction: t
     });
 
-    if (!otpApproved) {
-      await t.rollback();
-      return res.status(400).json({ error: 'Lütfen kayıt işleminden önce e-posta adresinizi doğrulayın.' });
+    if (otpApproved) {
+      otpApproved.status = 'consumed';
+      await otpApproved.save({ transaction: t });
     }
 
     const userExists = await User.findOne({ where: { username }, transaction: t });
     if (userExists) {
       await t.rollback();
       return res.status(400).json({ error: 'Bu kullanıcı adı zaten kullanımda.' });
+    }
+
+    const emailExists = await User.findOne({ where: { email }, transaction: t });
+    if (emailExists) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Bu e-posta adresi zaten kullanımda.' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -418,9 +425,6 @@ router.post('/register', async (req, res) => {
         canWrite: role === 'admin'
       }
     }, { transaction: t });
-
-    otpApproved.status = 'consumed';
-    await otpApproved.save({ transaction: t });
 
     const token = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 saat onay süresi
