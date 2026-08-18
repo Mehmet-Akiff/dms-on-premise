@@ -479,12 +479,25 @@
           <div class="log-status-card" style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 1rem;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
-                <p style="margin:0; font-size:0.8rem; color:var(--text-secondary);">{{ $t('settings.activeLogPath') || 'Aktif Log Yolu:' }}</p>
+                <p style="margin:0; font-size:0.8rem; color:var(--text-secondary);">{{ $t('settings.activeLogPath') || 'Aktif Log Yolu (Konteyner İçi):' }}</p>
                 <code style="font-size:0.75rem; color:var(--color-success); font-weight:700;">{{ logFilePath || '/app/uploads/dms-audit.jsonl' }}</code>
+                <p style="margin:0.35rem 0 0; font-size:0.65rem; color:#6b7280; line-height:1.4;">
+                  ℹ️ Bu yol Docker konteyneri içindeki dahili yoldur. Dosyayı bilgisayarınıza almak için aşağıdaki "İndir" butonunu kullanın.
+                </p>
               </div>
-              <span :style="{ background: logFileExists ? '#065f46' : '#991b1b', color: logFileExists ? 'var(--color-success)' : 'var(--color-danger)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: '700' }">
-                {{ logFileExists ? ($t('settings.logConnected') || 'BAĞLI') : ($t('settings.logNotFound') || 'DOSYA BULUNAMADI') }}
-              </span>
+              <div style="display:flex; flex-direction:column; gap:0.4rem; align-items:flex-end;">
+                <span :style="{ background: logFileExists ? '#065f46' : '#991b1b', color: logFileExists ? 'var(--color-success)' : 'var(--color-danger)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: '700' }">
+                  {{ logFileExists ? ($t('settings.logConnected') || 'BAĞLI') : ($t('settings.logNotFound') || 'DOSYA BULUNAMADI') }}
+                </span>
+                <span v-if="logFileSize > 0" style="font-size:0.62rem; color:#6b7280;">{{ formatFileSize(logFileSize) }}</span>
+              </div>
+            </div>
+
+            <div v-if="logFileExists" style="margin-top:0.75rem; border-top:1px dashed rgba(255,255,255,0.08); padding-top:0.65rem; display:flex; gap:0.5rem; align-items:center;">
+              <button type="button" class="btn-settings-save" @click="downloadLogFile" style="margin:0; padding:0.4rem 0.85rem; font-size:0.72rem; white-space:nowrap;">
+                📥 Log Dosyasını İndir
+              </button>
+              <span style="font-size:0.65rem; color:#6b7280;">Dosya doğrudan bilgisayarınıza indirilecektir.</span>
             </div>
             
             <div v-if="!logFileExists" style="margin-top:1rem; border-top:1px dashed rgba(255,255,255,0.08); padding-top:0.75rem;">
@@ -764,6 +777,7 @@ const workingHoursEnd = ref('18:00')
 // Log Dosyası Yönetim Değişkenleri
 const logFileExists = ref(true)
 const logFilePath = ref('')
+const logFileSize = ref(0)
 const importFilePath = ref('')
 
 // Bölümlenmiş onay listeleri
@@ -1350,9 +1364,41 @@ async function checkLogFileStatus() {
       const data = await response.json()
       logFileExists.value = data.exists;
       logFilePath.value = data.path;
+      logFileSize.value = data.fileSize || 0;
     }
   } catch (e) {
     // silent
+  }
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i]
+}
+
+async function downloadLogFile() {
+  try {
+    const response = await fetch('/api/auth/log-file-download', {
+      headers: { 'Authorization': `Bearer ${getKasaToken()}` }
+    })
+    if (!response.ok) {
+      toast.error('Log dosyası indirilemedi.')
+      return
+    }
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'dms-audit.jsonl'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+    toast.success('Log dosyası indirildi.')
+  } catch (e) {
+    toast.error('İndirme sırasında hata oluştu.')
   }
 }
 

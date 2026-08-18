@@ -165,7 +165,7 @@ const currentUserId = computed(() => {
 })
 
 async function deleteUser(user) {
-  const confirmMsg = `"${user.fullName} (${user.username})" isimli kullanıcıyı sistemden silmek istediğinize emin misiniz?\n\nBu işlem sistemdeki TÜM adminlerin ortak onayına gönderilecektir.`
+  const confirmMsg = `"${user.fullName} (${user.username})" isimli kullanıcıyı sistemden silmek istediğinize emin misiniz?`
   if (!confirm(confirmMsg)) return;
 
   try {
@@ -177,9 +177,9 @@ async function deleteUser(user) {
     
     const data = await response.json()
     if (response.status === 202) {
-      toast.info(data.message || 'Silme onay talebi oluşturuldu.')
+      toast.info(data.message || 'Silme onay talebi oluşturuldu. Diğer yöneticilerin onayı bekleniyor.')
     } else if (response.ok) {
-      toast.success('Kullanıcı başarıyla silindi.')
+      toast.success(data.message || 'Kullanıcı başarıyla silindi.')
       fetchUsers()
     } else {
       toast.error(data.error || 'Silme işlemi başlatılamadı.')

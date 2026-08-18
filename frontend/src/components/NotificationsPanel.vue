@@ -74,7 +74,7 @@
           <div v-if="canApprove(req)" style="display:flex; flex-direction:column; gap:0.5rem; border-top:1px dashed rgba(255,255,255,0.06); padding-top:0.5rem;">
             
             <!-- ÇİFT ONAY AÇIKSA veya CISO Profil Talebi ise -->
-            <template v-if="doubleApprovalEnabled || req.type === 'NAME_CHANGE' || req.type === 'USERNAME_CHANGE' || req.type === 'USER_DELETION'">
+            <template v-if="doubleApprovalEnabled || req.type === 'NAME_CHANGE' || req.type === 'USERNAME_CHANGE'">
               
               <!-- Arayüz İmzası Eksikse -->
               <div v-if="!(req.approvalsReceived || []).some(s => s.includes('Arayüz'))" style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.02); padding:0.4rem; border-radius:6px;">

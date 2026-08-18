@@ -683,15 +683,29 @@ router.delete('/users/:id', verifyToken, requireAdmin, async (req, res) => {
     const activeAdmins = await User.findAll({ where: { role: 'admin', status: 'active' } });
 
     if (targetUser.role === 'admin') {
-      // 1 aktif admin silinemez kuralı
       if (activeAdmins.length <= 1) {
         return res.status(403).json({ error: 'Sistemdeki son yönetici (Admin) hesabı silinemez.' });
       }
     }
 
-    // Ortak onay kaydı oluştur
+    // Sistemde tek admin varsa (veya sadece silmeyi başlatan admin varsa) doğrudan sil
+    const otherAdmins = activeAdmins.filter(a => a.id !== req.user.id);
+    if (otherAdmins.length === 0) {
+      // Tek admin - doğrudan sil, onay süreci gerekmiyor
+      await targetUser.destroy();
+      logAction('DELETE_USER_DIRECT', req.user.id, req.user.fullName, targetUser.id, targetUser.fullName, `Kullanıcı tek yönetici kararıyla doğrudan silindi.`, ip);
+      return res.status(200).json({ 
+        message: `"${targetUser.fullName}" kullanıcısı başarıyla silindi.`,
+        deleted: true
+      });
+    }
+
+    // Birden fazla admin var - ortak onay kaydı oluştur
     const token = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+
+    // Başlatan adminin onayını otomatik olarak say
+    const requesterSignature = `Admin (${req.user.fullName || req.user.username})`;
 
     const request = await ApprovalRequest.create({
       type: 'USER_DELETION',
@@ -705,16 +719,16 @@ router.delete('/users/:id', verifyToken, requireAdmin, async (req, res) => {
         expiresAt 
       },
       approvalsRequired: activeAdmins.length,
-      approvalsReceived: [],
+      approvalsReceived: [requesterSignature],
       status: 'pending',
       token
     });
 
-    // Adminlere e-posta bildirimi gönder (isteğe bağlı)
+    // Diğer adminlere e-posta bildirimi gönder
     const settingsRecord = await SystemSettings.findByPk('kasa_settings');
     const settings = settingsRecord ? settingsRecord.value : {};
     
-    for (const adm of activeAdmins) {
+    for (const adm of otherAdmins) {
       try {
         const transporter = getMailTransporter(settings.smtpConfig);
         const fromUser = settings.smtpConfig?.auth?.user || 'security@dms.com';
@@ -732,7 +746,7 @@ router.delete('/users/:id', verifyToken, requireAdmin, async (req, res) => {
     logAction('DELETE_USER_REQUESTED', req.user.id, req.user.fullName, targetUser.id, targetUser.fullName, `Kullanıcı silme talebi oluşturuldu. Ortak karar bekleniyor.`, ip);
 
     res.status(202).json({ 
-      message: 'Kullanıcı silme ortak onay talebi oluşturuldu. Tüm yöneticilerin (Admin) ortak kararı (onayı) bekleniyor.',
+      message: 'Kullanıcı silme ortak onay talebi oluşturuldu. Diğer yöneticilerin onayı bekleniyor.',
       pendingApproval: true
     });
   } catch (error) {
@@ -1422,6 +1436,12 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
         await t.commit();
       }
     } else if (request.type === 'USER_DELETION') {
+      // CISO kullanıcı silme onayı veremez
+      if (req.user.role === 'ciso') {
+        await t.rollback();
+        return res.status(403).json({ error: 'Kullanıcı silme onayını sadece Sistem Yöneticisi (Admin) verebilir.' });
+      }
+
       const user = await User.findByPk(request.targetId, { transaction: t });
       if (!user) {
         request.status = 'approved';
@@ -1430,15 +1450,19 @@ router.post('/approvals/:id/approve', verifyToken, async (req, res) => {
         return res.status(200).json({ message: 'Silinecek kullanıcı zaten bulunmuyor.', status: 'approved' });
       }
 
+      // Sadece admin-spesifik imza kullan (genel imzayı temizle)
       const adminSignature = `Admin (${req.user.fullName || req.user.username})`;
-      const received = request.approvalsReceived || [];
-      if (!received.includes(adminSignature)) {
-        received.push(adminSignature);
+      // Genel blokta eklenen generic imzaları kaldır
+      const cleanReceived = (request.approvalsReceived || []).filter(s => 
+        !s.includes('Yönetici (Arayüz)') && !s.includes('Yönetici (E-posta)')
+      );
+      if (!cleanReceived.includes(adminSignature)) {
+        cleanReceived.push(adminSignature);
       }
-      request.approvalsReceived = received;
+      request.approvalsReceived = cleanReceived;
       request.changed('approvalsReceived', true);
 
-      const uniqueApprovers = [...new Set(received)];
+      const uniqueApprovers = [...new Set(cleanReceived)];
       if (uniqueApprovers.length >= request.approvalsRequired) {
         request.status = 'approved';
         await request.save({ transaction: t });
@@ -1558,14 +1582,51 @@ router.get('/log-file-status', verifyToken, async (req, res) => {
     const fs = require('fs');
     const { SystemSettings } = require('../models');
     const record = await SystemSettings.findByPk('kasa_settings');
-    let path = '/app/uploads/dms-audit.jsonl';
+    let filePath = '/app/uploads/dms-audit.jsonl';
     if (record && record.value?.logFilePath) {
-      path = record.value.logFilePath;
+      filePath = record.value.logFilePath;
     }
-    const exists = fs.existsSync(path);
-    res.status(200).json({ exists, path });
+    const exists = fs.existsSync(filePath);
+    let fileSize = 0;
+    if (exists) {
+      const stats = fs.statSync(filePath);
+      fileSize = stats.size;
+    }
+    res.status(200).json({ 
+      exists, 
+      path: filePath,
+      fileSize,
+      note: 'Bu yol Docker konteyneri içindeki dahili yoldur. Dosyayı bilgisayarınıza indirmek için "Log Dosyasını İndir" butonunu kullanın.'
+    });
   } catch (err) {
     res.status(500).json({ error: 'Log dosyası durumu alınamadı.' });
+  }
+});
+
+// Log dosyasını doğrudan indirme
+router.get('/log-file-download', verifyToken, async (req, res) => {
+  if (req.user.role !== 'ciso' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Yetkisiz erişim.' });
+  }
+  try {
+    const fs = require('fs');
+    const pathModule = require('path');
+    const { SystemSettings } = require('../models');
+    const record = await SystemSettings.findByPk('kasa_settings');
+    let filePath = '/app/uploads/dms-audit.jsonl';
+    if (record && record.value?.logFilePath) {
+      filePath = record.value.logFilePath;
+    }
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Log dosyası bulunamadı.' });
+    }
+    const fileName = pathModule.basename(filePath);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Type', 'application/jsonl');
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: 'Log dosyası indirilemedi.' });
   }
 });
 
