@@ -526,6 +526,12 @@ body {
   width: 240px;
   box-shadow: 10px 0 30px rgba(0,0,0,0.1);
 }
+[data-sidebar-mode="pinned"] .app-sidebar-nav {
+  width: 240px !important;
+}
+[data-sidebar-mode="pinned"] .app-sidebar-nav .app-nav-label {
+  opacity: 1 !important;
+}
 .app-nav-link {
   display: flex;
   align-items: center;

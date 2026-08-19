@@ -78,7 +78,26 @@ export function applyAccent(palette) {
   document.documentElement.setAttribute('data-accent', palette || 'violet');
 }
 
+const SIDEBAR_MODE_KEY = 'dms_sidebar_mode';
+
+export function getSidebarMode() {
+  return localStorage.getItem(SIDEBAR_MODE_KEY) || 'hover';
+}
+
+export function setSidebarMode(mode) {
+  const valid = mode === 'pinned' ? 'pinned' : 'hover';
+  localStorage.setItem(SIDEBAR_MODE_KEY, valid);
+  applySidebarMode(valid);
+}
+
+export function applySidebarMode(mode) {
+  const current = mode || getSidebarMode();
+  document.documentElement.setAttribute('data-sidebar-mode', current);
+  window.dispatchEvent(new CustomEvent('sidebar-mode-changed', { detail: current }));
+}
+
 export function initTheme() {
   applyTheme(getTheme());
   applyAccent(getAccent());
+  applySidebarMode(getSidebarMode());
 }

@@ -108,6 +108,15 @@ const isCiso = computed(() => role.value === 'ciso')
   padding: 1.25rem 1rem;
 }
 
+[data-sidebar-mode="pinned"] .settings-sidebar {
+  width: 260px !important;
+  padding: 1.25rem 1rem !important;
+}
+[data-sidebar-mode="pinned"] .settings-sidebar .sidebar-title,
+[data-sidebar-mode="pinned"] .settings-sidebar .nav-text {
+  opacity: 1 !important;
+}
+
 .sidebar-header {
   display: flex;
   align-items: center;

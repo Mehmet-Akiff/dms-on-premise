@@ -60,6 +60,28 @@
             ></button>
           </div>
         </div>
+
+        <div class="form-group" style="grid-column: 1 / -1; margin-top: 0.5rem;">
+          <label>Kenar Çubuğu & Menü Davranışı</label>
+          <div class="theme-buttons">
+            <button 
+              type="button" 
+              class="btn-theme-choice" 
+              :class="{ active: currentSidebarMode === 'hover' }"
+              @click="setAppSidebarMode('hover')"
+            >
+              🌙 Otomatik Daralt (Üzerine Gelince Açılsın)
+            </button>
+            <button 
+              type="button" 
+              class="btn-theme-choice" 
+              :class="{ active: currentSidebarMode === 'pinned' }"
+              @click="setAppSidebarMode('pinned')"
+            >
+              📌 Sürekli Açık (Genişletilmiş Mod)
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -169,7 +191,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from 'vue-toastification'
-import { getTheme, setTheme, ACCENT_PALETTES, getAccent, setAccent } from '../../utils/ThemeProvider'
+import { getTheme, setTheme, ACCENT_PALETTES, getAccent, setAccent, getSidebarMode, setSidebarMode } from '../../utils/ThemeProvider'
 
 const toast = useToast()
 
@@ -198,6 +220,7 @@ const userFullName = ref(payload.value.fullName || payload.value.username || '')
 
 const currentTheme = ref(getTheme() || 'dark')
 const currentAccent = ref(getAccent() || 'violet')
+const currentSidebarMode = ref(getSidebarMode() || 'hover')
 
 function setAppTheme(mode) {
   setTheme(mode)
@@ -209,6 +232,12 @@ function setAppAccent(id) {
   setAccent(id)
   currentAccent.value = id
   toast.success('Vurgu rengi güncellendi.')
+}
+
+function setAppSidebarMode(mode) {
+  setSidebarMode(mode)
+  currentSidebarMode.value = mode
+  toast.success(`Menü Davranışı: ${mode === 'pinned' ? 'Sürekli Açık' : 'Otomatik Daralt (Hover)'}`)
 }
 
 const formFullName = ref(userFullName.value)

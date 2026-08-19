@@ -1582,6 +1582,13 @@ onUnmounted(() => {
 .chat-sidebar:hover {
   width: 280px;
 }
+[data-sidebar-mode="pinned"] .chat-sidebar {
+  width: 280px !important;
+}
+[data-sidebar-mode="pinned"] .chat-sidebar .sidebar-search,
+[data-sidebar-mode="pinned"] .chat-sidebar .room-info {
+  opacity: 1 !important;
+}
 .sidebar-search { 
   padding: 0.6rem; 
   border-bottom: 1px solid var(--border); 
