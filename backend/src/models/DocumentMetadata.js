@@ -47,6 +47,11 @@ const DocumentMetadata = sequelize.define('document_metadata', {
     defaultValue: [],
     comment: 'Satır bazlı kullanıcı yorumları',
   },
+  summary: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'AI tarafından oluşturulan kısa metin özeti',
+  },
 }, {
   underscored: true,
   timestamps: true,

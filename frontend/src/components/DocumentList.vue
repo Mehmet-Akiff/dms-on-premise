@@ -438,8 +438,23 @@
             <!-- Kaydırma Akışı (Summary -> OCR Text -> Preview) -->
             <div v-else class="modal-scroll-flow" style="display: flex; flex-direction: column; gap: 1.5rem;">
               
-              <!-- 1. Yapay Zeka Özeti -->
-              <div class="summary-section" style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 8px; padding: 1.25rem;">
+              <!-- 1. Yapay Zeka Özeti / Güvenlik Uyarısı -->
+              <div 
+                v-if="isExecutableDoc" 
+                class="security-warning-box" 
+                style="background: rgba(239, 68, 68, 0.12); border: 2px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 1.25rem;"
+              >
+                <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                  <span style="font-size: 1.5rem;">⚠️</span>
+                  <div>
+                    <h5 style="margin: 0 0 0.35rem 0; font-size: 0.95rem; font-weight: 800; color: #ef4444; text-transform: uppercase; letter-spacing: 0.5px;">KRİTİK GÜVENLİK UYARISI</h5>
+                    <p style="margin: 0; font-size: 0.85rem; font-weight: 600; line-height: 1.5; color: #fca5a5;">
+                      ⚠️ DİKKAT: Bu çalıştırılabilir bir dosyadır. İçerisine sistem güvenliğini tehdit edecek gizli kodlar enjekte edilmiş olabilir.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="summary-section" style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 8px; padding: 1.25rem;">
                 <h5 style="margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; color: var(--color-accent-text);">🤖 Yapay Zeka Belge Özeti</h5>
                 <p style="font-size: 0.82rem; line-height: 1.5; color: var(--text-primary);">{{ aiSummary }}</p>
               </div>
@@ -651,7 +666,16 @@ function clearTagFilter() {
 }
 
 
+const isExecutableDoc = computed(() => {
+  const cat = selectedDoc.value?.category || detailData.value?.metadata?.category || '';
+  const text = detailData.value?.metadata?.extractedText || detailData.value?.metadata?.extracted_text || '';
+  const summary = detailData.value?.metadata?.summary || '';
+  return cat === 'EXECUTABLE_WARNING' || text.includes('⚠️ DİKKAT: Bu çalıştırılabilir bir dosyadır') || summary.includes('⚠️ DİKKAT: Bu çalıştırılabilir bir dosyadır');
+})
+
 const aiSummary = computed(() => {
+  const metaSummary = detailData.value?.metadata?.summary;
+  if (metaSummary) return metaSummary;
   const jobs = detailData.value?.jobs || [];
   const completedJob = jobs.find(j => j.jobStatus === 'COMPLETED' && j.resultSummary);
   return completedJob ? completedJob.resultSummary : ($t('list.noAiSummary') || 'Bu doküman için AI özeti bulunmamaktadır.');

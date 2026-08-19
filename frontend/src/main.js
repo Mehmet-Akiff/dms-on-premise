@@ -93,8 +93,11 @@ window.fetch = async function () {
   return response;
 };
 
+import router from './router'
+
 const app = createApp(App)
 
+app.use(router)
 app.use(i18n)
 app.use(Toast, {
   position: 'top-right',

@@ -213,14 +213,15 @@ async function processDocumentWithAI(document, job) {
       let confidence = 0.0;
       let tags = [];
 
-      // 4.1. Sınıflandırma ve NER Analizi (SpaCy NLP)
+      // 4.1. Sınıflandırma, NER Analizi ve AI Özetleme (SpaCy NLP)
+      let summary = null;
       if (extractedText.trim().length > 0) {
-        console.log(`[AI_SERVICE] Kategori ve NER analizi başlatılıyor...`);
+        console.log(`[AI_SERVICE] Kategori, NER ve AI Özet analizi başlatılıyor...`);
         try {
           const classResponse = await fetch(`${AI_SERVICE_URL}/api/classify-and-extract`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: extractedText }),
+            body: JSON.stringify({ text: extractedText, fileName: document.filePath || document.title }),
           });
           
           if (classResponse.ok) {
@@ -229,7 +230,8 @@ async function processDocumentWithAI(document, job) {
               category = classResult.category || classResult.documentCategory || 'Diger';
               confidence = classResult.confidence || 0.0;
               tags = classResult.tags || [];
-              console.log(`[AI_SERVICE] Analiz Başarılı. Kategori: ${category} (Güven: ${confidence}), Etiketler: [${tags.join(', ')}]`);
+              summary = classResult.summary || null;
+              console.log(`[AI_SERVICE] Analiz Başarılı. Kategori: ${category} (Güven: ${confidence}), Etiketler: [${tags.join(', ')}], Özet: ${summary ? summary.slice(0, 40) + '...' : 'Yok'}`);
             }
           }
         } catch (classError) {
@@ -244,10 +246,11 @@ async function processDocumentWithAI(document, job) {
         category: category,
         extractedTags: tags,
         confidence: confidence,
+        summary: summary,
       });
 
       const charCount = (result.text || '').length;
-      console.log(`[AI_SERVICE] OCR metni kaydedildi — ${charCount} karakter`);
+      console.log(`[AI_SERVICE] OCR metni ve AI özeti kaydedildi — ${charCount} karakter`);
 
       // Document ve Job durumlarını COMPLETED yap
       const updatedDoc = await Document.findByPk(document.id, {
