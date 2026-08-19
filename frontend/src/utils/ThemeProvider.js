@@ -62,14 +62,17 @@ export function applyAccent(palette) {
   document.documentElement.style.setProperty('--accent', p.primary);
   document.documentElement.style.setProperty('--accent-primary', p.primary);
   document.documentElement.style.setProperty('--accent-secondary', p.secondary);
+  document.documentElement.style.setProperty('--color-accent-bg', p.primary);
+  document.documentElement.style.setProperty('--color-accent-text', p.primary);
+  document.documentElement.style.setProperty('--accent-hover', p.secondary);
   
-  // Create an rgba glow color based on hex to rgb
-  let glow = 'rgba(139, 92, 246, 0.15)'; // default violet glow
-  if (palette === 'blue') glow = 'rgba(59, 130, 246, 0.15)';
-  if (palette === 'emerald') glow = 'rgba(16, 185, 129, 0.15)';
-  if (palette === 'rose') glow = 'rgba(244, 63, 94, 0.15)';
-  if (palette === 'amber') glow = 'rgba(245, 158, 11, 0.15)';
-  if (palette === 'slate') glow = 'rgba(100, 116, 139, 0.15)';
+  // Create an rgba glow color based on palette
+  let glow = 'rgba(139, 92, 246, 0.25)';
+  if (palette === 'blue') glow = 'rgba(59, 130, 246, 0.25)';
+  if (palette === 'emerald') glow = 'rgba(16, 185, 129, 0.25)';
+  if (palette === 'rose') glow = 'rgba(244, 63, 94, 0.25)';
+  if (palette === 'amber') glow = 'rgba(245, 158, 11, 0.25)';
+  if (palette === 'slate') glow = 'rgba(100, 116, 139, 0.25)';
   
   document.documentElement.style.setProperty('--accent-glow', glow);
   document.documentElement.setAttribute('data-accent', palette || 'violet');

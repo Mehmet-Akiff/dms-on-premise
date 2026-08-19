@@ -84,6 +84,9 @@ window.fetch = async function () {
 };
 
 import router from './router'
+import { initTheme } from './utils/ThemeProvider'
+
+initTheme()
 
 const app = createApp(App)
 

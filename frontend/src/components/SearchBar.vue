@@ -82,40 +82,40 @@
     <!-- Alt Satır: Filtre Dropdown'ları (AI arama modunda devre dışı bırakılır) -->
     <div class="filter-row" :class="{ 'disabled-row': isAISearch }">
       <div class="filter-item">
-        <label class="filter-label">{{ $t('search.mode') || 'Arama Modu' }}</label>
+        <label class="filter-label">Arama Modu</label>
         <select v-model="searchMode" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
-          <option value="fuzzy">🧠 {{ $t('search.modeFuzzy') || 'Akıllı - Yazım hatalarını tolere eder, en esnek' }}</option>
-          <option value="broad">🌐 {{ $t('search.modeBroad') || 'Geniş - Kelimenin kökünü veya parçasını arar' }}</option>
-          <option value="exact">🎯 {{ $t('search.modeExact') || 'Katı - Birebir yazdığın gibi arar' }}</option>
+          <option value="fuzzy">🧠 Akıllı Arama (Yazım hatalarını tolere eder)</option>
+          <option value="broad">🌐 Geniş Arama (Kelime kökü veya parçası)</option>
+          <option value="exact">🎯 Birebir Arama (Tam eşleşme)</option>
         </select>
       </div>
 
       <div class="filter-item filter-item--sm">
-        <label class="filter-label">{{ $t('search.category') || 'Kategori' }}</label>
+        <label class="filter-label">Kategori</label>
         <select v-model="categoryFilter" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
-          <option value="all">📁 {{ $t('search.allCategories') || 'Tüm Kategoriler' }}</option>
+          <option value="all">📁 Tüm Kategoriler</option>
           <option value="Fatura">🧾 Fatura</option>
           <option value="Bordro">💵 Bordro</option>
           <option value="Sozlesme">📝 Sözleşme</option>
-          <option value="Rapor">📊 Rapor</option>
+          <option value="Rapor">📊 Rapor / Program</option>
           <option value="Dilekce">✉️ Dilekçe</option>
           <option value="Diger">📌 Diğer</option>
         </select>
       </div>
 
       <div class="filter-item filter-item--sm">
-        <label class="filter-label">{{ $t('search.fileType') || 'Dosya Türü' }}</label>
+        <label class="filter-label">Dosya Türü</label>
         <select v-model="fileType" class="filter-select" :disabled="isAISearch" @change="onFilterChange">
-          <option value="all">📁 {{ $t('search.allFiles') || 'Tüm Dosyalar' }}</option>
+          <option value="all">📁 Tüm Dosyalar</option>
           <option value="pdf">📕 Sadece PDF</option>
           <option value="image">🖼️ Resim (JPG, PNG)</option>
         </select>
       </div>
 
       <div class="filter-item filter-item--sm">
-        <label class="filter-label">{{ $t('search.status') || 'Durum' }}</label>
+        <label class="filter-label">İşlem Durumu</label>
         <select v-model="statusFilter" class="filter-select" @change="onFilterChange">
-          <option value="all">{{ $t('search.allStatus') || 'Tümü' }}</option>
+          <option value="all">Tümü</option>
           <option value="completed">✅ Tamamlanan</option>
           <option value="pending">⏳ Bekleyen</option>
           <option value="failed">❌ Başarısız</option>
