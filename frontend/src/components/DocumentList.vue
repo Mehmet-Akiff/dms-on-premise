@@ -352,8 +352,8 @@
 
     <!-- OCR Detay Modalı -->
     <Transition name="modal">
-      <div v-if="selectedDoc" class="modal-overlay" @click.self="closeDetail">
-        <div class="modal">
+      <div v-if="selectedDoc" class="preview-overlay" @click.self="closeDetail">
+        <div class="preview-modal">
           <div class="modal-header">
             <div class="modal-title-wrap">
               <h3 class="modal-title">{{ selectedDoc.originalName || selectedDoc.original_name }}</h3>
@@ -1998,7 +1998,7 @@ async function filterFromDashboard(type) {
 /* ============================================================
    MODAL
    ============================================================ */
-.modal-overlay {
+.preview-overlay {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.8);
@@ -2010,7 +2010,7 @@ async function filterFromDashboard(type) {
   padding: 0;
 }
 
-.modal {
+.preview-modal {
   background: var(--bg-card);
   width: 100vw;
   height: 100vh;
@@ -2020,6 +2020,30 @@ async function filterFromDashboard(type) {
   display: flex;
   flex-direction: column;
   border: none;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 2rem;
+}
+
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 680px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5);
 }
 
 .modal-header {
@@ -2544,6 +2568,8 @@ async function filterFromDashboard(type) {
   transform: scale(1.1);
 }
 </style>
+
+
 
 
 

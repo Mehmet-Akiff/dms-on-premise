@@ -15,14 +15,10 @@ import IntranetChat from '../components/chat/IntranetChat.vue'
   position: relative;
   overflow: hidden;
   display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 2rem;
-  box-sizing: border-box;
-  background: var(--bg-primary); /* Blend with the shell */
+  background: var(--bg-primary);
 }
 
-/* Override the Drawer styles to make it a centered, full-blown page component */
+/* Make it full screen, no max-width, no border radius */
 :deep(.chat-drawer-wrapper) {
   position: static !important;
   visibility: visible !important;
@@ -30,7 +26,6 @@ import IntranetChat from '../components/chat/IntranetChat.vue'
   width: 100% !important;
   height: 100% !important;
   display: flex !important;
-  justify-content: center !important;
   background: transparent !important;
 }
 
@@ -41,22 +36,23 @@ import IntranetChat from '../components/chat/IntranetChat.vue'
 :deep(.chat-drawer) {
   position: static !important;
   width: 100% !important;
-  max-width: 1600px !important; /* WIDER! */
+  max-width: none !important; /* Full width! */
   height: 100% !important;
   transform: none !important;
-  border-radius: 20px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255,255,255,0.05) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
   border: none !important;
+  display: flex !important;
+  flex-direction: column !important;
   overflow: hidden;
-  backdrop-filter: blur(40px) saturate(200%);
-  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 :deep(.drawer-header) {
-  padding: 1.25rem 2rem !important;
-  background: rgba(15, 23, 42, 0.7) !important;
-  backdrop-filter: blur(20px) !important;
+  padding: 1rem 1.5rem !important;
+  background: var(--bg-secondary) !important;
+  backdrop-filter: blur(10px) !important;
   border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+  flex: none;
 }
 
 :deep(.btn-close-drawer) {

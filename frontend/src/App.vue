@@ -509,27 +509,48 @@ body {
 
 /* Sol Navigasyon Sidebar */
 .app-sidebar-nav {
-  width: 220px;
+  width: 70px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
-  padding: 1.25rem 0.75rem;
+  padding: 1.25rem 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
   box-sizing: border-box;
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  overflow-x: hidden;
+  z-index: 50;
+  white-space: nowrap;
+}
+.app-sidebar-nav:hover {
+  width: 240px;
+  box-shadow: 10px 0 30px rgba(0,0,0,0.1);
 }
 .app-nav-link {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  gap: 1rem;
+  padding: 0.75rem;
   border-radius: 8px;
-  text-decoration: none;
   color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  border: 1px solid transparent;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  overflow: hidden;
+}
+.app-nav-icon {
+  font-size: 1.25rem;
+  min-width: 1.25rem;
+  display: flex;
+  justify-content: center;
+}
+.app-nav-label {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.app-sidebar-nav:hover .app-nav-label {
+  opacity: 1;
 }
 .app-nav-link:hover {
   background: rgba(255, 255, 255, 0.04);
@@ -633,3 +654,4 @@ body {
   }
 }
 </style>
+

@@ -80,7 +80,7 @@
           </div>
 
           <!-- Messages -->
-          <div class="messages-container" ref="messagesContainer">
+          <div class="messages-container" ref="messagesContainer" :style="{ backgroundImage: chatBgStyle }">
             <div v-if="deliveredMessages.length === 0" class="no-messages">
               <div class="empty-state-icon">💬</div>
               <p>{{ systemMode === 'standalone' ? 'Henüz not yok. İlk notu siz bırakın.' : 'Henüz mesaj yok. İlk mesajı siz gönderin.' }}</p>
@@ -1570,11 +1570,27 @@ onUnmounted(() => {
 /* LAYOUT & SIDEBAR */
 .chat-layout { display: flex; flex: 1; overflow: hidden; background: var(--bg-primary); }
 .chat-sidebar {
-  width: 280px; background: var(--bg-secondary);
+  width: 75px; 
+  background: var(--bg-secondary);
   border-right: 1px solid var(--border);
-  display: flex; flex-direction: column;
+  display: flex; 
+  flex-direction: column;
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  overflow-x: hidden;
+  white-space: nowrap;
 }
-.sidebar-search { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+.chat-sidebar:hover {
+  width: 280px;
+}
+.sidebar-search { 
+  padding: 0.6rem; 
+  border-bottom: 1px solid var(--border); 
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.chat-sidebar:hover .sidebar-search {
+  opacity: 1;
+}
 .search-wrapper { position: relative; }
 .search-icon {
   position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
@@ -1587,36 +1603,30 @@ onUnmounted(() => {
   transition: border-color 0.2s;
 }
 .search-input:focus { border-color: var(--accent-primary, var(--color-accent-bg)); }
-.room-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
+.room-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; overflow-x: hidden; }
 .room-item {
-  display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.75rem;
+  display: flex; align-items: center; gap: 1rem; padding: 0.65rem;
   border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer;
   transition: all 0.15s ease;
 }
 .room-item:hover { background: var(--accent-glow); }
-.room-item.active {
-  background: var(--accent-glow);
-  border-left: 3px solid var(--accent-primary, var(--color-accent-bg));
-}
+.room-item.active { background: rgba(99, 102, 241, 0.1); border-right: 3px solid var(--accent); }
 .room-avatar {
-  width: 44px; height: 44px; border-radius: 50%;
-  background: var(--bg-card, var(--bg-card));
-  display: flex; justify-content: center; align-items: center;
-  font-size: 1.1rem; font-weight: bold; color: var(--text-secondary);
-  position: relative; flex-shrink: 0;
+  width: 42px; height: 42px; min-width: 42px; border-radius: 50%;
+  background: linear-gradient(135deg, #e2e8f0, #cbd5e1); color: #334155;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 1.1rem; flex-shrink: 0; position: relative;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
-.global-avatar {
-  background: linear-gradient(135deg, var(--accent-primary, var(--color-accent-bg)), var(--accent-secondary, #3b82f6));
-  color: white;
+.global-avatar { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+.room-info {
+  display: flex; flex-direction: column; flex: 1;
+  opacity: 0; transition: opacity 0.3s;
 }
-.online-dot {
-  position: absolute; bottom: 1px; right: 1px;
-  width: 11px; height: 11px; background: var(--success, #22c55e);
-  border-radius: 50%; border: 2px solid var(--bg-secondary);
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+.chat-sidebar:hover .room-info {
+  opacity: 1;
 }
-.room-info { display: flex; flex-direction: column; overflow: hidden; }
-.room-name { font-weight: 600; color: var(--text-primary); font-size: 0.92rem; }
+.room-name { font-size: 0.9rem; font-weight: 600; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; }
 .room-preview {
   font-size: 0.75rem; color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1664,9 +1674,12 @@ onUnmounted(() => {
 
 /* MESSAGES */
 .messages-container {
-  flex: 1; overflow-y: auto; padding: 1.5rem 1.5rem 1.5rem 1.5rem;
+  flex: 1; overflow-y: auto; padding: 1.5rem;
   display: flex; flex-direction: column; gap: 0.35rem; z-index: 2;
   scroll-behavior: smooth;
+  background-color: var(--bg-primary);
+  background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><path d="M10 10 h 2 v 2 h -2 z M30 40 h 2 v 2 h -2 z M60 20 h 2 v 2 h -2 z M80 70 h 2 v 2 h -2 z" fill="%23888888" fill-opacity="0.05" /></svg>');
+  background-size: 100px;
 }
 .no-messages {
   flex: 1; display: flex; flex-direction: column; justify-content: center;
@@ -2371,3 +2384,7 @@ onUnmounted(() => {
   background: #d97706;
 }
 </style>
+
+
+
+

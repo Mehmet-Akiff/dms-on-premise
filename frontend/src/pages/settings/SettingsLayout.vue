@@ -93,42 +93,49 @@ const isCiso = computed(() => role.value === 'ciso')
   background: var(--bg-secondary, #1e293b);
   border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
   border-radius: 12px;
-  padding: 1.25rem;
+  padding: 1.25rem 0.5rem;
   height: fit-content;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 60px;
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  overflow-x: hidden;
+  white-space: nowrap;
 }
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 1.25rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-}
-.settings-icon {
-  font-size: 1.3rem;
+.settings-sidebar:hover {
+  width: 250px;
+  padding: 1.25rem 1.25rem;
 }
 .sidebar-header h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--text-primary, #f8fafc);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
-.settings-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+.settings-sidebar:hover .sidebar-header h3 {
+  opacity: 1;
 }
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 0.85rem;
+  gap: 1rem;
+  padding: 0.75rem;
   border-radius: 8px;
   text-decoration: none;
   color: var(--text-secondary, #94a3b8);
   border: 1px solid transparent;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+.nav-item .nav-icon {
+  font-size: 1.25rem;
+  min-width: 1.25rem;
+  display: flex;
+  justify-content: center;
+}
+.nav-item .nav-text {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.settings-sidebar:hover .nav-item .nav-text {
+  opacity: 1;
 }
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.04);
@@ -168,3 +175,4 @@ const isCiso = computed(() => role.value === 'ciso')
   }
 }
 </style>
+
