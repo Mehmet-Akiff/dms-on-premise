@@ -75,6 +75,10 @@ services:
     environment:
       - TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
       - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - OLLAMA_MODEL=qwen2.5:3b
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - upload-data:/app/shared-uploads
     networks:

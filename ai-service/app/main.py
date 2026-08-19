@@ -1,6 +1,6 @@
 """
 DMS On-Premise - Yerel Yapay Zeka Servisi
-FastAPI | Tesseract OCR | pdfplumber (Tablo Uyumlu) | Pillow | pdf2image | SpaCy (NLP)
+FastAPI | Tesseract OCR | pdfplumber (Gelişmiş Tablo & Layout) | Pillow | pdf2image | SpaCy (NLP) | Ollama LLM
 Port: 8000
 
 Tüm işlemler yerel (on-premise) sunucuda gerçekleşir.
@@ -20,9 +20,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageEnhance
 from pdf2image import convert_from_path
 import spacy
+import httpx
 
 try:
     import pdfplumber
@@ -46,6 +47,8 @@ logger = logging.getLogger("dms-ai-service")
 
 SHARED_UPLOADS_DIR = os.getenv("SHARED_UPLOADS_DIR", "/app/shared-uploads")
 TESSERACT_LANG = os.getenv("TESSERACT_LANG", "tur+eng")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
 PDF_EXTENSIONS = {".pdf"}
@@ -72,7 +75,7 @@ CATEGORY_KEYWORDS = {
     "Fatura": ["fatura", "invoice", "kdv", "matrah", "tutar", "fiyat", "vergi", "ödeme", "makbuz", "fiş", "toplam", "iban", "odeme", "fis", "faturasi"],
     "Bordro": ["bordro", "maaş", "ücret", "gelir", "kesinti", "sgk", "mesai", "çalışan", "net ödenen", "brüt", "bordrosu", "maas", "ucret", "calisan", "brut"],
     "Sozlesme": ["sözleşme", "anlaşma", "protokol", "taraf", "maddesi", "taahhüt", "imza", "akdedilen", "hüküm", "şartname", "sozlesme", "anlasma", "taahhut", "hukum", "sartname"],
-    "Rapor": ["rapor", "analiz", "sunum", "değerlendirme", "sonuç", "grafik", "istatistik", "durum", "özet", "bilanço", "degerlendirme", "sonuc", "ozet", "bilanco"],
+    "Rapor": ["rapor", "analiz", "sunum", "değerlendirme", "sonuç", "grafik", "istatistik", "durum", "özet", "bilanço", "degerlendirme", "sonuc", "ozet", "bilanco", "sinav", "sınav", "program", "programı", "vize", "final", "akademik"],
     "Dilekce": ["dilekçe", "dilekçesi", "makamına", "arz ederim", "gereğini", "bilgilerinize", "saygılarımla", "talep", "başvuru", "dilekce", "dilekcesi", "makamina", "geregini", "basvuru"]
 }
 
@@ -82,8 +85,8 @@ CATEGORY_KEYWORDS = {
 
 app = FastAPI(
     title="DMS AI Service",
-    description="On-Premise Doküman İşleme, Tablo Uyumlu OCR, AI Özetleme ve Sınıflandırma Servisi",
-    version="0.5.0",
+    description="On-Premise Doküman İşleme, Tablo Uyumlu OCR, Prompt Tabanlı AI Özetleme ve Sınıflandırma Servisi",
+    version="0.6.0",
 )
 
 app.add_middleware(
@@ -146,7 +149,8 @@ class ClassifyResponse(BaseModel):
 
 class SummarizeRequest(BaseModel):
     text: str = Field(..., description="Özetlenecek ham metin")
-    maxSentences: int = Field(3, description="Özette yer alacak maksimum cümle sayısı")
+    maxSentences: int = Field(4, description="Özette yer alacak maksimum cümle sayısı")
+    fileName: Optional[str] = None
 
 
 class SummarizeResponse(BaseModel):
@@ -187,17 +191,34 @@ def resolve_file_path(file_path: str) -> Path:
 
 
 def ocr_single_image(image: Image.Image) -> str:
-    """Tek bir Pillow Image nesnesi üzerinde Tesseract OCR çalıştırır."""
+    """Tek bir Pillow Image nesnesi üzerinde optimize edilmiş Tesseract OCR çalıştırır."""
+    try:
+        # Görsel ön işleme: Gri tonlama ve kontrast artırma
+        if image.mode != "L":
+            gray_img = image.convert("L")
+        else:
+            gray_img = image
+        
+        enhancer = ImageEnhance.Contrast(gray_img)
+        enhanced_img = enhancer.enhance(1.5)
+        
+        # PSM 4: Farklı boyutlardaki çok sütunlu / tablosal metin bloklarını korur
+        text = pytesseract.image_to_string(enhanced_img, lang=TESSERACT_LANG, config="--psm 4").strip()
+        if len(text) > 10:
+            return text
+    except Exception as e:
+        logger.warning("Ön işlemeli OCR hatası: %s, standart OCR deneniyor", str(e))
+        
     return pytesseract.image_to_string(image, lang=TESSERACT_LANG, config="--psm 4").strip()
 
 
 def ocr_pdf_tesseract(file_path: Path) -> tuple[str, int]:
-    """PDF dosyasını görsellere dönüştürüp Tesseract OCR ile tarar (Fallback)."""
+    """PDF dosyasını yüksek çözünürlüklü görsellere dönüştürüp Tesseract OCR ile tarar (Fallback)."""
     logger.info("PDF → Tesseract OCR fallback başlatılıyor — Dosya: %s", file_path.name)
     with tempfile.TemporaryDirectory(prefix="dms_pdf_") as tmp_dir:
         pages = convert_from_path(
             str(file_path),
-            dpi=150,
+            dpi=200,
             output_folder=tmp_dir,
             fmt="png",
             thread_count=4,
@@ -213,9 +234,9 @@ def ocr_pdf_tesseract(file_path: Path) -> tuple[str, int]:
 def extract_pdf_with_tables(file_path: Path) -> tuple[str, int, bool]:
     """
     PDF dosyasını pdfplumber ile okur.
-    Tabloları tespit edip Markdown formatında metne dahil eder (Tablo Yapısı Korunur).
-    Eğer pdfplumber metin bulamazsa (taranmış görsel PDF) Tesseract fallback çalıştırır.
-    Dönüş: (birleşik_metin, sayfa_sayısı, tablo_var_mı)
+    1. Çok stratejili tablo tespiti (çizgi bazlı + metin hizalama bazlı) uygular.
+    2. Tabloları temiz Markdown formatına çevirir.
+    3. Sayfadaki düz metinleri 2D koordinat düzenini (layout=True) koruyarak alır.
     """
     has_tables = False
     if pdfplumber is not None:
@@ -226,18 +247,43 @@ def extract_pdf_with_tables(file_path: Path) -> tuple[str, int, bool]:
                 for i, page in enumerate(pdf.pages, start=1):
                     page_content = []
                     
-                    # 1. Tabloları Çıkar ve Markdown Formatına Dönüştür
-                    tables = page.extract_tables()
+                    # 1. Çok Stratejili Tablo Çıkarımı
+                    tables = page.extract_tables({
+                        "vertical_strategy": "lines",
+                        "horizontal_strategy": "lines",
+                        "snap_tolerance": 4,
+                        "join_tolerance": 4,
+                        "edge_min_length": 3,
+                    })
+                    
+                    # Çizgi stratejisi yetersizse veya boşsa metin hizalama stratejisini dene
+                    if not tables or not any(len(t) > 1 for t in tables):
+                        text_tables = page.extract_tables({
+                            "vertical_strategy": "text",
+                            "horizontal_strategy": "text",
+                            "snap_tolerance": 4,
+                            "text_x_tolerance": 3,
+                            "text_y_tolerance": 3,
+                        })
+                        if text_tables and any(len(t) > 1 for t in text_tables):
+                            tables = text_tables
+
                     table_mds = []
                     if tables:
                         for table in tables:
                             if not table or len(table) < 1:
                                 continue
-                            cleaned_table = [
-                                [(cell or "").strip().replace("\n", " ") for cell in row]
-                                for row in table
-                            ]
-                            if not any(any(row) for row in cleaned_table):
+                            
+                            # Hücreleri temizle
+                            cleaned_table = []
+                            for row in table:
+                                if not row:
+                                    continue
+                                cleaned_row = [(cell or "").strip().replace("\n", " ") for cell in row]
+                                if any(cleaned_row):
+                                    cleaned_table.append(cleaned_row)
+                            
+                            if len(cleaned_table) < 1:
                                 continue
                             
                             has_tables = True
@@ -254,13 +300,13 @@ def extract_pdf_with_tables(file_path: Path) -> tuple[str, int, bool]:
                             
                             table_mds.append("\n".join(md_rows))
 
-                    # 2. Sayfadaki Düz Metni Al
-                    raw_text = page.extract_text() or ""
+                    # 2. Sayfadaki Düz Metni 2D Layout Koruyarak Al
+                    raw_text = page.extract_text(layout=True, x_tolerance=2, y_tolerance=2) or ""
                     
                     if raw_text.strip():
                         page_content.append(raw_text.strip())
                     if table_mds:
-                        page_content.append("\n📊 **[Tablo Verileri]**:\n" + "\n\n".join(table_mds))
+                        page_content.append("\n📊 **[Tespit Edilen Tablo Verileri]**:\n" + "\n\n".join(table_mds))
                     
                     full_page = "\n\n".join(page_content).strip()
                     if full_page:
@@ -279,40 +325,98 @@ def extract_pdf_with_tables(file_path: Path) -> tuple[str, int, bool]:
     return text, count, has_tables
 
 
-def extract_summary(text: str, max_sentences: int = 3) -> str:
+def summarize_with_ollama(text: str) -> Optional[str]:
     """
-    SpaCy ve TF-IDF tabanlı hafif, çevrimdışı (Extractive) Özetleme Algoritması.
-    En kritik 3-5 cümleyi seçerek özet oluşturur.
+    Ollama yerel LLM servisine prompt göndererek anlamlı, generatif ve akıllı özet üretir.
+    Eğer Ollama çalışmıyorsa veya yanıt vermezse None döner (Fallback'e geçer).
     """
-    if not text or len(text.strip()) < 40:
+    try:
+        sample_text = text[:4000]
+        prompt = f"""Sen kurumsal bir Doküman Yönetim Sistemi (DMS) Yapay Zeka Uzmanısın.
+Aşağıdaki OCR ile taranmış belge metnini ve varsa tablo verilerini dikkatlice incele.
+
+GÖREVİN:
+1. Belgenin türünü (Örn: Sınav Takvimi, Fatura, Maaş Bordrosu, Sözleşme, Dilekçe, Rapor vb.) ve kurum/başlık bilgisini belirle.
+2. Belgenin amacını, içerdiği ana konuları, önemli tarihleri, saatleri, kişileri/dersleri/tutarları net ve anlaşılır maddelerle özetle.
+3. Tablo veya liste varsa bunların içeriğini mantıksal olarak açıkla (Örn: hangi sınıfların/tarihlerin sınavları yer alıyor vb.).
+4. Varsa kritik uyarı veya dipnotları belirt.
+
+Biçimlendirme Kuralları:
+- Yanıtını doğrudan Markdown formatında maddeler halinde ver.
+- Giriş veya kapanış sohbet cümleleri ("Tabii ki, işte özet:" vb.) EKLEME.
+
+Belge Metni:
+{sample_text}
+"""
+        with httpx.Client(timeout=8.0) as client:
+            resp = client.post(
+                f"{OLLAMA_HOST}/api/generate",
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": 0.2, "top_p": 0.9}
+                }
+            )
+            if resp.status_code == 200:
+                res_json = resp.json()
+                res_text = res_json.get("response", "").strip()
+                if res_text and len(res_text) > 30:
+                    logger.info("Ollama LLM (%s) ile özet başarıyla üretildi. ✓", OLLAMA_MODEL)
+                    return res_text
+    except Exception as e:
+        logger.info("Ollama erişimi sağlanamadı (%s), semantik NLP özetleyiciye geçiliyor.", str(e))
+    
+    return None
+
+
+def extract_summary(text: str, max_sentences: int = 4, file_name: Optional[str] = None) -> str:
+    """
+    1. Öncelikli: Ollama LLM üzerinden zeki özetleme yapar.
+    2. Yedek: SpaCy + TF-IDF + Tablo Analizi ile yapılandırılmış kurumsal semantik özet üretir.
+    """
+    if not text or len(text.strip()) < 30:
         return text.strip() if text else "Özet çıkarılamadı."
 
     if "⚠️ DİKKAT: Bu çalıştırılabilir bir dosyadır" in text:
         return EXECUTABLE_SECURITY_WARNING
 
-    # Metnin ilk 10.000 karakterini analiz et
-    sample_text = text[:10000]
+    # 1. Adım: Ollama LLM'i dene
+    ollama_res = summarize_with_ollama(text)
+    if ollama_res:
+        return ollama_res
+
+    # 2. Adım: Semantik Yapılandırılmış NLP Özeti (Gelişmiş Fallback)
+    lines = [line.strip() for line in text.split("\n") if line.strip() and not line.startswith("--- Sayfa")]
+    title_candidates = [l for l in lines[:5] if len(l) > 5 and not l.startswith("|")]
+    detected_title = " - ".join(title_candidates[:2]) if title_candidates else (file_name or "Doküman")
+
+    # Tarihler, saatler ve tabloları tespit et
+    dates = list(set(re.findall(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)))
+    hours = list(set(re.findall(r'\b\d{1,2}:\d{2}\b', text)))
+    has_table_data = "📊 **[Tespit Edilen Tablo Verileri]**" in text or "|" in text
+    
+    # Sınav / Ders programı tespiti
+    is_exam_schedule = any(k in text.lower() for k in ["sınav", "sinav", "vize", "final", "programı", "programi", "derslik", "öğretim yılı", "ogretim yili"])
+
+    # SpaCy Cümle Analizi
+    sample_text = text[:8000]
     doc = nlp(sample_text)
     
-    sentences = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 15]
-    if len(sentences) <= max_sentences:
-        return " ".join(sentences)
-
-    # Kelime frekansı hesapla
+    sentences = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 15 and not sent.text.strip().startswith("|")]
+    
+    # TF-IDF benzeri kelime frekans skoru
     word_freq = {}
     for token in doc:
         if not token.is_stop and not token.is_punct and len(token.text) > 2:
             w = token.text.lower()
             word_freq[w] = word_freq.get(w, 0) + 1
 
-    if not word_freq:
-        return " ".join(sentences[:max_sentences])
+    if word_freq:
+        max_freq = max(word_freq.values())
+        for w in word_freq:
+            word_freq[w] = word_freq[w] / max_freq
 
-    max_freq = max(word_freq.values())
-    for w in word_freq:
-        word_freq[w] = word_freq[w] / max_freq
-
-    # Cümleleri skorla
     sentence_scores = []
     for i, sent in enumerate(sentences):
         score = 0
@@ -324,11 +428,30 @@ def extract_summary(text: str, max_sentences: int = 3) -> str:
             score = score / (len(words) ** 0.5)
         sentence_scores.append((score, i, sent))
 
-    # En yüksek puanlı cümleleri orijinal sırasına göre diz
     top_sentences = sorted(sentence_scores, key=lambda x: x[0], reverse=True)[:max_sentences]
-    top_ordered = sorted(top_sentences, key=lambda x: x[1])
+    top_ordered = [item[2] for item in sorted(top_sentences, key=lambda x: x[1])]
     
-    return " ".join([item[2] for item in top_ordered])
+    # Yapılandırılmış Markdown Özeti Oluştur
+    summary_parts = []
+    summary_parts.append(f"📌 **Belge Başlığı ve Kapsamı:** {detected_title}")
+    
+    if is_exam_schedule:
+        summary_parts.append("📋 **İçerik:** Belge, ilgili bölüm ve sınıflar için hazırlanmış ders/sınav takvimini ve saat dağılımlarını içermektedir.")
+    elif top_ordered:
+        summary_parts.append(f"📋 **Ana Metin Özeti:** {' '.join(top_ordered)}")
+
+    details = []
+    if dates:
+        details.append(f"Tarihler: {', '.join(dates[:4])}")
+    if hours:
+        details.append(f"Saat Aralıkları: {', '.join(hours[:5])}")
+    if has_table_data:
+        details.append("Tablo ve çizelge verileri ayrıştırıldı.")
+        
+    if details:
+        summary_parts.append(f"🔍 **Tespit Edilen Detaylar:** {' | '.join(details)}")
+
+    return "\n\n".join(summary_parts)
 
 
 # ============================================================
@@ -412,7 +535,7 @@ async def perform_ocr(request: OCRRequest):
                 extracted_text = ocr_single_image(img)
                 page_count = 1
 
-        logger.info("Metin çıkarma tamamlandı — Dosya: %s — Sayfa: %d — Karakter: %d", resolved_path.name, page_count, len(extracted_text))
+        logger.info("Metin çıkarma tamamlandı — Dosya: %s — Sayfa: %d — Karakter: %d — Tablo: %s", resolved_path.name, page_count, len(extracted_text), has_tables)
 
         return OCRSuccessResponse(
             status="success",
@@ -441,7 +564,7 @@ async def perform_ocr(request: OCRRequest):
 )
 async def classify_and_extract(request: ClassifyRequest):
     """
-    Metni sınıflandırır, NER varlıklarını çıkarır ve AI özetini üretir.
+    Metni sınıflandırır, NER varlıklarını çıkarır ve Prompt Tabanlı / Semantik AI özetini üretir.
     """
     try:
         text = request.text
@@ -520,8 +643,8 @@ async def classify_and_extract(request: ClassifyRequest):
         for k in kdvs[:2]:
             tags.add(k.upper())
 
-        # 3. AI Özetleme (Extractive)
-        generated_summary = extract_summary(text, max_sentences=3)
+        # 3. AI Özetleme (Prompt Destekli / Yapılandırılmış Semantik)
+        generated_summary = extract_summary(text, max_sentences=4, file_name=request.fileName)
 
         return ClassifyResponse(
             status="success",
@@ -544,9 +667,9 @@ async def classify_and_extract(request: ClassifyRequest):
 @app.post("/api/summarize", response_model=SummarizeResponse)
 async def summarize_text(request: SummarizeRequest):
     """
-    Verilen metnin kısa AI özetini döner.
+    Verilen metnin akıllı AI özetini döner.
     """
-    summary = extract_summary(request.text, request.maxSentences)
+    summary = extract_summary(request.text, request.maxSentences, file_name=request.fileName)
     return SummarizeResponse(status="success", summary=summary)
 
 
@@ -565,7 +688,7 @@ async def nlp_search(request: NLPSearchRequest):
             "Fatura": ["fatura", "faturaları", "faturalarını", "faturalar", "makbuz", "makbuzu", "makbuzları", "fiş", "fişi", "fişleri", "faturalari", "faturalarini", "makbuzlari", "fisi", "fisleri"],
             "Bordro": ["bordro", "bordrosu", "bordroları", "bordrolarını", "bordrolar", "maaş", "maaşı", "maaşları", "bordrolari", "bordrolarini", "maas", "maasi", "maaslari"],
             "Sozlesme": ["sözleşme", "sözleşmesi", "sözleşmelerini", "sözleşmeleri", "anlaşma", "anlaşması", "anlaşmaları", "protokol", "sozlesme", "sozlesmesi", "sozlesmelerini", "sozlesmeleri", "anlasma", "anlasmasi", "anlasmalari"],
-            "Rapor": ["rapor", "raporu", "raporları", "raporlarını", "sunum", "analiz", "analizi", "bilanço", "raporlari", "raporlarini", "bilanco"],
+            "Rapor": ["rapor", "raporu", "raporları", "raporlarını", "sunum", "analiz", "analizi", "bilanço", "raporlari", "raporlarini", "bilanco", "sinav", "sınav", "program", "programı", "vize"],
             "Dilekce": ["dilekçe", "dilekçesi", "dilekçeleri", "talep", "başvuru", "başvurusu", "dilekce", "dilekcesi", "dilekceleri", "basvuru", "basvurusu"]
         }
         pdf_keywords = ["pdf", "pdf'ler", "pdf'leri", "pdfler"]
