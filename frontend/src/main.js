@@ -74,20 +74,10 @@ window.fetch = async function () {
     
     // Login isteklerinde 401 dönmesi normaldir (yanlış şifre vb), bunları atla.
     if (!url.includes('/api/auth/login')) {
-      console.warn('[DMS Interceptor] 401 Unauthorized. Forcing logout and redirecting to /login');
-      
-      // Temizlik işlemleri
+      console.warn('[DMS Interceptor] 401 Unauthorized. Kasa kilitleniyor.');
       localStorage.removeItem('token');
       localStorage.removeItem('kasa_token');
-      
-      // Hemen login'e zorla
-      window.location.href = '/login';
-      
-      // Asıl isteği yapan kodun (App.vue vb) çalışmaya devam edip ekrana "veriler alınamadı"
-      // gibi anlamsız Toast/Snackbar hataları basmasını engellemek için,
-      // asla çözümlenmeyen (pending) bir Promise döndürüyoruz.
-      // Böylece fetch() çağrısı asılı kalır ve alt satırlardaki try/catch/then blokları çalışmaz.
-      return new Promise(() => {});
+      window.dispatchEvent(new Event('kasa-lock'));
     }
   }
   return response;

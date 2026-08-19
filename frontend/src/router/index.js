@@ -23,6 +23,7 @@ function parseJwt() {
 
 const routes = [
   { path: '/', redirect: '/vault' },
+  { path: '/login', redirect: '/vault' },
   { path: '/vault', name: 'Vault', component: VaultPage, meta: { title: 'Belge Kasası' } },
   { path: '/chat', name: 'Chat', component: ChatPage, meta: { title: 'Kurum İçi Sohbet' } },
   { path: '/audit', name: 'Audit', component: AuditPage, meta: { title: 'Denetim Günlüğü', roles: ['ciso'] } },
@@ -39,7 +40,8 @@ const routes = [
       { path: 'notifications', name: 'SettingsNotifications', component: NotificationSettings, meta: { title: 'Alarm & Bildirimler', roles: ['admin', 'ciso'] } },
       { path: 'smtp', name: 'SettingsSmtp', component: SmtpSettings, meta: { title: 'SMTP & Log', roles: ['ciso'] } }
     ]
-  }
+  },
+  { path: '/:pathMatch(.*)*', redirect: '/vault' }
 ]
 
 const router = createRouter({
@@ -47,16 +49,11 @@ const router = createRouter({
   routes
 })
 
-// Navigation guard — JWT ve rol kontrolü
+// Navigation guard — rol kontrolü
 router.beforeEach((to, from, next) => {
   const payload = parseJwt()
-  
-  // Token yoksa vault'a git (KasaLock App.vue'de handle ediliyor)
-  if (!payload && to.path !== '/') {
-    return next('/')
-  }
 
-  // Rol bazlı erişim kontrolü
+  // Rol bazlı erişim kısıtlaması (token varsa ve rol yetmiyorsa)
   if (to.meta.roles && payload) {
     if (!to.meta.roles.includes(payload.role)) {
       return next('/vault')
