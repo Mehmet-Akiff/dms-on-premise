@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 // Page components (lazy-loaded)
 const VaultPage = () => import('../pages/VaultPage.vue')
-const ChatPage = () => import('../pages/ChatPage.vue')
 const AuditPage = () => import('../pages/AuditPage.vue')
 const UsersPage = () => import('../pages/UsersPage.vue')
 const SettingsLayout = () => import('../pages/settings/SettingsLayout.vue')
@@ -25,7 +24,6 @@ const routes = [
   { path: '/', redirect: '/vault' },
   { path: '/login', redirect: '/vault' },
   { path: '/vault', name: 'Vault', component: VaultPage, meta: { title: 'Belge Kasası' } },
-  { path: '/chat', name: 'Chat', component: ChatPage, meta: { title: 'Kurum İçi Sohbet' } },
   { path: '/audit', name: 'Audit', component: AuditPage, meta: { title: 'Denetim Günlüğü', roles: ['ciso'] } },
   { path: '/users', name: 'Users', component: UsersPage, meta: { title: 'Kullanıcı Yönetimi', roles: ['admin', 'ciso'] } },
   {

@@ -83,10 +83,10 @@
             <span class="app-nav-label">Belge Kasası</span>
           </router-link>
 
-          <router-link to="/chat" class="app-nav-link" active-class="active">
+          <a href="#" class="app-nav-link" :class="{ 'active': isChatOpen }" @click.prevent="isChatOpen = true">
             <span class="app-nav-icon">💬</span>
             <span class="app-nav-label">Kurum İçi Sohbet</span>
-          </router-link>
+          </a>
 
           <router-link v-if="isCiso" to="/audit" class="app-nav-link" active-class="active">
             <span class="app-nav-icon">📜</span>
@@ -128,6 +128,9 @@
         </div>
       </div>
 
+      <!-- Kurum İçi Sohbet Çekmecesi (Overlay / Modal) -->
+      <IntranetChat :isOpen="isChatOpen" @close="isChatOpen = false" />
+
       <!-- Footer -->
       <footer class="dms-footer">
         <p>{{ $t('nav.footerText') || '© 2026 DMS On-Premise — %100 Yerel Kaynaklı ve Güvenli Doküman Yönetim Sistemi.' }}</p>
@@ -143,8 +146,10 @@ import { getTheme, toggleTheme, initTheme } from './utils/ThemeProvider'
 import KasaLock from './components/KasaLock.vue'
 import NotificationsPanel from './components/NotificationsPanel.vue'
 import NativeLangSelector from './components/NativeLangSelector.vue'
+import IntranetChat from './components/chat/IntranetChat.vue'
 
 const isKasaLocked = ref(true)
+const isChatOpen = ref(false)
 const isNotificationsOpen = ref(false)
 const isLogoutConfirmOpen = ref(false)
 const logoutConfirmTimer = ref(0)

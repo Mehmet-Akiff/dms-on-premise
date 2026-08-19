@@ -350,19 +350,19 @@
       <p class="doc-empty-sub">Sol panelden dosya yükleyerek başlayabilirsiniz.</p>
     </div>
 
-    <!-- OCR Detay Modalı -->
-    <Transition name="modal">
-      <div v-if="selectedDoc" class="modal-overlay" @click.self="closeDetail">
-        <div class="modal">
-          <div class="modal-header">
-            <div class="modal-title-wrap">
-              <h3 class="modal-title">{{ selectedDoc.originalName || selectedDoc.original_name }}</h3>
+    <!-- OCR Detay Modalı (Drawer) -->
+    <Transition name="slide-drawer">
+      <div v-if="selectedDoc" class="drawer-overlay" @click.self="closeDetail">
+        <div class="doc-drawer">
+          <div class="drawer-header">
+            <div class="drawer-title-wrap">
+              <h3 class="drawer-title">{{ selectedDoc.originalName || selectedDoc.original_name }}</h3>
               <span class="status-badge status--completed" style="font-size:0.72rem">
                 <span class="status-dot"></span>
                 {{ selectedDoc.status }}
               </span>
             </div>
-            <div class="modal-header-actions" style="display:flex; align-items:center; gap:0.6rem">
+            <div class="drawer-header-actions" style="display:flex; align-items:center; gap:0.6rem">
               <!-- Orijinal Belgeyi İndir Butonu -->
               <button 
                 class="action-link-btn shadow-btn" 
@@ -2522,4 +2522,25 @@ async function filterFromDashboard(type) {
   opacity: 1;
   transform: scale(1.1);
 }
+.drawer-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(4px);
+  z-index: 9000; display: flex; justify-content: flex-end;
+}
+.doc-drawer {
+  background: var(--bg-card); width: 100%; max-width: 960px; height: 100%;
+  border-left: 1px solid var(--border); box-shadow: -10px 0 40px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.5rem; background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+}
+.drawer-title-wrap { display: flex; align-items: center; gap: 0.75rem; }
+.drawer-title { margin: 0; font-size: 1.1rem; color: var(--text-primary); }
+.drawer-body {
+  padding: 1.5rem; flex: 1; overflow-y: auto; background: var(--bg-primary);
+}
+.slide-drawer-enter-active, .slide-drawer-leave-active { transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+.slide-drawer-enter-from, .slide-drawer-leave-to { opacity: 0; }
+.slide-drawer-enter-from .doc-drawer, .slide-drawer-leave-to .doc-drawer { transform: translateX(100%); }
 </style>
