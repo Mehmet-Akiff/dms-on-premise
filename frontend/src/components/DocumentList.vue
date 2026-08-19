@@ -613,10 +613,13 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'vue-toastification'
 import { useI18n } from 'vue-i18n'
 import DocumentEditor from './DocumentEditor.vue'
 
+const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 
 function getToken() {
@@ -1264,36 +1267,45 @@ async function deleteComment(commentId) {
 
 
 async function openDetail(doc) {
+  // Sadece URL'yi degistir. Watcher devreye girecek.
+  router.push({ query: { ...route.query, preview: doc.id } })
+}
+
+async function loadDetail(docId) {
+  const doc = documents.value.find(d => d.id === docId) || { id: docId, originalName: 'Belge Yukleniyor...' }
   selectedDoc.value = doc
   isLoadingDetail.value = true
   detailData.value = null
   isEditing.value = false
-  docSearchQuery.value = searchQuery.value || '' // Arama sorgusuyla başlat
+  docSearchQuery.value = searchQuery.value || ''
   activeMatchIndex.value = 0
 
-  trackAction('PREVIEW', doc.id, doc.originalName || doc.original_name, 'Belge detayları, AI özeti ve OCR metni görüntülendi.');
+  trackAction('PREVIEW', doc.id, doc.originalName || doc.original_name, 'Belge detaylari goruntulendi.')
 
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch(`/api/documents/${doc.id}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+    const response = await fetch('/api/documents/' + doc.id, {
+      headers: { 'Authorization': 'Bearer ' + token }
     })
     if (response.ok) {
       const data = await response.json()
       detailData.value = data.document || data
-
-      const currentLang = localStorage.getItem('dms_locale') || 'tr'
+      selectedDoc.value = data.document || data
     }
   } catch (error) {
-    console.error('[DocumentList] Detay yükleme hatası:', error)
+    console.error('[DocumentList] Detay yukleme hatasi:', error)
   } finally {
     isLoadingDetail.value = false
   }
 }
 
 function closeDetail() {
+  const newQuery = { ...route.query }
+  delete newQuery.preview
+  router.push({ query: newQuery })
+}
+
+function clearDetailState() {
   selectedDoc.value = null
   detailData.value = null
   isEditing.value = false
@@ -1302,6 +1314,14 @@ function closeDetail() {
   activeMatchIndex.value = 0
   highlightedOcrHtml.value = ''
 }
+
+watch(() => route.query.preview, (newId) => {
+  if (newId) {
+    loadDetail(newId)
+  } else {
+    clearDetailState()
+  }
+}, { immediate: true })
 
 function handleEditorSave(updatedDoc) {
   if (detailData.value) {
@@ -1981,33 +2001,34 @@ async function filterFromDashboard(type) {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(24px) saturate(180%);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9000;
-  padding: 2rem;
+  z-index: 9999;
+  padding: 0;
 }
 
 .modal {
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  width: 100%;
-  max-width: 680px;
-  max-height: 80vh;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5);
+  border: none;
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--border);
+  padding: 1rem 2rem;
+  background: rgba(15, 23, 42, 0.4);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
 .modal-title-wrap {
@@ -2224,15 +2245,15 @@ async function filterFromDashboard(type) {
 
 /* Modal Transition */
 .modal-enter-active {
-  animation: modal-in 0.3s ease;
+  animation: modal-in 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 .modal-leave-active {
-  animation: modal-in 0.2s ease reverse;
+  animation: modal-in 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) reverse;
 }
 
 @keyframes modal-in {
-  from { opacity: 0; transform: scale(0.95) translateY(10px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* Çöp Kutusu Toggle Buton Stilleri */
@@ -2523,3 +2544,7 @@ async function filterFromDashboard(type) {
   transform: scale(1.1);
 }
 </style>
+
+
+
+
