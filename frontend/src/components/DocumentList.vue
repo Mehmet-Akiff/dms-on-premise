@@ -454,9 +454,13 @@
                   </div>
                 </div>
               </div>
-              <div v-else class="summary-section" style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 8px; padding: 1.25rem;">
-                <h5 style="margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; color: var(--color-accent-text);">🤖 Yapay Zeka Belge Özeti</h5>
-                <p style="font-size: 0.82rem; line-height: 1.5; color: var(--text-primary);">{{ aiSummary }}</p>
+              <div v-else class="summary-section">
+                <div class="summary-card-header">
+                  <span class="ai-sparkle-icon">✨</span>
+                  <h5 class="summary-title">DMS Yapay Zeka Belge Analizi</h5>
+                  <span class="ai-badge">Otomatik Özet</span>
+                </div>
+                <div class="ai-summary-body" v-html="formattedAiSummaryHtml"></div>
               </div>
 
               <!-- 2. Çıkarılan Tam Metin -->
@@ -682,6 +686,59 @@ const aiSummary = computed(() => {
   const jobs = detailData.value?.jobs || [];
   const completedJob = jobs.find(j => j.jobStatus === 'COMPLETED' && j.resultSummary);
   return completedJob ? completedJob.resultSummary : ($t('list.noAiSummary') || 'Bu doküman için AI özeti bulunmamaktadır.');
+})
+
+const formattedAiSummaryHtml = computed(() => {
+  const raw = aiSummary.value;
+  if (!raw) return '';
+  
+  // Escape HTML
+  let text = raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const lines = text.split('\n');
+  const blocks = [];
+  let currentList = [];
+
+  for (let line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (currentList.length > 0) {
+        blocks.push('<ul class="ai-summary-list">' + currentList.join('') + '</ul>');
+        currentList = [];
+      }
+      continue;
+    }
+
+    // Format bold: **text** -> <strong class="ai-strong">text</strong>
+    const formattedLine = trimmed.replace(/\*\*(.*?)\*\*/g, '<strong class="ai-strong">$1</strong>');
+
+    // Check if line is a bullet item
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      const itemContent = formattedLine.substring(2);
+      currentList.push(`<li class="ai-summary-item">${itemContent}</li>`);
+    } else {
+      if (currentList.length > 0) {
+        blocks.push('<ul class="ai-summary-list">' + currentList.join('') + '</ul>');
+        currentList = [];
+      }
+
+      // Check if it's a section header line (starts with an emoji)
+      if (/^(?:📄|🎯|📋|📌|🔍|📊|⚠️|💡)/.test(trimmed)) {
+        blocks.push(`<div class="ai-summary-header-block">${formattedLine}</div>`);
+      } else {
+        blocks.push(`<p class="ai-summary-p">${formattedLine}</p>`);
+      }
+    }
+  }
+
+  if (currentList.length > 0) {
+    blocks.push('<ul class="ai-summary-list">' + currentList.join('') + '</ul>');
+  }
+
+  return blocks.join('');
 })
 
 // Sistemdeki mevcut tüm benzersiz etiketler
@@ -1513,6 +1570,107 @@ async function filterFromDashboard(type) {
 </script>
 
 <style scoped>
+/* YAPAY ZEKA ÖZET KARTI (Apple-grade Glassmorphism) */
+.summary-section {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.09) 0%, rgba(59, 130, 246, 0.04) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 25px rgba(139, 92, 246, 0.06);
+  position: relative;
+  overflow: hidden;
+}
+
+.summary-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.ai-sparkle-icon {
+  font-size: 1.25rem;
+}
+
+.summary-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-accent-text, #a78bfa);
+  letter-spacing: -0.01em;
+}
+
+.ai-badge {
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.2);
+  color: var(--color-accent-text, #c4b5fd);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-summary-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+:deep(.ai-summary-header-block) {
+  background: rgba(15, 23, 42, 0.5);
+  border-left: 3px solid var(--accent-primary, #8b5cf6);
+  padding: 0.65rem 0.9rem;
+  border-radius: 0 8px 8px 0;
+  font-size: 0.85rem;
+  color: #f1f5f9;
+  line-height: 1.5;
+}
+
+:deep(.ai-strong) {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+:deep(.ai-summary-p) {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--text-primary, #e2e8f0);
+  line-height: 1.6;
+  padding-left: 0.25rem;
+}
+
+:deep(.ai-summary-list) {
+  list-style: none;
+  padding: 0.25rem 0 0.25rem 0.5rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+:deep(.ai-summary-item) {
+  position: relative;
+  padding-left: 1.25rem;
+  font-size: 0.84rem;
+  color: var(--text-primary, #e2e8f0);
+  line-height: 1.5;
+}
+
+:deep(.ai-summary-item::before) {
+  content: '▸';
+  color: var(--accent-primary, #8b5cf6);
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
 .doc-list {
   background: var(--bg-card);
   border: 1px solid var(--border);
