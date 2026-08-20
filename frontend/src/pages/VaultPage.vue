@@ -54,11 +54,19 @@ const documentListRef = ref(null)
 const dashboardRef = ref(null)
 const showDebugLab = ref(false)
 
-// Dev mode: ortam değişkeni VEYA localStorage flag'i ile aktifleştirilebilir
+// Dev mode: ortam değişkeni, localStorage VEYA URL parametresi (?debug=1) ile aktifleştirilebilir
 const isDevMode = computed(() => {
   const envMode = import.meta.env.VITE_APP_MODE
   const localFlag = localStorage.getItem('dms_dev_mode')
-  return envMode === 'debug' || localFlag === 'true'
+  let urlDebug = false
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('debug') === '1' || params.get('debug') === 'true' || params.get('test') === '1') {
+      urlDebug = true
+      localStorage.setItem('dms_dev_mode', 'true')
+    }
+  }
+  return envMode === 'debug' || localFlag === 'true' || urlDebug
 })
 
 function onDocumentUploaded() {
