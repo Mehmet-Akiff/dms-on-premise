@@ -35,7 +35,11 @@
         <div v-if="hasResults" class="debug-results">
           <!-- Timing Bar -->
           <div class="timing-bar">
-            <span class="timing-label">⏱️ Motor Süreleri:</span>
+            <span class="file-badge" :class="isCurrentPdf ? 'badge-pdf' : 'badge-img'">
+              {{ isCurrentPdf ? '📕 PDF Belgesi' : '🖼️ Görsel / Resim' }}:
+              <strong>{{ results.fileName }}</strong>
+            </span>
+            <span class="timing-label">⏱️ Süreler:</span>
             <span v-for="(val, key) in results.timings" :key="key" class="timing-chip">
               {{ key }}: <strong>{{ val }}s</strong>
             </span>
@@ -54,6 +58,7 @@
                   @click="activeEngine = name"
                 >
                   {{ getEngineIcon(name) }} {{ name }}
+                  <span v-if="name === 'pdfplumber' && !isCurrentPdf" class="tab-sub-hint">(Sadece PDF)</span>
                 </button>
               </div>
               <div class="engine-output">
@@ -97,6 +102,10 @@ const errorMsg = ref('')
 const activeEngine = ref('')
 
 const hasResults = computed(() => results.value && results.value.engines)
+
+const isCurrentPdf = computed(() => {
+  return !!results.value?.fileName?.toLowerCase()?.endsWith('.pdf')
+})
 
 const formattedConsensus = computed(() => {
   if (!results.value?.consensus) return ''
@@ -351,6 +360,34 @@ function resetLab() {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(15, 23, 42, 0.8);
   flex-wrap: wrap;
+}
+
+.file-badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.file-badge.badge-pdf {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+.file-badge.badge-img {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+.file-badge strong {
+  color: #ffffff;
+}
+
+.tab-sub-hint {
+  font-size: 0.65rem;
+  opacity: 0.6;
+  margin-left: 0.25rem;
 }
 
 .timing-label {

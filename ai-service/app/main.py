@@ -878,10 +878,15 @@ def _run_easyocr_on_images(images: list) -> str:
 def _build_consensus(engine_outputs: dict, file_name: str) -> str:
     """
     Farklı motor çıktılarını SpaCy ile analiz ederek konsensüs özeti oluşturur.
-    En uzun (en çok bilgi içeren) çıktıyı temel alır ve destekleyici detay ekler.
+    En uzun (en çok bilgi içeren) gerçek OCR çıktısını temel alır ve destekleyici detay ekler.
     """
-    # En zengin çıktıyı temel al
-    outputs_sorted = sorted(engine_outputs.items(), key=lambda x: len(x[1] or ""), reverse=True)
+    # Bilgi ve hata mesajlarını filtrele
+    valid_outputs = {}
+    for k, v in engine_outputs.items():
+        if v and not v.startswith("ℹ️") and not v.startswith("(") and not v.startswith("[HATA]"):
+            valid_outputs[k] = v
+
+    outputs_sorted = sorted(valid_outputs.items(), key=lambda x: len(x[1] or ""), reverse=True)
     primary_engine, primary_text = outputs_sorted[0] if outputs_sorted else ("?", "")
 
     if not primary_text or len(primary_text.strip()) < 30:
@@ -894,9 +899,12 @@ def _build_consensus(engine_outputs: dict, file_name: str) -> str:
     stats_lines = []
     for eng_name, eng_text in engine_outputs.items():
         txt = eng_text or ""
-        word_count = len(txt.split())
-        char_count = len(txt)
-        stats_lines.append(f"- **{eng_name}:** {word_count:,} kelime, {char_count:,} karakter")
+        if eng_name in valid_outputs:
+            word_count = len(txt.split())
+            char_count = len(txt)
+            stats_lines.append(f"- **{eng_name}:** {word_count:,} kelime, {char_count:,} karakter (Aktif)")
+        else:
+            stats_lines.append(f"- **{eng_name}:** Desteklenmiyor / Metin katmanı yok")
 
     consensus = (
         f"📊 **Konsensüs Kaynağı:** En zengin çıktı **{primary_engine}** motorundan alınmıştır.\n\n"
@@ -965,15 +973,26 @@ async def debug_ensemble_ocr(file: UploadFile = File(...)):
         timings["Tesseract OCR"] = round(_time.time() - t0, 2)
 
         # =============================================
-        # Motor 2: pdfplumber (sadece PDF için)
+        # Motor 2: pdfplumber (PDF Tablo & Düzen Çıkarıcı)
         # =============================================
         t0 = _time.time()
         try:
             if is_pdf and pdfplumber is not None:
                 plumber_text, _, has_tables = extract_pdf_with_tables(tmp_path)
-                engine_results["pdfplumber"] = plumber_text
+                if plumber_text and len(plumber_text.strip()) > 20:
+                    engine_results["pdfplumber"] = plumber_text
+                else:
+                    engine_results["pdfplumber"] = (
+                        "ℹ️ [BİLGİ] Bu PDF dosyasında dijital metin katmanı bulunamadı (Taranmış / Görsel PDF).\n\n"
+                        "pdfplumber kütüphanesi dijital vektörel metinleri ve tabloları okumak içindir.\n"
+                        "Taranmış sayfalar Tesseract OCR ve EasyOCR motorları tarafından taranmıştır."
+                    )
             else:
-                engine_results["pdfplumber"] = "(Bu motor sadece PDF dosyalarını destekler)"
+                engine_results["pdfplumber"] = (
+                    f"ℹ️ [BİLGİ] Yüklenen dosya ('{file.filename}') bir görsel ({suffix.upper()}) formatındadır.\n\n"
+                    "pdfplumber kütüphanesi sadece PDF dokümanlarındaki vektörel tabloları ve metin düzenini okumak için tasarlanmıştır.\n\n"
+                    "Görsel formatındaki belgeler sol taraftaki Tesseract OCR ve EasyOCR derin öğrenme motorları ile taranmıştır."
+                )
         except Exception as e:
             engine_results["pdfplumber"] = f"[HATA] {str(e)}"
         timings["pdfplumber"] = round(_time.time() - t0, 2)
@@ -987,7 +1006,6 @@ async def debug_ensemble_ocr(file: UploadFile = File(...)):
                 with tempfile.TemporaryDirectory(prefix="dms_easy_") as tmp_dir:
                     pages = convert_from_path(str(tmp_path), dpi=200, output_folder=tmp_dir, fmt="png")
                     easy_text = _run_easyocr_on_images(pages)
-            else:
                 img = Image.open(tmp_path)
                 easy_text = _run_easyocr_on_images([img])
             engine_results["EasyOCR"] = easy_text
