@@ -18,6 +18,15 @@
           </svg>
           {{ $t('upload.privacyNotice') || 'Tüm dosyalar yerel sunucuda güvenle işlenir. Veri dışarı çıkmaz.' }}
         </div>
+
+        <!-- 🧪 Debug Lab Button (Sadece Geliştirici Modunda Görünür) -->
+        <button
+          v-if="isDevMode"
+          class="btn-debug-lab"
+          @click="showDebugLab = true"
+        >
+          🧪 OCR Test & Konsensüs Laboratuvarı
+        </button>
       </section>
 
       <!-- Sağ Panel: Dashboard + Arama + Doküman Listesi -->
@@ -27,18 +36,30 @@
         <DocumentList ref="documentListRef" />
       </section>
     </div>
+
+    <!-- 🧪 OCR Debug Lab Modal -->
+    <OcrDebugLab v-if="isDevMode" :visible="showDebugLab" @close="showDebugLab = false" />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import FileUpload from '../components/FileUpload.vue'
 import Dashboard from '../components/Dashboard.vue'
 import SearchBar from '../components/SearchBar.vue'
 import DocumentList from '../components/DocumentList.vue'
+import OcrDebugLab from '../components/OcrDebugLab.vue'
 
 const documentListRef = ref(null)
 const dashboardRef = ref(null)
+const showDebugLab = ref(false)
+
+// Dev mode: ortam değişkeni VEYA localStorage flag'i ile aktifleştirilebilir
+const isDevMode = computed(() => {
+  const envMode = import.meta.env.VITE_APP_MODE
+  const localFlag = localStorage.getItem('dms_dev_mode')
+  return envMode === 'debug' || localFlag === 'true'
+})
 
 function onDocumentUploaded() {
   documentListRef.value?.refresh()
@@ -112,9 +133,32 @@ function onStatClick(type) {
   gap: 1rem;
   min-width: 0;
 }
+
+/* 🧪 Debug Lab Button */
+.btn-debug-lab {
+  margin-top: 1rem;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: 1px dashed rgba(234, 179, 8, 0.35);
+  background: rgba(234, 179, 8, 0.06);
+  color: #fbbf24;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  letter-spacing: 0.01em;
+}
+.btn-debug-lab:hover {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.6);
+  box-shadow: 0 0 20px rgba(234, 179, 8, 0.1);
+  transform: translateY(-1px);
+}
+
 @media (max-width: 1024px) {
   .dms-main {
     grid-template-columns: 1fr;
   }
 }
 </style>
+

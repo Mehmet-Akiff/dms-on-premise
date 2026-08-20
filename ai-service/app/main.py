@@ -820,3 +820,204 @@ async def nlp_search(request: NLPSearchRequest):
             status_code=500,
             detail={"status": "error", "message": f"NLP arama analizi hatası: {str(e)}"},
         )
+
+
+# ============================================================
+# 🧪 AR-GE / DEBUG: Ensemble OCR Motor Kıyaslama Laboratuvarı
+# ============================================================
+# Bu endpoint canlı (release) sistemi ETKİLEMEZ.
+# Sadece /api/ocr/debug-ensemble çağrıldığında çalışır.
+# EasyOCR modeli ilk çağrıda lazy-load edilir.
+# ============================================================
+
+from fastapi import UploadFile, File
+import time as _time
+
+# Lazy-loaded EasyOCR reader — sadece debug endpoint tetiklendiğinde yüklenir
+_easyocr_reader = None
+
+
+def _get_easyocr_reader():
+    """EasyOCR reader'ı ilk kullanımda başlatır (lazy singleton)."""
+    global _easyocr_reader
+    if _easyocr_reader is None:
+        try:
+            import easyocr
+            logger.info("🧪 [DEBUG] EasyOCR reader başlatılıyor (ilk çağrı — lazy load)...")
+            _easyocr_reader = easyocr.Reader(["tr", "en"], gpu=False, verbose=False)
+            logger.info("🧪 [DEBUG] EasyOCR reader başarıyla yüklendi. ✓")
+        except ImportError:
+            logger.error("🧪 [DEBUG] EasyOCR kurulu değil! pip install easyocr gerekli.")
+            raise HTTPException(
+                status_code=503,
+                detail={"status": "error", "message": "EasyOCR bu ortamda kurulu değil."},
+            )
+        except Exception as e:
+            logger.error("🧪 [DEBUG] EasyOCR başlatma hatası: %s", str(e))
+            raise HTTPException(
+                status_code=503,
+                detail={"status": "error", "message": f"EasyOCR başlatılamadı: {str(e)}"},
+            )
+    return _easyocr_reader
+
+
+def _run_easyocr_on_images(images: list) -> str:
+    """Pillow Image listesi üzerinde EasyOCR çalıştırır."""
+    import numpy as np
+    reader = _get_easyocr_reader()
+    all_text = []
+    for i, img in enumerate(images, 1):
+        arr = np.array(img)
+        results = reader.readtext(arr, detail=0, paragraph=True)
+        page_text = "\n".join(results)
+        if page_text.strip():
+            all_text.append(f"--- Sayfa {i} ---\n{page_text.strip()}")
+    return "\n\n".join(all_text)
+
+
+def _build_consensus(engine_outputs: dict, file_name: str) -> str:
+    """
+    Farklı motor çıktılarını SpaCy ile analiz ederek konsensüs özeti oluşturur.
+    En uzun (en çok bilgi içeren) çıktıyı temel alır ve destekleyici detay ekler.
+    """
+    # En zengin çıktıyı temel al
+    outputs_sorted = sorted(engine_outputs.items(), key=lambda x: len(x[1] or ""), reverse=True)
+    primary_engine, primary_text = outputs_sorted[0] if outputs_sorted else ("?", "")
+
+    if not primary_text or len(primary_text.strip()) < 30:
+        return "Hiçbir OCR motoru yeterli metin çıkaramadı."
+
+    # SpaCy ile temel özet oluştur
+    summary = extract_summary(primary_text, max_sentences=4, file_name=file_name)
+
+    # Karşılaştırmalı istatistik
+    stats_lines = []
+    for eng_name, eng_text in engine_outputs.items():
+        txt = eng_text or ""
+        word_count = len(txt.split())
+        char_count = len(txt)
+        stats_lines.append(f"- **{eng_name}:** {word_count:,} kelime, {char_count:,} karakter")
+
+    consensus = (
+        f"📊 **Konsensüs Kaynağı:** En zengin çıktı **{primary_engine}** motorundan alınmıştır.\n\n"
+        f"{summary}\n\n"
+        f"🔬 **Motor Karşılaştırma İstatistikleri:**\n"
+        + "\n".join(stats_lines)
+    )
+    return consensus
+
+
+@app.post("/api/ocr/debug-ensemble")
+async def debug_ensemble_ocr(file: UploadFile = File(...)):
+    """
+    🧪 AR-GE / DEBUG — Ensemble OCR Motor Kıyaslama Endpoint'i.
+    Yüklenen dosyayı 3 farklı OCR motorundan geçirir ve sonuçları karşılaştırır.
+    Bu endpoint canlı sistemi ETKILEMEZ, sadece test amaçlıdır.
+    """
+    logger.info("🧪 [DEBUG-ENSEMBLE] İstek alındı — Dosya: %s", file.filename)
+
+    # Dosyayı geçici dizine kaydet
+    suffix = Path(file.filename).suffix.lower() if file.filename else ".tmp"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix="dms_debug_") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = Path(tmp.name)
+
+    try:
+        is_pdf = suffix in PDF_EXTENSIONS
+        is_image = suffix in IMAGE_EXTENSIONS
+        is_executable = suffix in EXECUTABLE_EXTENSIONS
+
+        if is_executable:
+            return {
+                "status": "blocked",
+                "message": EXECUTABLE_SECURITY_WARNING,
+                "engines": {},
+                "consensus": EXECUTABLE_SECURITY_WARNING,
+                "timings": {},
+            }
+
+        if not (is_pdf or is_image):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": f"Desteklenmeyen dosya türü: {suffix}. PDF veya görsel dosya yükleyin.",
+                },
+            )
+
+        engine_results = {}
+        timings = {}
+
+        # =============================================
+        # Motor 1: Tesseract OCR
+        # =============================================
+        t0 = _time.time()
+        try:
+            if is_pdf:
+                tess_text, _ = ocr_pdf_tesseract(tmp_path)
+            else:
+                img = Image.open(tmp_path)
+                tess_text = ocr_single_image(img)
+            engine_results["Tesseract OCR"] = tess_text
+        except Exception as e:
+            engine_results["Tesseract OCR"] = f"[HATA] {str(e)}"
+        timings["Tesseract OCR"] = round(_time.time() - t0, 2)
+
+        # =============================================
+        # Motor 2: pdfplumber (sadece PDF için)
+        # =============================================
+        t0 = _time.time()
+        try:
+            if is_pdf and pdfplumber is not None:
+                plumber_text, _, has_tables = extract_pdf_with_tables(tmp_path)
+                engine_results["pdfplumber"] = plumber_text
+            else:
+                engine_results["pdfplumber"] = "(Bu motor sadece PDF dosyalarını destekler)"
+        except Exception as e:
+            engine_results["pdfplumber"] = f"[HATA] {str(e)}"
+        timings["pdfplumber"] = round(_time.time() - t0, 2)
+
+        # =============================================
+        # Motor 3: EasyOCR (Lazy-load)
+        # =============================================
+        t0 = _time.time()
+        try:
+            if is_pdf:
+                with tempfile.TemporaryDirectory(prefix="dms_easy_") as tmp_dir:
+                    pages = convert_from_path(str(tmp_path), dpi=200, output_folder=tmp_dir, fmt="png")
+                    easy_text = _run_easyocr_on_images(pages)
+            else:
+                img = Image.open(tmp_path)
+                easy_text = _run_easyocr_on_images([img])
+            engine_results["EasyOCR"] = easy_text
+        except Exception as e:
+            engine_results["EasyOCR"] = f"[HATA] {str(e)}"
+        timings["EasyOCR"] = round(_time.time() - t0, 2)
+
+        # =============================================
+        # Konsensüs Özeti (SpaCy ile birleştirilmiş)
+        # =============================================
+        consensus = _build_consensus(engine_results, file.filename or "debug_belge")
+
+        logger.info(
+            "🧪 [DEBUG-ENSEMBLE] Tamamlandı — Tesseract: %.1fs, pdfplumber: %.1fs, EasyOCR: %.1fs",
+            timings.get("Tesseract OCR", 0),
+            timings.get("pdfplumber", 0),
+            timings.get("EasyOCR", 0),
+        )
+
+        return {
+            "status": "success",
+            "fileName": file.filename,
+            "engines": engine_results,
+            "consensus": consensus,
+            "timings": timings,
+        }
+
+    finally:
+        # Geçici dosyayı temizle
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass

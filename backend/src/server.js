@@ -120,6 +120,34 @@ global.sendDocumentUpdateToClients = (documentData) => {
   });
 };
 
+// 🧪 AR-GE / DEBUG: Ensemble OCR Proxy Route (Backend -> AI Service)
+const multer = require('multer');
+const uploadDebug = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+app.post('/api/ocr/debug-ensemble', uploadDebug.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Dosya yüklenmedi.' });
+    }
+
+    const aiUrl = (process.env.AI_SERVICE_URL || 'http://ai-service:8000') + '/api/ocr/debug-ensemble';
+    const formData = new FormData();
+    const blob = new Blob([req.file.buffer], { type: req.file.mimetype || 'application/octet-stream' });
+    formData.append('file', blob, req.file.originalname);
+
+    const aiRes = await fetch(aiUrl, {
+      method: 'POST',
+      body: formData
+    });
+
+    const data = await aiRes.json();
+    res.status(aiRes.status).json(data);
+  } catch (err) {
+    console.error('[DEBUG-ENSEMBLE-PROXY-ERR]', err);
+    res.status(500).json({ error: 'AI Servisi debug ensemble hatası: ' + err.message });
+  }
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/chat', chatRoutes);
