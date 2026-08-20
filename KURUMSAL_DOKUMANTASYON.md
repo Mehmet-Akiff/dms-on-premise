@@ -139,20 +139,28 @@ Dışarıya tek bir bayt dahi göndermeden çalışan otonom NLP motoru yüklene
 
 ## 4. ENSEMBLE OCR & AR-GE LABORATUVARI BENCHMARK RAPORU
 
-Sistemimiz bünyesinde geliştirilen izole **🧪 OCR Test & Konsensüs Laboratuvarı** ile gerçek kurumsal belgeler üzerinde yapılan ampirik kıyaslama test sonuçları aşağıdadır:
+Sistemimiz bünyesinde canlı mimarinin kararlılığını koruyarak geliştirilen izole **🧪 OCR Test & Konsensüs Laboratuvarı** ile gerçek kurumsal belgeler üzerinde yapılan ampirik kıyaslama test sonuçları aşağıdadır:
 
 ### 4.1. Ampirik Test Sonuçları Tablosu
 *(Test Belgesi: Selçuk Üniversitesi Bilgisayar Mühendisliği Haftalık Ders Programı - 2025/2026 Bahar)*
 
 | Ölçüt | 📊 `pdfplumber` (Vektörel Matris) | 🔤 `Tesseract OCR` (Piksel İşleme) | 🧠 `EasyOCR` (Derin Öğrenme) |
 |---|:---:|:---:|:---:|
-| **İşlem Süresi** | ⚡ **5.85 saniye** | ⏱️ **8.66 saniye** | ⏳ **62.60 saniye** |
+| **İşlem Süresi** | ⚡ **5.85 saniye** | ⏱️ **8.66 saniye** | ⏳ **62.60 saniye** (Yüksek CPU) |
 | **Çıkarılan Kelime** | 🏆 **3.940 kelime** | 925 kelime | 1.058 kelime |
 | **Çıkarılan Karakter** | 🏆 **21.493 karakter** | 7.045 karakter | 8.302 karakter |
-| **Tablo Hücre Bütünlüğü** | 🌟 **%99.8 Kusursuz** | ⚠️ Parantezler ve satırlar kaydı | ⚠️ Sütun aralıkları bölündü |
-| **CPU Tüketim Seviyesi** | 🍃 Çok Hafif (~%5) | 🍃 Düşük (~%15) | 💥 Çok Yüksek (~%95 PyTorch) |
+| **Tablo Hücre Bütünlüğü** | 🌟 **%99.8 Kusursuz** | ⚠️ Hücrelerde kaymalar | ⚠️ Sütun aralıkları bölündü |
+| **Mantıksal Metin Akışı** | ⚠️ Ham matris dizilimi | 🌟 **En Başarılı Akış** | ⚖️ Orta Düzey Akış |
+| **CPU / Sistem Maliyeti** | 🍃 Çok Hafif (~%5) | 🍃 Düşük (~%15) | 💥 Çok Yüksek (~%95 PyTorch CPU) |
 
-### 4.2. Hibrit Akıllı Yönlendirme Mimarisi (Smart Router Decision Tree)
+### 4.2. OCR Motorları Temel Değerlendirmesi:
+1. **`pdfplumber` (Vektörel Matris):** 5.85 sn sürede 21.493 karakteri %99.8 hücre bütünlüğüyle çıkardı; tablo çizgilerini eksiksiz yakaladı, ancak doğal mantıksal metin akışı bağlamında satır bazlı NLP işlemine göre ham matris dökümü üretti.
+2. **`Tesseract OCR` (Piksel İşleme):** 8.66 sn sürede tamamlandı. Karmaşık tablolarda ufak kaymalar yaşansa da mantıksal metin diziliminde ve doğal Türkçe okuma akışında en başarılı sonucu verdi.
+3. **`EasyOCR` (Derin Öğrenme):** CPU üzerinde yüksek yük oluşturarak işlemi 62.60 sn’de tamamladı; mevcut aşamada CPU tabanlı on-premise üretim ortamı için maliyetli ve yavaş kalmaktadır.
+
+### 4.3. Gelecek Sürüm / Yol Haritası Tavsiyesi: "Hibrit Akıllı Yönlendirme (Smart Router)"
+> [!NOTE]
+> Canlı mimarinin kararlılığını korumak adına mevcut sisteme doğrudan müdahale edilmemiş; test sonuçlarına dayanarak bir sonraki güncelleme için **"Hibrit Akıllı Yönlendirme (Smart Router)"** mimarisi öneri olarak dokümante edilmiştir.
 
 ```
                             [Yüklenen Kurumsal Belge]
