@@ -74,8 +74,8 @@ User.hasMany(Message, { foreignKey: 'receiver_id', as: 'receivedMessages' });
 Message.belongsTo(User, { foreignKey: 'receiver_id', as: 'receiver' });
 
 // ChatRoom → Message (1:N) - Odaya ait mesajlar
-ChatRoom.hasMany(Message, { foreignKey: 'room_id', as: 'messages', onDelete: 'CASCADE' });
-Message.belongsTo(ChatRoom, { foreignKey: 'room_id', as: 'room' });
+ChatRoom.hasMany(Message, { foreignKey: 'room_id', as: 'messages', onDelete: 'CASCADE', constraints: false });
+Message.belongsTo(ChatRoom, { foreignKey: 'room_id', as: 'room', constraints: false });
 
 // ============================================================
 // Dışa Aktarım

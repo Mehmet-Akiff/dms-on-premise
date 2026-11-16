@@ -216,11 +216,3 @@ docker run --rm --volumes-from dms_backend -v $(pwd):/backup alpine tar czf /bac
 | **TS ISO/IEC 27001 (BGYS)** | Kriptografik parola hash'leme (bcrypt), rol tabanlı yetkilendirme ve CISO denetim iz kayıtları. | ✅ TAM UYUMLU |
 | **Cumhurbaşkanlığı Bilgi ve İletişim Güvenliği Rehberi** | Yerli ve milli açık kaynak bileşenler, kapalı devre mikroservis mimarisi. | ✅ TAM UYUMLU |
 | **Bütünlük & İnkar Edilemezlik** | Değiştirilen veya silinen hiçbir chat veya doküman üstverisi loglardan silinmez; geriye dönük adli bilişim incelemesine açıktır. | ✅ TAM UYUMLU |
-
----
-
-```
-ONAYLAYAN & HAZIRLAYAN:
-DMS Mimari ve Bilgi Güvenliği Mühendisliği Ekibi
-Google DeepMind Agentic Systems Architecture
-```

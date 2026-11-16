@@ -16,8 +16,8 @@ const Message = sequelize.define('Message', {
     allowNull: true, // Grup mesajıysa null olabilir, room_id kullanılır
   },
   room_id: {
-    type: DataTypes.STRING,
-    allowNull: true, // Birebir mesajsa null olabilir, 'global' da olabilir
+    type: DataTypes.UUID,
+    allowNull: true, // Birebir mesajsa null olabilir, Global oda için UUID kullanılır
   },
   content: {
     type: DataTypes.TEXT,
